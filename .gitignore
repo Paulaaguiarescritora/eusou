@@ -1,0 +1,23 @@
+# Compiled output
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+
+# OS and IDE files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
