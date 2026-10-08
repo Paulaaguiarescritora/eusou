@@ -17,6 +17,7 @@ model User {
   updatedAt     DateTime       @updatedAt
   roles         UserRole[]
   refreshTokens RefreshToken[]
+  affiliate     Affiliate?
 }
 
 model Role {
@@ -74,6 +75,7 @@ model Product {
   description      String?
   status           ProductStatus @default(DRAFT)
   brand            String?
+  basePrice        Decimal?      @db.Decimal(10, 2)
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
@@ -81,6 +83,31 @@ model Product {
   attributeValues ProductAttributeValue[]
   variants        ProductVariant[]
   media           Media[]
+
+  // F3 relations
+  niches          ProductNiche[]
+  categories      ProductCategory[]
+  tags            ProductTag[]
+
+  // F4 relations
+  catalogItems    CatalogItem[]
+  collectionItems CollectionItem[]
+
+  // F5 relations
+  orderItems      OrderItem[]
+
+  // F6 relations
+  affiliateLinks  AffiliateLink[]
+  commissionRules CommissionRule[]
+
+  // F7 relations
+  productionProfiles ProductionProfile[]
+  productionJobs     ProductionJob[]
+  inventories        Inventory[]
+  stockMovements     StockMovement[]
+
+  // F9 relations
+  channelProducts    ChannelProduct[]
 }
 
 // F2B: Attribute Definitions (global, reusable across products)
@@ -119,6 +146,7 @@ model ProductVariant {
   productId String
   name      String?
   sku       String?  @unique
+  price     Decimal? @db.Decimal(10, 2)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -126,6 +154,13 @@ model ProductVariant {
   product                Product               @relation(fields: [productId], references: [id])
   variantAttributeValues VariantAttributeValue[]
   media                  Media[]
+  orderItems             OrderItem[]
+
+  // F7 relations
+  productionProfiles     ProductionProfile[]
+  productionJobs         ProductionJob[]
+  inventories            Inventory[]
+  stockMovements         StockMovement[]
 
   @@index([productId])
 }
@@ -168,3 +203,833 @@ model Media {
   @@index([productId])
   @@index([variantId])
 }
+
+
+// ==========================================
+// F3: NICHES, CATEGORIES, TAGS & THEMES
+// ==========================================
+
+enum NicheStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Niche {
+  id          String      @id @default(uuid())
+  name        String
+  slug        String      @unique
+  description String?
+  status      NicheStatus @default(ACTIVE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  categories      Category[]
+  products        ProductNiche[]
+  catalogs        Catalog[]
+  commissionRules CommissionRule[]
+}
+
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Category {
+  id          String         @id @default(uuid())
+  name        String
+  slug        String         @unique
+  description String?
+  status      CategoryStatus @default(ACTIVE)
+  parentId    String?
+  nicheId     String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  parent   Category?         @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[]        @relation("CategoryHierarchy")
+  niche    Niche?            @relation(fields: [nicheId], references: [id])
+  products          ProductCategory[]
+  commissionRules   CommissionRule[]
+  channelCategories ChannelCategory[]
+
+  @@index([parentId])
+  @@index([nicheId])
+}
+
+enum TagStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Tag {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  status    TagStatus @default(ACTIVE)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  products ProductTag[]
+}
+
+model ProductNiche {
+  productId String
+  nicheId   String
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  niche   Niche   @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+
+  @@id([productId, nicheId])
+  @@index([productId])
+  @@index([nicheId])
+}
+
+model ProductCategory {
+  productId  String
+  categoryId String
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([productId, categoryId])
+  @@index([productId])
+  @@index([categoryId])
+}
+
+model ProductTag {
+  productId String
+  tagId     String
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([productId, tagId])
+  @@index([productId])
+  @@index([tagId])
+}
+
+enum ThemeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Theme {
+  id              String      @id @default(uuid())
+  name            String
+  slug            String      @unique
+  description     String?
+  status          ThemeStatus @default(ACTIVE)
+  logo            String?
+  primaryColor    String      @default("#000000")
+  secondaryColor  String      @default("#ffffff")
+  font            String      @default("Inter")
+  buttonStyle     String      @default("rounded")
+  cardStyle       String      @default("elevated")
+  bannerStyle     String      @default("full-width")
+  productsPerRow  Int         @default(4)
+  showCategories  Boolean     @default(true)
+  showHighlights  Boolean     @default(true)
+  showNewProducts Boolean     @default(true)
+  showOffers      Boolean     @default(true)
+  isPreset        Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  catalogs        Catalog[]
+}
+
+
+// ==========================================
+// F4: CATALOGS & COLLECTIONS
+// ==========================================
+
+enum CatalogStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum CatalogType {
+  MANUAL
+  AUTOMATIC
+}
+
+enum CatalogRuleType {
+  NICHE
+  CATEGORY
+  TAG
+}
+
+model Catalog {
+  id          String        @id @default(uuid())
+  name        String
+  slug        String        @unique
+  description String?
+  status      CatalogStatus @default(DRAFT)
+  type        CatalogType   @default(MANUAL)
+  nicheId     String?
+  themeId     String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  niche       Niche?        @relation(fields: [nicheId], references: [id])
+  theme       Theme?        @relation(fields: [themeId], references: [id])
+
+  items          CatalogItem[]
+  collections    CatalogCollection[]
+  rules          CatalogRule[]
+  affiliateLinks AffiliateLink[]
+
+  @@index([nicheId])
+  @@index([themeId])
+}
+
+model CatalogItem {
+  id        String   @id @default(uuid())
+  catalogId String
+  productId String
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  catalog   Catalog  @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([catalogId, productId])
+  @@index([catalogId])
+  @@index([productId])
+}
+
+model CatalogRule {
+  id        String          @id @default(uuid())
+  catalogId String
+  type      CatalogRuleType
+  value     String
+  createdAt DateTime        @default(now())
+
+  catalog   Catalog         @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+
+  @@index([catalogId])
+}
+
+enum CollectionStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+model Collection {
+  id               String           @id @default(uuid())
+  name             String
+  slug             String           @unique
+  description      String?
+  coverMediaId     String?
+  status           CollectionStatus @default(DRAFT)
+  ownerAffiliateId String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  ownerAffiliate   Affiliate?       @relation("AffiliateOwnedCollections", fields: [ownerAffiliateId], references: [id])
+  items            CollectionItem[]
+  catalogs         CatalogCollection[]
+  affiliateLinks   AffiliateLink[]
+
+  @@index([ownerAffiliateId])
+}
+
+model CollectionItem {
+  id           String     @id @default(uuid())
+  collectionId String
+  productId    String
+  position     Int        @default(0)
+  createdAt    DateTime   @default(now())
+
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, productId])
+  @@index([collectionId])
+  @@index([productId])
+}
+
+model CatalogCollection {
+  id           String     @id @default(uuid())
+  catalogId    String
+  collectionId String
+  position     Int        @default(0)
+  createdAt    DateTime   @default(now())
+
+  catalog      Catalog    @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  collection   Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@unique([catalogId, collectionId])
+  @@index([catalogId])
+  @@index([collectionId])
+}
+
+
+// ==========================================
+// F5: ORDERS & ORDER ITEMS
+// ==========================================
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  customerName    String
+  customerEmail   String
+  customerPhone   String
+  status          OrderStatus @default(PENDING)
+  subtotal        Decimal     @db.Decimal(10, 2)
+  shippingAmount  Decimal     @default(0.00) @db.Decimal(10, 2)
+  total           Decimal     @db.Decimal(10, 2)
+
+  // Address
+  street          String
+  number          String
+  complement      String?
+  neighborhood    String
+  city            String
+  state           String
+  zipCode         String
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  affiliateCode   String?
+  items           OrderItem[]
+  conversion      AffiliateConversion?
+
+  @@index([customerEmail])
+  @@index([status])
+  @@index([affiliateCode])
+}
+
+model OrderItem {
+  id                  String          @id @default(uuid())
+  orderId             String
+  productId           String
+  variantId           String?
+  productNameSnapshot String
+  skuSnapshot         String?
+  quantity            Int
+  unitPrice           Decimal         @db.Decimal(10, 2)
+  subtotal            Decimal         @db.Decimal(10, 2)
+  createdAt           DateTime        @default(now())
+
+  order               Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product             Product         @relation(fields: [productId], references: [id])
+  variant             ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+
+// ==========================================
+// F6: AFFILIATES, LINKS, CLICKS, CONVERSIONS & COMMISSIONS
+// ==========================================
+
+enum AffiliateStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model Affiliate {
+  id          String          @id @default(uuid())
+  userId      String          @unique
+  code        String          @unique
+  displayName String
+  status      AffiliateStatus @default(ACTIVE)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user        User            @relation(fields: [userId], references: [id])
+
+  links            AffiliateLink[]
+  clicks           AffiliateClick[]
+  conversions      AffiliateConversion[]
+  commissionRules  CommissionRule[]
+  ownedCollections Collection[]          @relation("AffiliateOwnedCollections")
+
+  @@index([code])
+  @@index([status])
+}
+
+model AffiliateLink {
+  id           String    @id @default(uuid())
+  affiliateId  String
+  code         String    @unique
+  destination  String
+  productId    String?
+  catalogId    String?
+  collectionId String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  affiliate    Affiliate   @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  product      Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  catalog      Catalog?    @relation(fields: [catalogId], references: [id], onDelete: SetNull)
+  collection   Collection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+
+  clicks       AffiliateClick[]
+  conversions  AffiliateConversion[]
+
+  @@index([affiliateId])
+  @@index([code])
+}
+
+model AffiliateClick {
+  id              String   @id @default(uuid())
+  affiliateId     String
+  affiliateLinkId String?
+  productId       String?
+  sessionId       String?
+  createdAt       DateTime @default(now())
+
+  affiliate       Affiliate      @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  affiliateLink   AffiliateLink? @relation(fields: [affiliateLinkId], references: [id], onDelete: SetNull)
+
+  @@index([affiliateId])
+  @@index([affiliateLinkId])
+  @@index([createdAt])
+}
+
+enum ConversionStatus {
+  PENDING
+  APPROVED
+  CANCELLED
+}
+
+model AffiliateConversion {
+  id               String           @id @default(uuid())
+  affiliateId      String
+  affiliateLinkId  String?
+  orderId          String           @unique
+  amount           Decimal          @db.Decimal(10, 2)
+  commissionAmount Decimal          @db.Decimal(10, 2)
+  status           ConversionStatus @default(PENDING)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  affiliate        Affiliate      @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  affiliateLink    AffiliateLink? @relation(fields: [affiliateLinkId], references: [id], onDelete: SetNull)
+  order            Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId])
+  @@index([orderId])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model CommissionRule {
+  id          String   @id @default(uuid())
+  affiliateId String?
+  productId   String?
+  categoryId  String?
+  nicheId     String?
+  percentage  Decimal  @db.Decimal(5, 2)
+  fixedAmount Decimal? @db.Decimal(10, 2)
+  priority    Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  affiliate   Affiliate? @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  product     Product?   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category    Category?  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  niche       Niche?     @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateId])
+  @@index([productId])
+  @@index([categoryId])
+  @@index([nicheId])
+  @@index([priority])
+}
+
+// ==========================================
+// F7: PRODUÇÃO, IMPRESSORAS, MATERIAIS, CUSTOS E ESTOQUE
+// ==========================================
+
+enum PrinterStatus {
+  AVAILABLE
+  PRINTING
+  MAINTENANCE
+  INACTIVE
+}
+
+model Printer {
+  id                 String        @id @default(uuid())
+  name               String
+  model              String
+  status             PrinterStatus @default(AVAILABLE)
+  location           String?
+  machineCostPerHour Decimal       @default(0.00) @db.Decimal(10, 2)
+  notes              String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  productionJobs     ProductionJob[]
+
+  @@index([status])
+}
+
+enum MaterialType {
+  PLA
+  PETG
+  ABS
+  RESIN
+  OTHER
+}
+
+enum MaterialUnit {
+  GRAM
+  KILOGRAM
+  METER
+  PIECE
+}
+
+model Material {
+  id              String        @id @default(uuid())
+  name            String
+  type            MaterialType  @default(PLA)
+  color           String?
+  unit            MaterialUnit  @default(GRAM)
+  costPerUnit     Decimal       @db.Decimal(10, 4)
+  currentQuantity Decimal       @default(0) @db.Decimal(12, 3)
+  minimumQuantity Decimal       @default(0) @db.Decimal(12, 3)
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  productionMaterials ProductionMaterial[]
+  materialMovements   MaterialMovement[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+enum ProductionMode {
+  STOCK
+  MAKE_TO_ORDER
+}
+
+model ProductionProfile {
+  id                     String         @id @default(uuid())
+  productId              String?
+  variantId              String?
+  productionMode         ProductionMode @default(STOCK)
+  productionTimeMinutes  Int            @default(0)
+  materialWeightGrams    Decimal        @default(0) @db.Decimal(10, 2)
+  powerConsumptionWatts  Int            @default(0)
+  finishingTimeMinutes   Int            @default(0)
+  finishingCost          Decimal        @default(0.00) @db.Decimal(10, 2)
+  packagingCost          Decimal        @default(0.00) @db.Decimal(10, 2)
+  laborCost              Decimal        @default(0.00) @db.Decimal(10, 2)
+  notes                  String?
+  isActive               Boolean        @default(true)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  product                Product?       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant                ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  materials              ProductionMaterial[]
+
+  @@index([productId])
+  @@index([variantId])
+  @@index([isActive])
+}
+
+model ProductionMaterial {
+  id                  String            @id @default(uuid())
+  productionProfileId String
+  materialId          String
+  quantity            Decimal           @db.Decimal(10, 3)
+  unit                MaterialUnit      @default(GRAM)
+  percentage          Decimal?          @db.Decimal(5, 2)
+  notes               String?
+
+  productionProfile   ProductionProfile @relation(fields: [productionProfileId], references: [id], onDelete: Cascade)
+  material            Material          @relation(fields: [materialId], references: [id], onDelete: Restrict)
+
+  @@index([productionProfileId])
+  @@index([materialId])
+}
+
+model EnergyCostConfig {
+  id         String   @id @default(uuid())
+  costPerKwh Decimal  @db.Decimal(10, 4)
+  currency   String   @default("BRL")
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+enum ProductionJobStatus {
+  QUEUED
+  PRINTING
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+model ProductionJob {
+  id               String              @id @default(uuid())
+  productId        String
+  variantId        String?
+  printerId        String
+  status           ProductionJobStatus @default(QUEUED)
+  plannedQuantity  Int                 @default(1)
+  producedQuantity Int                 @default(0)
+  rejectedQuantity Int                 @default(0)
+  startedAt        DateTime?
+  completedAt      DateTime?
+  estimatedCost    Decimal             @default(0.00) @db.Decimal(10, 2)
+  actualCost       Decimal?            @db.Decimal(10, 2)
+  notes            String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  product          Product             @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant          ProductVariant?     @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  printer          Printer             @relation(fields: [printerId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@index([printerId])
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model Inventory {
+  id               String          @id @default(uuid())
+  productId        String?
+  variantId        String?
+  quantity         Int             @default(0)
+  reservedQuantity Int             @default(0)
+  minimumQuantity  Int             @default(0)
+  updatedAt        DateTime        @updatedAt
+
+  product          Product?        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant          ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, variantId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  RESERVATION
+  RELEASE
+}
+
+model StockMovement {
+  id            String            @id @default(uuid())
+  productId     String
+  variantId     String?
+  type          StockMovementType
+  quantity      Int
+  referenceType String?           // 'ORDER', 'PRODUCTION', 'MANUAL_ADJUSTMENT'
+  referenceId   String?
+  reason        String
+  createdBy     String?
+  createdAt     DateTime          @default(now())
+
+  product       Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant       ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+  @@index([variantId])
+  @@index([createdAt])
+  @@index([referenceId])
+}
+
+enum MaterialMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+model MaterialMovement {
+  id            String               @id @default(uuid())
+  materialId    String
+  type          MaterialMovementType
+  quantity      Decimal              @db.Decimal(12, 3)
+  referenceType String?              // 'PRODUCTION_JOB', 'MANUAL_ADJUSTMENT', 'PURCHASE'
+  referenceId   String?
+  reason        String
+  createdBy     String?
+  createdAt     DateTime             @default(now())
+
+  material      Material             @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+  @@index([createdAt])
+  @@index([referenceId])
+}
+
+// ==========================================
+// F9: ARQUITETURA DE MARKETPLACES, CANAIS E CONECTORES
+// ==========================================
+
+enum ChannelType {
+  OWN_STORE
+  MERCADO_LIVRE
+  SHOPEE
+  AMAZON
+  MAGALU
+  TIKTOK_SHOP
+  GOOGLE_MERCHANT
+  OTHER
+}
+
+model Channel {
+  id          String        @id @default(uuid())
+  name        String
+  type        ChannelType
+  isActive    Boolean       @default(true)
+  description String?
+  icon        String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  accounts    ChannelAccount[]
+  categories  ChannelCategory[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+enum ChannelAccountStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+  DISCONNECTED
+  PENDING
+}
+
+model ChannelAccount {
+  id                String               @id @default(uuid())
+  channelId         String
+  name              String
+  status            ChannelAccountStatus @default(PENDING)
+  externalAccountId String?
+  configuration     Json?
+  lastSyncAt        DateTime?
+  errorMessage      String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  channel           Channel              @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelProducts   ChannelProduct[]
+  syncLogs          ChannelSyncLog[]
+
+  @@index([channelId])
+  @@index([status])
+}
+
+enum ChannelProductStatus {
+  DRAFT
+  PENDING
+  PUBLISHED
+  PAUSED
+  ERROR
+  UNPUBLISHED
+}
+
+model ChannelProduct {
+  id                String               @id @default(uuid())
+  productId         String
+  channelAccountId  String
+  externalProductId String?
+  externalUrl       String?
+  externalSku       String?
+  priceOverride     Decimal?             @db.Decimal(10, 2)
+  status            ChannelProductStatus @default(DRAFT)
+  lastSyncAt        DateTime?
+  lastError         String?
+  syncPayload       Json?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  product           Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  channelAccount    ChannelAccount       @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+  syncLogs          ChannelSyncLog[]
+
+  @@unique([productId, channelAccountId])
+  @@index([productId])
+  @@index([channelAccountId])
+  @@index([status])
+  @@index([externalProductId])
+}
+
+model ChannelCategory {
+  id                   String   @id @default(uuid())
+  channelId            String
+  categoryId           String
+  externalCategoryId   String
+  externalCategoryName String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  channel              Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  category             Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, categoryId])
+  @@index([channelId])
+  @@index([categoryId])
+}
+
+enum ChannelSyncOperation {
+  PUBLISH
+  UPDATE
+  PRICE
+  STOCK
+  UNPUBLISH
+  SYNC
+  TEST_CONNECTION
+}
+
+enum ChannelSyncStatus {
+  SUCCESS
+  ERROR
+  PENDING
+}
+
+model ChannelSyncLog {
+  id               String               @id @default(uuid())
+  channelAccountId String
+  channelProductId String?
+  operation        ChannelSyncOperation
+  status           ChannelSyncStatus
+  message          String?
+  details          Json?
+  externalCode     String?
+  durationMs       Int?
+  createdAt        DateTime             @default(now())
+
+  channelAccount   ChannelAccount       @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
+  channelProduct   ChannelProduct?      @relation(fields: [channelProductId], references: [id], onDelete: SetNull)
+
+  @@index([channelAccountId])
+  @@index([channelProductId])
+  @@index([operation])
+  @@index([status])
+  @@index([createdAt])
+}
+

@@ -63,4 +63,37 @@ export class ProductController {
     const actorId = (req as any).user?.sub;
     return this.productService.delete(id, actorId);
   }
+
+  @Post(':id/niches')
+  @HttpCode(HttpStatus.OK)
+  async assignNiches(
+    @Param('id') id: string,
+    @Body() dto: { nicheIds: string[] },
+    @Req() req: Request,
+  ) {
+    const actorId = (req as any).user?.sub;
+    return this.productService.assignNiches(id, dto.nicheIds, actorId);
+  }
+
+  @Post(':id/categories')
+  @HttpCode(HttpStatus.OK)
+  async assignCategories(
+    @Param('id') id: string,
+    @Body() dto: { categoryIds: string[] },
+    @Req() req: Request,
+  ) {
+    const actorId = (req as any).user?.sub;
+    return this.productService.assignCategories(id, dto.categoryIds, actorId);
+  }
+
+  @Post(':id/tags')
+  @HttpCode(HttpStatus.OK)
+  async assignTags(
+    @Param('id') id: string,
+    @Body() dto: { tagIds: string[] },
+    @Req() req: Request,
+  ) {
+    const actorId = (req as any).user?.sub;
+    return this.productService.assignTags(id, dto.tagIds, actorId);
+  }
 }

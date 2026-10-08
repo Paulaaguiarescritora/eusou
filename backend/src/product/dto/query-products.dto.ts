@@ -34,6 +34,18 @@ export class QueryProductsDto {
 
   @IsOptional()
   @IsString()
+  nicheId?: string;
+
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
+
+  @IsOptional()
+  @IsString()
+  tagId?: string;
+
+  @IsOptional()
+  @IsString()
   @IsIn(['createdAt', 'updatedAt', 'name', 'status', 'brand'])
   sortBy?: string = 'createdAt';
 

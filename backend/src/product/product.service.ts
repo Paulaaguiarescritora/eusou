@@ -96,6 +96,18 @@ export class ProductService {
       where.status = query.status;
     }
 
+    if (query.nicheId) {
+      where.niches = { some: { nicheId: query.nicheId } };
+    }
+
+    if (query.categoryId) {
+      where.categories = { some: { categoryId: query.categoryId } };
+    }
+
+    if (query.tagId) {
+      where.tags = { some: { tagId: query.tagId } };
+    }
+
     const sortBy = query.sortBy || 'createdAt';
     const sortOrder = query.sortOrder || 'desc';
 
@@ -105,6 +117,11 @@ export class ProductService {
         skip,
         take,
         orderBy: { [sortBy]: sortOrder },
+        include: {
+          niches: { include: { niche: true } },
+          categories: { include: { category: true } },
+          tags: { include: { tag: true } },
+        },
       }),
       this.prisma.product.count({ where }),
     ]);
@@ -123,6 +140,34 @@ export class ProductService {
   async findById(id: string): Promise<Product> {
     const product = await this.prisma.product.findUnique({
       where: { id },
+      include: {
+        attributeValues: {
+          include: { attributeDefinition: true },
+        },
+        variants: {
+          include: {
+            variantAttributeValues: {
+              include: {
+                productAttributeValue: {
+                  include: { attributeDefinition: true },
+                },
+              },
+            },
+          },
+        },
+        media: {
+          orderBy: { sortOrder: 'asc' },
+        },
+        niches: {
+          include: { niche: true },
+        },
+        categories: {
+          include: { category: true },
+        },
+        tags: {
+          include: { tag: true },
+        },
+      },
     });
 
     if (!product) {
@@ -270,5 +315,95 @@ export class ProductService {
     });
 
     return { message: 'Product archived successfully', id };
+  }
+
+  async assignNiches(id: string, nicheIds: string[], actorId?: string) {
+    await this.findById(id);
+
+    // Verify all niches exist
+    const count = await this.prisma.niche.count({
+      where: { id: { in: nicheIds } },
+    });
+    if (count !== nicheIds.length) {
+      throw new NotFoundException('One or more niches not found');
+    }
+
+    // Atomic replace associations
+    await this.prisma.$transaction([
+      this.prisma.productNiche.deleteMany({ where: { productId: id } }),
+      this.prisma.productNiche.createMany({
+        data: nicheIds.map((nicheId) => ({ productId: id, nicheId })),
+      }),
+    ]);
+
+    await this.auditLog.log({
+      action: 'PRODUCT_NICHES_UPDATED',
+      entity: 'Product',
+      entityId: id,
+      userId: actorId ?? null,
+      metadata: { nicheIds },
+    });
+
+    return this.findById(id);
+  }
+
+  async assignCategories(id: string, categoryIds: string[], actorId?: string) {
+    await this.findById(id);
+
+    // Verify all categories exist
+    const count = await this.prisma.category.count({
+      where: { id: { in: categoryIds } },
+    });
+    if (count !== categoryIds.length) {
+      throw new NotFoundException('One or more categories not found');
+    }
+
+    // Atomic replace associations
+    await this.prisma.$transaction([
+      this.prisma.productCategory.deleteMany({ where: { productId: id } }),
+      this.prisma.productCategory.createMany({
+        data: categoryIds.map((categoryId) => ({ productId: id, categoryId })),
+      }),
+    ]);
+
+    await this.auditLog.log({
+      action: 'PRODUCT_CATEGORIES_UPDATED',
+      entity: 'Product',
+      entityId: id,
+      userId: actorId ?? null,
+      metadata: { categoryIds },
+    });
+
+    return this.findById(id);
+  }
+
+  async assignTags(id: string, tagIds: string[], actorId?: string) {
+    await this.findById(id);
+
+    // Verify all tags exist
+    const count = await this.prisma.tag.count({
+      where: { id: { in: tagIds } },
+    });
+    if (count !== tagIds.length) {
+      throw new NotFoundException('One or more tags not found');
+    }
+
+    // Atomic replace associations
+    await this.prisma.$transaction([
+      this.prisma.productTag.deleteMany({ where: { productId: id } }),
+      this.prisma.productTag.createMany({
+        data: tagIds.map((tagId) => ({ productId: id, tagId })),
+      }),
+    ]);
+
+    await this.auditLog.log({
+      action: 'PRODUCT_TAGS_UPDATED',
+      entity: 'Product',
+      entityId: id,
+      userId: actorId ?? null,
+      metadata: { tagIds },
+    });
+
+    return this.findById(id);
   }
 }

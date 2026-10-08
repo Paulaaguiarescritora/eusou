@@ -1,0 +1,211 @@
+import React, { useState } from 'react';
+import { ShoppingBag, Search, Menu, X, ArrowLeft } from 'lucide-react';
+
+interface HeaderProps {
+  totalItems: number;
+  onNavigate: (route: string) => void;
+  currentRoute: string;
+}
+
+export const Header: React.FC<HeaderProps> = ({ totalItems, onNavigate }) => {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      onNavigate(`/produtos?search=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  return (
+    <header className="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-xs">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          {/* Brand Logo */}
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => onNavigate('/')}>
+            <div className="w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold text-lg tracking-wider">
+              E
+            </div>
+            <span className="font-bold text-xl tracking-tight text-slate-900">EuSou</span>
+          </div>
+
+          {/* Desktop Search */}
+          <div className="hidden md:flex flex-1 max-w-md mx-8">
+            <form onSubmit={handleSearchSubmit} className="relative w-full">
+              <input
+                type="text"
+                placeholder="Buscar produtos, categorias..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 rounded-full border border-gray-200 text-sm focus:outline-none focus:border-slate-800 transition"
+              />
+              <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-gray-400" />
+            </form>
+          </div>
+
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center space-x-6">
+            <button
+              onClick={() => onNavigate('/')}
+              className="text-sm font-medium text-gray-700 hover:text-black transition"
+            >
+              Início
+            </button>
+            <button
+              onClick={() => onNavigate('/produtos')}
+              className="text-sm font-medium text-gray-700 hover:text-black transition"
+            >
+              Catálogo Geral
+            </button>
+            <button
+              onClick={() => onNavigate('/admin/orders')}
+              className="text-xs px-2.5 py-1 rounded bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200"
+            >
+              Pedidos
+            </button>
+            <button
+              onClick={() => onNavigate('/admin/production')}
+              className="text-xs px-2.5 py-1 rounded bg-amber-600 text-white font-semibold hover:bg-amber-700"
+            >
+              Produção
+            </button>
+            <button
+              onClick={() => onNavigate('/admin/inventory')}
+              className="text-xs px-2.5 py-1 rounded bg-slate-900 text-white font-semibold hover:bg-slate-800"
+            >
+              Estoque
+            </button>
+            <button
+              onClick={() => onNavigate('/admin/divulgacao')}
+              className="text-xs px-2.5 py-1 rounded bg-gradient-to-r from-amber-600 to-amber-700 text-white font-semibold hover:from-amber-500 hover:to-amber-600 shadow-xs"
+            >
+              Divulgação
+            </button>
+            <button
+              onClick={() => onNavigate('/admin/marketplaces')}
+              className="text-xs px-2.5 py-1 rounded bg-indigo-600 text-white font-semibold hover:bg-indigo-700 shadow-xs"
+            >
+              Marketplaces
+            </button>
+            <button
+              onClick={() => onNavigate('/admin/affiliates')}
+              className="text-xs px-2.5 py-1 rounded bg-zinc-800 text-white font-semibold hover:bg-zinc-700"
+            >
+              Afiliados
+            </button>
+            <button
+              onClick={() => onNavigate('/affiliate')}
+              className="text-xs px-2.5 py-1 rounded bg-amber-500/20 text-amber-800 border border-amber-500/30 font-semibold hover:bg-amber-500/30"
+            >
+              Portal Afiliado
+            </button>
+          </nav>
+
+          {/* Cart & Mobile Toggle */}
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => onNavigate('/carrinho')}
+              className="relative p-2 rounded-full hover:bg-gray-100 transition cursor-pointer flex items-center justify-center"
+              aria-label="Carrinho de Compras"
+            >
+              <ShoppingBag className="w-6 h-6 text-slate-800" />
+              {totalItems > 0 && (
+                <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-xs">
+                  {totalItems}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg text-gray-600 hover:text-black hover:bg-gray-100"
+            >
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile menu dropdown */}
+        {mobileMenuOpen && (
+          <div className="md:hidden pb-4 pt-2 border-t border-gray-100 space-y-3">
+            <form onSubmit={handleSearchSubmit} className="relative w-full mb-3">
+              <input
+                type="text"
+                placeholder="Buscar produtos..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-slate-800"
+              />
+              <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-gray-400" />
+            </form>
+            <button
+              onClick={() => {
+                onNavigate('/');
+                setMobileMenuOpen(false);
+              }}
+              className="block w-full text-left py-2 text-sm font-medium text-gray-800"
+            >
+              Início
+            </button>
+            <button
+              onClick={() => {
+                onNavigate('/produtos');
+                setMobileMenuOpen(false);
+              }}
+              className="block w-full text-left py-2 text-sm font-medium text-gray-800"
+            >
+              Produtos
+            </button>
+            <button
+              onClick={() => {
+                onNavigate('/admin/orders');
+                setMobileMenuOpen(false);
+              }}
+              className="block w-full text-left py-2 text-xs font-semibold text-slate-600"
+            >
+              Painel Admin (Pedidos)
+            </button>
+          </div>
+        )}
+      </div>
+    </header>
+  );
+};
+
+export const Footer: React.FC = () => {
+  return (
+    <footer className="bg-slate-900 text-slate-400 py-12 border-t border-slate-800 mt-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div>
+          <div className="flex items-center space-x-2 text-white font-bold text-lg mb-3">
+            <div className="w-7 h-7 rounded-full bg-white text-slate-900 flex items-center justify-center font-black text-sm">
+              E
+            </div>
+            <span>EuSou</span>
+          </div>
+          <p className="text-sm text-slate-400 leading-relaxed">
+            Plataforma de produtos autênticos com catálogos curados e coleções exclusivas.
+          </p>
+        </div>
+        <div>
+          <h4 className="text-white text-sm font-semibold mb-3 tracking-wider uppercase">Navegação</h4>
+          <ul className="space-y-2 text-sm">
+            <li><a href="#" className="hover:text-white transition">Início</a></li>
+            <li><a href="#" className="hover:text-white transition">Todos os Produtos</a></li>
+            <li><a href="#" className="hover:text-white transition">Catálogos Temáticos</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 className="text-white text-sm font-semibold mb-3 tracking-wider uppercase">Segurança & Modos</h4>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Ambiente comercial com snapshots de pedido e provedor de demonstração (MockPaymentProvider). Transações 100% protegidas e auditadas.
+          </p>
+        </div>
+      </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pt-8 border-t border-slate-800 text-center text-xs text-slate-500">
+        &copy; {new Date().getFullYear()} EuSou. Todos os direitos reservados.
+      </div>
+    </footer>
+  );
+};
