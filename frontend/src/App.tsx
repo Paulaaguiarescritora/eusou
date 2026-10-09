@@ -21,6 +21,10 @@ import { AdminNichesView } from './components/AdminNichesView';
 import { AdminCategoriesView } from './components/AdminCategoriesView';
 import { AdminTagsView } from './components/AdminTagsView';
 import { AdminAttributesView } from './components/AdminAttributesView';
+import { AdminThemesView } from './components/AdminThemesView';
+import { AdminCollectionsView } from './components/AdminCollectionsView';
+import { AdminCatalogsView } from './components/AdminCatalogsView';
+import { AdminCatalogForm } from './components/AdminCatalogForm';
 import { LoginModal } from './components/LoginModal';
 import { useCart } from './useCart';
 import { fetchApi } from './api';
@@ -134,6 +138,15 @@ export function App() {
         fetchApi<Product>(`/public/products/${slugFromRoute}`)
           .then((p) => setSelectedProduct(p))
           .catch(() => setSelectedProduct(null))
+          .finally(() => setLoading(false));
+      }
+    } else if (route.startsWith('/catalogos/')) {
+      const catSlug = route.replace('/catalogos/', '').split('?')[0];
+      if (catSlug && (!selectedCatalog || selectedCatalog.slug !== catSlug)) {
+        setLoading(true);
+        fetchApi<Catalog>(`/public/catalogs/${catSlug}`)
+          .then((c) => setSelectedCatalog(c))
+          .catch(() => setSelectedCatalog(null))
           .finally(() => setLoading(false));
       }
     }
@@ -350,6 +363,34 @@ export function App() {
         {/* /admin/attributes */}
         {route === '/admin/attributes' && (
           <AdminAttributesView />
+        )}
+
+        {/* /admin/themes */}
+        {route === '/admin/themes' && (
+          <AdminThemesView />
+        )}
+
+        {/* /admin/collections */}
+        {route === '/admin/collections' && (
+          <AdminCollectionsView onNavigate={navigateTo} />
+        )}
+
+        {/* /admin/catalogs */}
+        {route === '/admin/catalogs' && (
+          <AdminCatalogsView onNavigate={navigateTo} />
+        )}
+
+        {/* /admin/catalogs/new */}
+        {route === '/admin/catalogs/new' && (
+          <AdminCatalogForm onNavigate={navigateTo} />
+        )}
+
+        {/* /admin/catalogs/:id */}
+        {route.startsWith('/admin/catalogs/') && route !== '/admin/catalogs/new' && (
+          <AdminCatalogForm
+            catalogId={route.replace('/admin/catalogs/', '')}
+            onNavigate={navigateTo}
+          />
         )}
 
         {/* Existing modules */}

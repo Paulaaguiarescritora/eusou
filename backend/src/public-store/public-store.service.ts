@@ -103,7 +103,10 @@ export class PublicStoreService {
         take: limit,
         orderBy: { [sortBy]: sortOrder },
         include: {
-          media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 2 },
+          media: {
+            orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
+            take: 2,
+          },
           variants: {
             where: { isActive: true },
             include: {

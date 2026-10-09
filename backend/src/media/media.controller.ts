@@ -34,7 +34,8 @@ export class MediaController {
   @Post('upload')
   upload(
     @Param('productId') productId: string,
-    @Body() body: { fileBase64: string; originalName?: string; isPrimary?: boolean },
+    @Body()
+    body: { fileBase64: string; originalName?: string; isPrimary?: boolean },
     @Req() req: any,
   ) {
     return this.mediaService.uploadBase64(

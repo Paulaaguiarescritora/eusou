@@ -28,6 +28,18 @@ interface AdminLayoutProps {
   children: ReactNode;
 }
 
+interface NavItem {
+  label: string;
+  route: string;
+  icon: any;
+  badge?: string;
+}
+
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
   currentRoute,
   onNavigate,
@@ -35,7 +47,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   userEmail,
   children,
 }) => {
-  const navSections = [
+  const navSections: NavSection[] = [
     {
       title: 'VISÃO GERAL',
       items: [
@@ -55,14 +67,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         { label: 'Categorias', route: '/admin/categories', icon: FolderTree },
         { label: 'Tags', route: '/admin/tags', icon: Tag },
         { label: 'Atributos', route: '/admin/attributes', icon: SlidersHorizontal },
-        { label: 'Temas', route: '/admin/themes', icon: Palette, badge: 'Em breve' },
+        { label: 'Temas', route: '/admin/themes', icon: Palette },
       ],
     },
     {
       title: 'PUBLICAÇÃO',
       items: [
-        { label: 'Catálogos', route: '/admin/catalogs', icon: BookOpen, badge: 'Em breve' },
-        { label: 'Coleções', route: '/admin/collections', icon: Library, badge: 'Em breve' },
+        { label: 'Catálogos', route: '/admin/catalogs', icon: BookOpen },
+        { label: 'Coleções', route: '/admin/collections', icon: Library },
       ],
     },
     {

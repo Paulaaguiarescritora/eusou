@@ -73,7 +73,13 @@ export class NicheService {
         include: {
           categories: {
             orderBy: { name: 'asc' },
-            select: { id: true, name: true, slug: true, status: true, _count: { select: { products: true } } },
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              status: true,
+              _count: { select: { products: true } },
+            },
           },
           _count: {
             select: { categories: true, products: true },

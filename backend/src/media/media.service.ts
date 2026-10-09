@@ -216,7 +216,7 @@ export class MediaService {
     await this.assertProductExists(productId);
 
     // Parse mime type and buffer
-    const matches = fileBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    const matches = fileBase64.match(/^data:([A-Za-z-+/_]+);base64,(.+)$/);
     let buffer: Buffer;
     let ext = 'webp';
 

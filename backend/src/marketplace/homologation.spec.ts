@@ -21,6 +21,7 @@ describe('Homologação Controlada F10 — Mercado Livre', () => {
   let encryption: CredentialEncryptionService;
 
   let testProductId: string;
+  let testProductName: string;
   let testChannelId: string;
   let testAccountId: string;
 
@@ -61,11 +62,17 @@ describe('Homologação Controlada F10 — Mercado Livre', () => {
 
     // Carrega entidades reais do Supabase
     const prod = await prisma.product.findFirst({
-      where: { slug: 'porta-chaves-gatinho-3d' },
+      where: {
+        OR: [
+          { slug: 'porta-chaves-gatinho' },
+          { slug: 'porta-chaves-gatinho-3d' },
+        ],
+      },
     });
     if (!prod)
       throw new Error('Produto de homologação não encontrado no Supabase.');
     testProductId = prod.id;
+    testProductName = prod.name;
 
     const ch = await prisma.channel.findFirst({
       where: { type: 'MERCADO_LIVRE' },
@@ -201,7 +208,7 @@ describe('Homologação Controlada F10 — Mercado Livre', () => {
       });
 
       expect(val.isValid).toBe(true);
-      expect(val.productName).toBe('Porta-Chaves Gatinho 3D');
+      expect(val.productName).toBe(testProductName);
       expect(val.externalCategoryId).toBe('MLB3530');
       expect(val.errors).toHaveLength(0);
     });

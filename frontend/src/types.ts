@@ -33,6 +33,9 @@ export interface Theme {
   id: string;
   name: string;
   slug: string;
+  description?: string | null;
+  status?: 'ACTIVE' | 'INACTIVE';
+  logo?: string | null;
   primaryColor: string;
   secondaryColor: string;
   font: string;
@@ -44,6 +47,17 @@ export interface Theme {
   showHighlights: boolean;
   showNewProducts: boolean;
   showOffers: boolean;
+  isPreset?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  _count?: { catalogs?: number };
+}
+
+export interface CatalogRule {
+  id?: string;
+  catalogId?: string;
+  type: 'NICHE' | 'CATEGORY' | 'TAG';
+  value: string;
 }
 
 export interface Catalog {
@@ -51,11 +65,19 @@ export interface Catalog {
   name: string;
   slug: string;
   description?: string | null;
+  status?: 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
   type: 'MANUAL' | 'AUTOMATIC';
+  nicheId?: string | null;
+  themeId?: string | null;
+  niche?: Niche | null;
   theme?: Theme | null;
+  rules?: CatalogRule[];
   resolvedProducts?: Product[];
-  items?: { product: Product; position: number }[];
-  collections?: { collection: Collection; position: number }[];
+  items?: { id?: string; productId?: string; product: Product; position: number }[];
+  collections?: { id?: string; collectionId?: string; collection: Collection; position: number }[];
+  _count?: { items?: number; collections?: number; rules?: number };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Collection {
@@ -63,8 +85,14 @@ export interface Collection {
   name: string;
   slug: string;
   description?: string | null;
+  coverMediaId?: string | null;
+  status?: 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
   products?: Product[];
-  items?: { product: Product; position: number }[];
+  items?: { id?: string; productId?: string; product: Product; position: number }[];
+  catalogs?: { id?: string; catalogId?: string; catalog: Catalog; position?: number }[];
+  _count?: { items?: number; catalogs?: number };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Niche {
