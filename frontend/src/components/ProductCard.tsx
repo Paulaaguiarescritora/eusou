@@ -13,7 +13,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onSelect,
   onQuickAdd,
 }) => {
-  const imageUrl = product.media && product.media.length > 0 ? product.media[0].url : null;
+  const imageUrl =
+    product.media?.find((m) => m.isPrimary)?.url ||
+    (product.media && product.media.length > 0 ? product.media[0].url : null);
   const price = product.basePrice ? Number(product.basePrice) : 0;
 
   return (

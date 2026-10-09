@@ -59,6 +59,7 @@ export class ProductService {
         description: dto.description?.trim() || null,
         status: dto.status || ProductStatus.DRAFT,
         brand: dto.brand?.trim() || null,
+        basePrice: dto.basePrice !== undefined ? dto.basePrice : null,
       },
     });
 
@@ -118,6 +119,7 @@ export class ProductService {
         take,
         orderBy: { [sortBy]: sortOrder },
         include: {
+          media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }] },
           niches: { include: { niche: true } },
           categories: { include: { category: true } },
           tags: { include: { tag: true } },
@@ -240,6 +242,10 @@ export class ProductService {
 
     if (dto.brand !== undefined) {
       updateData.brand = dto.brand ? dto.brand.trim() : null;
+    }
+
+    if (dto.basePrice !== undefined) {
+      updateData.basePrice = dto.basePrice !== null ? dto.basePrice : null;
     }
 
     const updated = await this.prisma.product.update({

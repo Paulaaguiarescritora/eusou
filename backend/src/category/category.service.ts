@@ -152,6 +152,21 @@ export class CategoryService {
         include: {
           niche: true,
           parent: true,
+          products: {
+            take: 20,
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  sku: true,
+                  basePrice: true,
+                  status: true,
+                },
+              },
+            },
+          },
           _count: {
             select: { children: true, products: true },
           },

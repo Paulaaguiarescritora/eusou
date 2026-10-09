@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber } from 'class-validator';
 import { ProductStatus } from '@prisma/client';
 
 export class UpdateProductDto {
@@ -30,4 +30,8 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   brand?: string;
+
+  @IsOptional()
+  @IsNumber()
+  basePrice?: number;
 }

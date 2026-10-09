@@ -205,4 +205,54 @@ export class MediaService {
 
     return { message: 'Media deleted successfully' };
   }
+
+  async uploadBase64(
+    productId: string,
+    fileBase64: string,
+    originalName?: string,
+    isPrimary: boolean = false,
+    actorId?: string,
+  ): Promise<Media> {
+    await this.assertProductExists(productId);
+
+    // Parse mime type and buffer
+    const matches = fileBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    let buffer: Buffer;
+    let ext = 'webp';
+
+    if (matches && matches.length === 3) {
+      const mime = matches[1];
+      if (mime.includes('png')) ext = 'png';
+      else if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
+      else if (mime.includes('gif')) ext = 'gif';
+      else if (mime.includes('webp')) ext = 'webp';
+      buffer = Buffer.from(matches[2], 'base64');
+    } else {
+      buffer = Buffer.from(fileBase64, 'base64');
+    }
+
+    const fs = require('fs');
+    const path = require('path');
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'products');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const fileName = `${productId}-${Date.now()}-${Math.floor(Math.random() * 10000)}.${ext}`;
+    const filePath = path.join(uploadsDir, fileName);
+    fs.writeFileSync(filePath, buffer);
+
+    const publicUrl = `http://localhost:3000/uploads/products/${fileName}`;
+
+    return this.create(
+      productId,
+      {
+        url: publicUrl,
+        type: 'IMAGE',
+        isPrimary,
+        altText: originalName || undefined,
+      },
+      actorId,
+    );
+  }
 }

@@ -26,10 +26,13 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
     product.variants && product.variants.length > 0 ? product.variants[0] : null,
   );
   const [quantity, setQuantity] = useState(1);
-  const [selectedImage, setSelectedImage] = useState<string | null>(
-    product.media && product.media.length > 0 ? product.media[0].url : null,
-  );
+  const primaryImg = product.media?.find((m) => m.isPrimary)?.url || (product.media && product.media.length > 0 ? product.media[0].url : null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(primaryImg);
   const [addedNotice, setAddedNotice] = useState(false);
+
+  React.useEffect(() => {
+    setSelectedImage(primaryImg);
+  }, [product.id, primaryImg]);
 
   const currentPrice = selectedVariant?.price
     ? Number(selectedVariant.price)

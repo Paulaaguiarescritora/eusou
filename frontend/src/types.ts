@@ -8,7 +8,7 @@ export interface Product {
   status: 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
   brand?: string | null;
   basePrice?: string | number | null;
-  media?: { id: string; url: string; sortOrder: number }[];
+  media?: { id: string; url: string; sortOrder?: number; isPrimary?: boolean }[];
   variants?: ProductVariant[];
   categories?: { category: { id: string; name: string; slug: string } }[];
   niches?: { niche: { id: string; name: string; slug: string } }[];
@@ -67,11 +67,48 @@ export interface Collection {
   items?: { product: Product; position: number }[];
 }
 
+export interface Niche {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  status: 'ACTIVE' | 'INACTIVE';
+  themeId?: string | null;
+  theme?: Theme | null;
+  categories?: { id: string; name: string; slug: string; status?: string; _count?: { products?: number } }[];
+  _count?: { products?: number; catalogs?: number; categories?: number };
+}
+
 export interface Category {
   id: string;
   name: string;
   slug: string;
+  description?: string | null;
+  status?: 'ACTIVE' | 'INACTIVE';
+  parentId?: string | null;
+  parent?: Category | null;
+  nicheId?: string | null;
+  niche?: Niche | null;
   children?: Category[];
+  products?: { product: Product }[];
+  _count?: { products?: number; children?: number };
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  slug: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  _count?: { products?: number };
+}
+
+export interface AttributeDefinition {
+  id: string;
+  name: string;
+  slug: string;
+  type: 'STRING' | 'NUMBER' | 'BOOLEAN' | 'SELECT';
+  description?: string | null;
+  options?: any;
 }
 
 export interface CartItem {

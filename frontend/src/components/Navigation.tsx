@@ -56,49 +56,19 @@ export const Header: React.FC<HeaderProps> = ({ totalItems, onNavigate }) => {
               onClick={() => onNavigate('/produtos')}
               className="text-sm font-medium text-gray-700 hover:text-black transition"
             >
-              Catálogo Geral
-            </button>
-            <button
-              onClick={() => onNavigate('/admin/orders')}
-              className="text-xs px-2.5 py-1 rounded bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200"
-            >
-              Pedidos
-            </button>
-            <button
-              onClick={() => onNavigate('/admin/production')}
-              className="text-xs px-2.5 py-1 rounded bg-amber-600 text-white font-semibold hover:bg-amber-700"
-            >
-              Produção
-            </button>
-            <button
-              onClick={() => onNavigate('/admin/inventory')}
-              className="text-xs px-2.5 py-1 rounded bg-slate-900 text-white font-semibold hover:bg-slate-800"
-            >
-              Estoque
-            </button>
-            <button
-              onClick={() => onNavigate('/admin/divulgacao')}
-              className="text-xs px-2.5 py-1 rounded bg-gradient-to-r from-amber-600 to-amber-700 text-white font-semibold hover:from-amber-500 hover:to-amber-600 shadow-xs"
-            >
-              Divulgação
-            </button>
-            <button
-              onClick={() => onNavigate('/admin/marketplaces')}
-              className="text-xs px-2.5 py-1 rounded bg-indigo-600 text-white font-semibold hover:bg-indigo-700 shadow-xs"
-            >
-              Marketplaces
-            </button>
-            <button
-              onClick={() => onNavigate('/admin/affiliates')}
-              className="text-xs px-2.5 py-1 rounded bg-zinc-800 text-white font-semibold hover:bg-zinc-700"
-            >
-              Afiliados
+              Produtos
             </button>
             <button
               onClick={() => onNavigate('/affiliate')}
               className="text-xs px-2.5 py-1 rounded bg-amber-500/20 text-amber-800 border border-amber-500/30 font-semibold hover:bg-amber-500/30"
             >
               Portal Afiliado
+            </button>
+            <button
+              onClick={() => onNavigate('/admin/products')}
+              className="text-xs px-2.5 py-1 rounded bg-slate-900 text-white font-semibold hover:bg-slate-800 shadow-xs"
+            >
+              Área Administrativa
             </button>
           </nav>
 
@@ -159,12 +129,21 @@ export const Header: React.FC<HeaderProps> = ({ totalItems, onNavigate }) => {
             </button>
             <button
               onClick={() => {
-                onNavigate('/admin/orders');
+                onNavigate('/affiliate');
                 setMobileMenuOpen(false);
               }}
-              className="block w-full text-left py-2 text-xs font-semibold text-slate-600"
+              className="block w-full text-left py-2 text-sm font-medium text-amber-800"
             >
-              Painel Admin (Pedidos)
+              Portal Afiliado
+            </button>
+            <button
+              onClick={() => {
+                onNavigate('/admin/products');
+                setMobileMenuOpen(false);
+              }}
+              className="block w-full text-left py-2 text-xs font-semibold text-slate-900"
+            >
+              Área Administrativa
             </button>
           </div>
         )}
@@ -173,7 +152,11 @@ export const Header: React.FC<HeaderProps> = ({ totalItems, onNavigate }) => {
   );
 };
 
-export const Footer: React.FC = () => {
+interface FooterProps {
+  onNavigate?: (route: string) => void;
+}
+
+export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
   return (
     <footer className="bg-slate-900 text-slate-400 py-12 border-t border-slate-800 mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -191,9 +174,33 @@ export const Footer: React.FC = () => {
         <div>
           <h4 className="text-white text-sm font-semibold mb-3 tracking-wider uppercase">Navegação</h4>
           <ul className="space-y-2 text-sm">
-            <li><a href="#" className="hover:text-white transition">Início</a></li>
-            <li><a href="#" className="hover:text-white transition">Todos os Produtos</a></li>
-            <li><a href="#" className="hover:text-white transition">Catálogos Temáticos</a></li>
+            <li>
+              <button
+                type="button"
+                onClick={() => onNavigate && onNavigate('/')}
+                className="hover:text-white transition cursor-pointer text-left"
+              >
+                Início
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => onNavigate && onNavigate('/produtos')}
+                className="hover:text-white transition cursor-pointer text-left"
+              >
+                Todos os Produtos
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => onNavigate && onNavigate('/')}
+                className="hover:text-white transition cursor-pointer text-left"
+              >
+                Catálogos Temáticos
+              </button>
+            </li>
           </ul>
         </div>
         <div>

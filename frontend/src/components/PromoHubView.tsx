@@ -78,6 +78,9 @@ export const PromoHubView: React.FC<PromoHubViewProps> = ({ onNavigate }) => {
     ? activeVariant.price
     : selectedProduct?.basePrice;
 
+  const effectiveImageUrl =
+    selectedProduct?.media?.find((m) => m.isPrimary)?.url ||
+    (selectedProduct?.media && selectedProduct.media.length > 0 ? selectedProduct.media[0].url : null);
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://eusou.com.br';
   const productUrl = selectedProduct
     ? `${origin}/produtos/${selectedProduct.slug}${activeVariant ? `?variant=${activeVariant.id}` : ''}`
@@ -386,9 +389,20 @@ export const PromoHubView: React.FC<PromoHubViewProps> = ({ onNavigate }) => {
                   {/* Preview do Card */}
                   <div className="p-6 bg-zinc-50 border border-dashed border-zinc-300 rounded-2xl flex justify-center">
                     <div className="w-72 bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-lg flex flex-col">
-                      <div className="h-44 bg-zinc-900 flex items-center justify-center text-white relative">
-                        <ShoppingBag size={48} className="text-amber-400 opacity-90" />
-                        <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-zinc-950 uppercase">
+                      <div className="h-44 bg-zinc-100 flex items-center justify-center relative overflow-hidden">
+                        {effectiveImageUrl ? (
+                          <img
+                            src={effectiveImageUrl}
+                            alt={effectiveName}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center text-zinc-400">
+                            <ShoppingBag size={48} className="text-zinc-400 opacity-60" />
+                            <span className="text-[11px] mt-1 font-medium text-zinc-400">Sem imagem</span>
+                          </div>
+                        )}
+                        <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-zinc-950 uppercase shadow-xs">
                           Autêntico
                         </span>
                       </div>
@@ -422,7 +436,10 @@ export const PromoHubView: React.FC<PromoHubViewProps> = ({ onNavigate }) => {
                       <span className="text-xs font-bold text-zinc-600 uppercase">Código HTML do Card</span>
                       <button
                         onClick={() => {
-                          const html = `<div style="max-width:280px;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;font-family:sans-serif;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);"><div style="height:160px;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#f59e0b;font-size:24px;font-weight:bold;">EuSou</div><div style="padding:16px;"><div style="font-size:11px;color:#94a3b8;font-weight:bold;">${effectiveSku}</div><h4 style="margin:4px 0;font-size:16px;font-weight:bold;color:#0f172a;">${effectiveName}</h4><div style="font-size:18px;font-weight:bold;color:#b45309;margin-top:8px;">${formatPrice(effectivePrice)}</div><a href="${productUrl}" target="_blank" style="display:block;margin-top:16px;text-align:center;background:#0f172a;color:#fff;padding:10px;border-radius:10px;text-decoration:none;font-size:13px;font-weight:bold;">Comprar Agora</a></div></div>`;
+                          const imgTag = effectiveImageUrl
+                            ? `<img src="${effectiveImageUrl}" alt="${effectiveName}" style="width:100%;height:180px;object-fit:cover;display:block;" />`
+                            : `<div style="height:160px;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#f59e0b;font-size:24px;font-weight:bold;">EuSou</div>`;
+                          const html = `<div style="max-width:280px;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;font-family:sans-serif;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">${imgTag}<div style="padding:16px;"><div style="font-size:11px;color:#94a3b8;font-weight:bold;">${effectiveSku}</div><h4 style="margin:4px 0;font-size:16px;font-weight:bold;color:#0f172a;">${effectiveName}</h4><div style="font-size:18px;font-weight:bold;color:#b45309;margin-top:8px;">${formatPrice(effectivePrice)}</div><a href="${productUrl}" target="_blank" style="display:block;margin-top:16px;text-align:center;background:#0f172a;color:#fff;padding:10px;border-radius:10px;text-decoration:none;font-size:13px;font-weight:bold;">Comprar Agora</a></div></div>`;
                           copyText(html, 'card_code');
                         }}
                         className="text-amber-600 hover:text-amber-700 text-xs font-semibold flex items-center gap-1"
@@ -433,7 +450,7 @@ export const PromoHubView: React.FC<PromoHubViewProps> = ({ onNavigate }) => {
                     </div>
                     <pre className="bg-zinc-900 text-zinc-100 p-3.5 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap">
 {`<div style="max-width:280px;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;font-family:sans-serif;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
-  <div style="height:160px;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#f59e0b;font-size:24px;font-weight:bold;">EuSou</div>
+  ${effectiveImageUrl ? `<img src="${effectiveImageUrl}" alt="${effectiveName}" style="width:100%;height:180px;object-fit:cover;display:block;" />` : `<div style="height:160px;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#f59e0b;font-size:24px;font-weight:bold;">EuSou</div>`}
   <div style="padding:16px;">
     <div style="font-size:11px;color:#94a3b8;font-weight:bold;">${effectiveSku}</div>
     <h4 style="margin:4px 0;font-size:16px;font-weight:bold;color:#0f172a;">${effectiveName}</h4>
@@ -457,9 +474,17 @@ export const PromoHubView: React.FC<PromoHubViewProps> = ({ onNavigate }) => {
                   {/* Preview Banner */}
                   <div className="p-4 bg-gradient-to-r from-zinc-950 via-zinc-900 to-amber-950 text-white rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-300 font-bold">
-                        <Sparkles size={24} />
-                      </div>
+                      {effectiveImageUrl ? (
+                        <img
+                          src={effectiveImageUrl}
+                          alt={effectiveName}
+                          className="w-14 h-14 rounded-xl object-cover border border-amber-500/30 shadow-sm"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-300 font-bold">
+                          <Sparkles size={24} />
+                        </div>
+                      )}
                       <div>
                         <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">Destaque Exclusivo</span>
                         <div className="font-serif font-bold text-base">{effectiveName}</div>

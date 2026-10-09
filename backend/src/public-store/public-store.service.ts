@@ -103,7 +103,7 @@ export class PublicStoreService {
         take: limit,
         orderBy: { [sortBy]: sortOrder },
         include: {
-          media: { orderBy: { sortOrder: 'asc' }, take: 2 },
+          media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 2 },
           variants: {
             where: { isActive: true },
             include: {
@@ -137,7 +137,7 @@ export class PublicStoreService {
     const product = await this.prisma.product.findFirst({
       where: { slug, status: 'ACTIVE' },
       include: {
-        media: { orderBy: { sortOrder: 'asc' } },
+        media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }] },
         attributeValues: {
           include: { attributeDefinition: true },
         },

@@ -31,6 +31,21 @@ export class MediaController {
     return this.mediaService.create(productId, dto, req.user?.sub);
   }
 
+  @Post('upload')
+  upload(
+    @Param('productId') productId: string,
+    @Body() body: { fileBase64: string; originalName?: string; isPrimary?: boolean },
+    @Req() req: any,
+  ) {
+    return this.mediaService.uploadBase64(
+      productId,
+      body.fileBase64,
+      body.originalName,
+      body.isPrimary || false,
+      req.user?.sub,
+    );
+  }
+
   @Get()
   findAll(@Param('productId') productId: string) {
     return this.mediaService.findAll(productId);

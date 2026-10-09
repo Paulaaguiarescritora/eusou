@@ -14,21 +14,39 @@ import { InventoryView } from './components/InventoryView';
 import { PromoHubView } from './components/PromoHubView';
 import { ProductEmbedView } from './components/ProductEmbedView';
 import { MarketplacesView } from './components/MarketplacesView';
+import { AdminLayout } from './components/AdminLayout';
+import { AdminProductsView } from './components/AdminProductsView';
+import { AdminProductForm } from './components/AdminProductForm';
+import { AdminNichesView } from './components/AdminNichesView';
+import { AdminCategoriesView } from './components/AdminCategoriesView';
+import { AdminTagsView } from './components/AdminTagsView';
+import { AdminAttributesView } from './components/AdminAttributesView';
+import { LoginModal } from './components/LoginModal';
 import { useCart } from './useCart';
 import { fetchApi } from './api';
 import { Product, Catalog, Category, Collection, Order } from './types';
-import { Sparkles, ArrowRight, Layers, Tag, Grid } from 'lucide-react';
+import { Sparkles, ArrowRight } from 'lucide-react';
 
 export function App() {
   const [route, setRoute] = useState<string>(() => {
-    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/embed/')) {
-      return window.location.pathname;
+    if (typeof window !== 'undefined') {
+      return window.location.pathname || '/';
     }
     return '/';
   });
+
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCatalog, setSelectedCatalog] = useState<Catalog | null>(null);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
+
+  // Auth state
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; roles: string[] } | null>(null);
+  const isAdmin = currentUser?.roles?.includes('admin') ?? false;
+  const [authChecking, setAuthChecking] = useState<boolean>(() => {
+    return typeof window !== 'undefined' && Boolean(localStorage.getItem('token'));
+  });
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [pendingRoute, setPendingRoute] = useState<string | null>(null);
 
   // Store data
   const [homeData, setHomeData] = useState<{
@@ -51,13 +69,40 @@ export function App() {
     subtotal,
   } = useCart();
 
+  // Load auth session on start
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      fetchApi<{ id: string; email: string; roles: string[] }>('/auth/me')
+        .then((user) => setCurrentUser(user))
+        .catch(() => {
+          localStorage.removeItem('token');
+          setCurrentUser(null);
+        })
+        .finally(() => {
+          setAuthChecking(false);
+        });
+    } else {
+      setAuthChecking(false);
+    }
+  }, []);
+
+  // Listen to browser navigation (back/forward)
+  useEffect(() => {
+    const handlePopState = () => {
+      setRoute(window.location.pathname || '/');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Load public home data
   useEffect(() => {
     // Tracking de Afiliado via URL (?ref=CODIGO)
     const urlParams = new URLSearchParams(window.location.search);
     const refCode = urlParams.get('ref');
     if (refCode) {
       localStorage.setItem('eusou_ref_code', refCode);
-      // Registra clique no backend de forma transparente
       fetchApi('/affiliates/track-click', {
         method: 'POST',
         body: JSON.stringify({
@@ -67,29 +112,75 @@ export function App() {
       }).catch((e) => console.debug('Click tracking notice:', e));
     }
 
-    // Load initial home data
     fetchApi<any>('/public/home')
       .then((data) => setHomeData(data))
       .catch((e) => console.error('Failed to load public home data', e));
   }, []);
 
-  const navigateTo = (newRoute: string) => {
-    setRoute(newRoute);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-
-    if (newRoute === '/produtos' || newRoute.startsWith('/produtos?')) {
+  // CORREÇÃO: Disparar fetch de /produtos quando a rota atual for /produtos
+  useEffect(() => {
+    if (route === '/produtos' || route.startsWith('/produtos?')) {
+      setSelectedProduct(null);
       setLoading(true);
-      fetchApi<{ data: Product[] }>('/public/products')
-        .then((res) => setProductsList(res.data))
+      const queryStr = route.includes('?') ? route.substring(route.indexOf('?')) : '';
+      fetchApi<{ data: Product[] }>(`/public/products${queryStr}`)
+        .then((res) => setProductsList(res.data || []))
         .catch(() => setProductsList([]))
         .finally(() => setLoading(false));
+    } else if (route.startsWith('/produtos/')) {
+      const slugFromRoute = route.replace('/produtos/', '').split('?')[0];
+      if (slugFromRoute && (!selectedProduct || selectedProduct.slug !== slugFromRoute)) {
+        setLoading(true);
+        fetchApi<Product>(`/public/products/${slugFromRoute}`)
+          .then((p) => setSelectedProduct(p))
+          .catch(() => setSelectedProduct(null))
+          .finally(() => setLoading(false));
+      }
     }
+  }, [route]);
+
+  // Route change handler
+  const navigateTo = (newRoute: string) => {
+    // Check if route is admin and requires auth
+    if (newRoute.startsWith('/admin/')) {
+      const isAdmin = currentUser?.roles?.includes('admin');
+      if (!isAdmin) {
+        setPendingRoute(newRoute);
+        setShowLoginModal(true);
+        return;
+      }
+    }
+
+    setRoute(newRoute);
+    if (typeof window !== 'undefined' && window.location.pathname !== newRoute) {
+      window.history.pushState({}, '', newRoute);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleLoginSuccess = (user: { id: string; email: string; roles: string[] }) => {
+    setCurrentUser(user);
+    if (user.roles.includes('admin')) {
+      const target = pendingRoute || '/admin/products';
+      setRoute(target);
+      if (typeof window !== 'undefined') {
+        window.history.pushState({}, '', target);
+      }
+    } else {
+      alert('Seu perfil não possui acesso administrativo.');
+    }
+    setPendingRoute(null);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setCurrentUser(null);
+    navigateTo('/');
   };
 
   const handleSelectProduct = (product: Product) => {
     setSelectedProduct(product);
-    setRoute(`/produtos/${product.slug}`);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigateTo(`/produtos/${product.slug}`);
   };
 
   const handleSelectCatalog = async (catalogSlug: string) => {
@@ -97,8 +188,7 @@ export function App() {
     try {
       const fullCatalog = await fetchApi<Catalog>(`/public/catalogs/${catalogSlug}`);
       setSelectedCatalog(fullCatalog);
-      setRoute(`/catalogos/${catalogSlug}`);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      navigateTo(`/catalogos/${catalogSlug}`);
     } catch (e) {
       console.error('Failed to load catalog', e);
     } finally {
@@ -108,10 +198,11 @@ export function App() {
 
   const handleOrderPlaced = (order: Order) => {
     setCompletedOrder(order);
-    setRoute(`/pedido/${order.id}`);
+    clearCart();
+    navigateTo(`/pedido/${order.id}`);
   };
 
-  // Standalone embed widget rendering (no global navbar/footer)
+  // 1. EMBED ROUTE
   if (route.startsWith('/embed/products/')) {
     const embedId = route.replace('/embed/products/', '').split('?')[0];
     return (
@@ -121,12 +212,172 @@ export function App() {
     );
   }
 
+  // 2. ADMIN BACKOFFICE ROUTE
+  if (route.startsWith('/admin/')) {
+    if (authChecking) {
+      return (
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400 text-xs">
+          Verificando permissões de acesso...
+        </div>
+      );
+    }
+
+    if (!isAdmin) {
+      return (
+        <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 text-white">
+          <div className="max-w-md w-full bg-white p-8 rounded-2xl border border-slate-200 text-slate-900 shadow-2xl space-y-6">
+            <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+              <div className="w-10 h-10 rounded-xl bg-slate-900 text-amber-400 font-black flex items-center justify-center text-lg shadow-xs">
+                E
+              </div>
+              <div>
+                <h2 className="text-lg font-black tracking-tight text-slate-900">EuSou Backoffice</h2>
+                <p className="text-xs text-slate-500">Acesso Restrito Administrativo</p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200/80 text-xs text-amber-900">
+              <span className="font-bold block mb-1">Credenciais de Acesso:</span>
+              <span className="font-mono text-slate-700 block">E-mail: admin@eusou.com</span>
+              <span className="font-mono text-slate-700 block">Senha: admin123</span>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.currentTarget;
+                const emailInput = (form.elements.namedItem('email') as HTMLInputElement).value;
+                const passwordInput = (form.elements.namedItem('password') as HTMLInputElement).value;
+                try {
+                  const res = await fetchApi<{ accessToken: string }>('/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ email: emailInput, password: passwordInput }),
+                  });
+                  localStorage.setItem('token', res.accessToken);
+                  const me = await fetchApi<{ id: string; email: string; roles: string[] }>('/auth/me');
+                  handleLoginSuccess(me);
+                } catch (err: any) {
+                  alert(err.message || 'Falha ao autenticar.');
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">E-mail</label>
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  defaultValue="admin@eusou.com"
+                  placeholder="admin@eusou.com"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Senha</label>
+                <input
+                  type="password"
+                  name="password"
+                  required
+                  defaultValue="admin123"
+                  placeholder="••••••••"
+                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => navigateTo('/')}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Voltar à Loja
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                >
+                  Entrar no Backoffice
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <AdminLayout
+        currentRoute={route}
+        onNavigate={navigateTo}
+        onLogout={handleLogout}
+        userEmail={currentUser?.email || 'admin@eusou.com'}
+      >
+        {/* /admin/products */}
+        {route === '/admin/products' && (
+          <AdminProductsView onNavigate={navigateTo} />
+        )}
+
+        {/* /admin/products/new */}
+        {route === '/admin/products/new' && (
+          <AdminProductForm onNavigate={navigateTo} />
+        )}
+
+        {/* /admin/products/:id */}
+        {route.startsWith('/admin/products/') && route !== '/admin/products/new' && (
+          <AdminProductForm
+            productId={route.replace('/admin/products/', '')}
+            onNavigate={navigateTo}
+          />
+        )}
+
+        {/* /admin/niches */}
+        {route === '/admin/niches' && (
+          <AdminNichesView />
+        )}
+
+        {/* /admin/categories */}
+        {route === '/admin/categories' && (
+          <AdminCategoriesView />
+        )}
+
+        {/* /admin/tags */}
+        {route === '/admin/tags' && (
+          <AdminTagsView />
+        )}
+
+        {/* /admin/attributes */}
+        {route === '/admin/attributes' && (
+          <AdminAttributesView />
+        )}
+
+        {/* Existing modules */}
+        {route === '/admin/orders' && <AdminOrdersView />}
+        {route === '/admin/production' && <ProductionView />}
+        {route === '/admin/inventory' && <InventoryView />}
+        {route === '/admin/affiliates' && <AdminAffiliatesView onNavigate={navigateTo} />}
+        {route === '/admin/divulgacao' && <PromoHubView onNavigate={navigateTo} />}
+        {route === '/admin/marketplaces' && (
+          <MarketplacesView token={localStorage.getItem('token') || ''} />
+        )}
+      </AdminLayout>
+    );
+  }
+
+  // 3. PUBLIC STORE ROUTE
   return (
     <div className="min-h-screen flex flex-col bg-slate-50/50 text-slate-800 font-sans antialiased">
       <Header
         totalItems={totalItems}
         onNavigate={navigateTo}
         currentRoute={route}
+      />
+
+      <LoginModal
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onSuccess={handleLoginSuccess}
       />
 
       <main className="flex-1">
@@ -148,7 +399,7 @@ export function App() {
                 <div className="pt-4 flex justify-center gap-4">
                   <button
                     onClick={() => navigateTo('/produtos')}
-                    className="px-6 py-3 bg-white text-slate-900 rounded-xl font-bold text-xs hover:bg-slate-100 transition shadow-sm cursor-pointer"
+                    className="px-6 py-3 bg-white text-slate-900 rounded-xl font-bold text-xs hover:bg-slate-100 transition shadow-xs cursor-pointer"
                   >
                     Ver Todos os Produtos
                   </button>
@@ -158,25 +409,25 @@ export function App() {
 
             {/* Content Sections */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-20">
-              {/* Categorias Principais */}
+              {/* Categorias em Destaque */}
               {homeData?.categories && homeData.categories.length > 0 && (
                 <div>
                   <div className="flex justify-between items-center mb-6">
                     <div>
                       <h2 className="text-xl font-extrabold text-slate-900">Categorias</h2>
-                      <p className="text-xs text-slate-500">Navegue pelas divisões do catálogo</p>
+                      <p className="text-xs text-slate-500">Navegue pelas principais áreas de produto</p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     {homeData.categories.map((c) => (
                       <div
                         key={c.id}
-                        onClick={() => navigateTo(`/produtos?category=${c.id}`)}
-                        className="p-5 bg-white rounded-xl border border-gray-100 hover:border-slate-300 transition cursor-pointer text-center group"
+                        onClick={() => navigateTo(`/produtos?category=${c.slug}`)}
+                        className="p-4 bg-white rounded-2xl border border-gray-100 hover:border-slate-800 hover:shadow-xs transition text-center cursor-pointer group"
                       >
-                        <h4 className="font-bold text-sm text-slate-800 group-hover:text-black">
+                        <span className="text-xs font-bold text-slate-800 group-hover:text-black">
                           {c.name}
-                        </h4>
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -363,43 +614,13 @@ export function App() {
           />
         )}
 
-        {/* ROUTE: ADMIN PEDIDOS */}
-        {route === '/admin/orders' && (
-          <AdminOrdersView />
-        )}
-
-        {/* ROUTE: ADMIN PRODUÇÃO */}
-        {route === '/admin/production' && (
-          <ProductionView />
-        )}
-
-        {/* ROUTE: ADMIN ESTOQUE */}
-        {route === '/admin/inventory' && (
-          <InventoryView />
-        )}
-
-        {/* ROUTE: ADMIN AFILIADOS */}
-        {route === '/admin/affiliates' && (
-          <AdminAffiliatesView onNavigate={navigateTo} />
-        )}
-
-        {/* ROUTE: ADMIN DIVULGAÇÃO */}
-        {route === '/admin/divulgacao' && (
-          <PromoHubView onNavigate={navigateTo} />
-        )}
-
-        {/* ROUTE: ADMIN MARKETPLACES */}
-        {route === '/admin/marketplaces' && (
-          <MarketplacesView token={localStorage.getItem('token') || ''} />
-        )}
-
         {/* ROUTE: PORTAL DO AFILIADO */}
         {route === '/affiliate' && (
           <AffiliatePortalView onNavigate={navigateTo} />
         )}
       </main>
 
-      <Footer />
+      <Footer onNavigate={navigateTo} />
     </div>
   );
 }
