@@ -25,6 +25,7 @@ import { AdminThemesView } from './components/AdminThemesView';
 import { AdminCollectionsView } from './components/AdminCollectionsView';
 import { AdminCatalogsView } from './components/AdminCatalogsView';
 import { AdminCatalogForm } from './components/AdminCatalogForm';
+import { CommercialDashboardView } from './components/CommercialDashboardView';
 import { LoginModal } from './components/LoginModal';
 import { useCart } from './useCart';
 import { fetchApi } from './api';
@@ -327,6 +328,11 @@ export function App() {
         onLogout={handleLogout}
         userEmail={currentUser?.email || 'admin@eusou.com'}
       >
+        {/* /admin/dashboard */}
+        {(route === '/admin/dashboard' || route === '/admin') && (
+          <CommercialDashboardView onNavigate={navigateTo} token={localStorage.getItem('token') || ''} />
+        )}
+
         {/* /admin/products */}
         {route === '/admin/products' && (
           <AdminProductsView onNavigate={navigateTo} />

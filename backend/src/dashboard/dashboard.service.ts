@@ -1,152 +1,425 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import { CommercialAlertService } from './commercial-alert.service';
+import {
+  ChannelAccountStatus,
+  ChannelProductStatus,
+  MarketplaceEventStatus,
+  OrderStatus,
+  Prisma,
+} from '@prisma/client';
+
+export type DashboardPeriod = 'today' | '7d' | '30d' | '90d';
+
+export interface CommercialDashboardFilter {
+  period?: DashboardPeriod;
+  startDate?: string;
+  endDate?: string;
+}
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(DashboardService.name);
 
-  async getSummary() {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly alertService: CommercialAlertService,
+  ) {}
+
+  /**
+   * Resolução de intervalo de datas (Período atual e Período anterior equivalente)
+   */
+  private resolveDateRanges(filter: CommercialDashboardFilter) {
+    const now = new Date();
+    let currentStart = new Date();
+    let currentEnd = now;
+
+    if (filter.startDate && filter.endDate) {
+      currentStart = new Date(filter.startDate);
+      currentEnd = new Date(filter.endDate);
+    } else {
+      const p = filter.period || '30d';
+      if (p === 'today') {
+        currentStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+      } else if (p === '7d') {
+        currentStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      } else if (p === '90d') {
+        currentStart = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      } else {
+        // Default 30d
+        currentStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+    }
+
+    const durationMs = currentEnd.getTime() - currentStart.getTime();
+    const previousStart = new Date(currentStart.getTime() - durationMs);
+    const previousEnd = new Date(currentStart.getTime());
+
+    return {
+      current: { start: currentStart, end: currentEnd },
+      previous: { start: previousStart, end: previousEnd },
+    };
+  }
+
+  /**
+   * Resumo Operacional Consolidado (Endpoint principal /admin/dashboard/summary)
+   */
+  async getCommercialSummary(filter: CommercialDashboardFilter = {}) {
+    const dates = this.resolveDateRanges(filter);
+
+    // 1. Vendas e Pedidos (F5) - Período Atual vs Anterior
+    const [
+      currentOrders,
+      previousOrders,
+      todayOrders,
+      orders7d,
+      orders30d,
+    ] = await Promise.all([
+      this.prisma.order.findMany({
+        where: {
+          createdAt: { gte: dates.current.start, lte: dates.current.end },
+          status: { not: OrderStatus.CANCELLED },
+        },
+        include: {
+          items: true,
+          channelOrder: { include: { channel: true } },
+        },
+      }),
+      this.prisma.order.findMany({
+        where: {
+          createdAt: { gte: dates.previous.start, lte: dates.previous.end },
+          status: { not: OrderStatus.CANCELLED },
+        },
+      }),
+      // Hoje
+      this.prisma.order.findMany({
+        where: {
+          createdAt: {
+            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+          },
+          status: { not: OrderStatus.CANCELLED },
+        },
+      }),
+      // 7 dias
+      this.prisma.order.findMany({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+          },
+          status: { not: OrderStatus.CANCELLED },
+        },
+      }),
+      // 30 dias
+      this.prisma.order.findMany({
+        where: {
+          createdAt: {
+            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+          },
+          status: { not: OrderStatus.CANCELLED },
+        },
+      }),
+    ]);
+
+    // Métricas financeiras com Prisma.Decimal
+    const currentRevenue = currentOrders.reduce(
+      (acc, ord) => acc.add(ord.total),
+      new Prisma.Decimal(0),
+    );
+    const previousRevenue = previousOrders.reduce(
+      (acc, ord) => acc.add(ord.total),
+      new Prisma.Decimal(0),
+    );
+
+    const revenueToday = todayOrders.reduce(
+      (acc, ord) => acc.add(ord.total),
+      new Prisma.Decimal(0),
+    );
+    const revenue7d = orders7d.reduce(
+      (acc, ord) => acc.add(ord.total),
+      new Prisma.Decimal(0),
+    );
+    const revenue30d = orders30d.reduce(
+      (acc, ord) => acc.add(ord.total),
+      new Prisma.Decimal(0),
+    );
+
+    // Comparação percentual de faturamento
+    let revenueGrowthPercent: number | null = null;
+    if (previousRevenue.greaterThan(0)) {
+      revenueGrowthPercent = Number(
+        currentRevenue
+          .minus(previousRevenue)
+          .dividedBy(previousRevenue)
+          .times(100)
+          .toFixed(1),
+      );
+    }
+
+    const orderCount = currentOrders.length;
+    const averageTicket = orderCount > 0
+      ? currentRevenue.dividedBy(orderCount).toFixed(2)
+      : '0.00';
+
+    // Quebra por Origem de Venda
+    let revenueOwnStore = new Prisma.Decimal(0);
+    let revenueMarketplace = new Prisma.Decimal(0);
+    let revenueAffiliate = new Prisma.Decimal(0);
+
+    for (const ord of currentOrders) {
+      if (ord.channelOrder) {
+        revenueMarketplace = revenueMarketplace.add(ord.total);
+      } else if (ord.affiliateCode) {
+        revenueAffiliate = revenueAffiliate.add(ord.total);
+      } else {
+        revenueOwnStore = revenueOwnStore.add(ord.total);
+      }
+    }
+
+    // 2. Saúde Operacional & Alertas (F14 Core)
+    const [operationHealth, alerts] = await Promise.all([
+      this.alertService.getOperationHealth(),
+      this.alertService.getAlerts(),
+    ]);
+
+    // 3. Produtos & Catálogo (F2A, F3, F11)
     const [
       totalProducts,
-      totalActiveProducts,
-      totalNiches,
-      totalActiveNiches,
-      totalCategories,
-      totalActiveCategories,
-      totalTags,
-      totalThemes,
-      totalCatalogs,
-      totalActiveCatalogs,
-      totalCollections,
-      totalActiveCollections,
-      totalAffiliates,
-      activeAffiliates,
-      totalClicks,
-      totalConversions,
-      conversions,
+      activeProducts,
+      productsWithoutCategory,
+      productsWithoutBasePrice,
+      productsWithPublishError,
     ] = await Promise.all([
       this.prisma.product.count(),
       this.prisma.product.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.niche.count(),
-      this.prisma.niche.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.category.count(),
-      this.prisma.category.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.tag.count(),
-      this.prisma.theme.count(),
-      this.prisma.catalog.count(),
-      this.prisma.catalog.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.collection.count(),
-      this.prisma.collection.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.affiliate.count(),
-      this.prisma.affiliate.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.affiliateClick.count(),
-      this.prisma.affiliateConversion.count(),
-      this.prisma.affiliateConversion.findMany({
-        select: { amount: true, commissionAmount: true, status: true },
+      this.prisma.product.count({ where: { status: 'ACTIVE', categories: { none: {} } } }),
+      this.prisma.product.count({ where: { status: 'ACTIVE', OR: [{ basePrice: null }, { basePrice: 0 }] } }),
+      this.prisma.channelProduct.count({ where: { status: ChannelProductStatus.ERROR } }),
+    ]);
+
+    // 4. Estoque & Produção (F7)
+    const [
+      inventories,
+      activeJobs,
+      completedJobs,
+    ] = await Promise.all([
+      this.prisma.inventory.findMany({
+        include: { product: true },
+      }),
+      this.prisma.productionJob.findMany({
+        where: { status: { in: ['QUEUED', 'PRINTING'] } },
+        include: { product: true, printer: true },
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.productionJob.count({
+        where: { status: 'COMPLETED' },
       }),
     ]);
 
-    const approvedCommissions = conversions
-      .filter((c) => c.status === 'APPROVED')
-      .reduce((sum, c) => sum + Number(c.commissionAmount), 0);
+    let totalStockAvailable = 0;
+    let totalStockReserved = 0;
+    let criticalStockCount = 0;
+    let lowStockCount = 0;
 
-    const pendingCommissions = conversions
-      .filter((c) => c.status === 'PENDING')
-      .reduce((sum, c) => sum + Number(c.commissionAmount), 0);
+    const criticalItems: any[] = [];
+    for (const inv of inventories) {
+      if (!inv.product) continue;
+      const avail = inv.quantity - inv.reservedQuantity;
+      totalStockAvailable += Math.max(0, avail);
+      totalStockReserved += inv.reservedQuantity;
 
-    const affiliateSales = conversions
-      .filter((c) => c.status !== 'CANCELLED')
-      .reduce((sum, c) => sum + Number(c.amount), 0);
+      if (avail <= 0) {
+        criticalStockCount++;
+        criticalItems.push({
+          productId: inv.productId,
+          productName: inv.product.name,
+          sku: inv.product.sku,
+          available: avail,
+          minimum: inv.minimumQuantity,
+          status: 'ESGOTADO',
+        });
+      } else if (avail <= inv.minimumQuantity) {
+        lowStockCount++;
+        criticalItems.push({
+          productId: inv.productId,
+          productName: inv.product.name,
+          sku: inv.product.sku,
+          available: avail,
+          minimum: inv.minimumQuantity,
+          status: 'BAIXO',
+        });
+      }
+    }
 
+    // 5. Marketplaces & Canais (F9, F10, F13)
     const [
-      totalPrinters,
-      availablePrinters,
-      queuedJobs,
-      printingJobs,
-      completedJobs,
-      inventories,
-      materials,
+      channels,
+      channelAccounts,
+      publishedChannelProducts,
+      pendingEvents,
+      failedEvents,
+      recentOrders,
     ] = await Promise.all([
-      this.prisma.printer.count(),
-      this.prisma.printer.count({ where: { status: 'AVAILABLE' } }),
-      this.prisma.productionJob.count({ where: { status: 'QUEUED' } }),
-      this.prisma.productionJob.count({ where: { status: 'PRINTING' } }),
-      this.prisma.productionJob.count({ where: { status: 'COMPLETED' } }),
-      this.prisma.inventory.findMany({
-        select: {
-          quantity: true,
-          reservedQuantity: true,
-          minimumQuantity: true,
-          product: { select: { basePrice: true } },
+      this.prisma.channel.findMany({
+        include: { _count: { select: { accounts: true, channelOrders: true } } },
+      }),
+      this.prisma.channelAccount.findMany({
+        include: {
+          channel: true,
+          _count: { select: { channelProducts: true, channelOrders: true } },
         },
       }),
-      this.prisma.material.findMany({
-        select: { currentQuantity: true, minimumQuantity: true },
+      this.prisma.channelProduct.count({ where: { status: ChannelProductStatus.PUBLISHED } }),
+      this.prisma.marketplaceEvent.count({ where: { status: MarketplaceEventStatus.RECEIVED } }),
+      this.prisma.marketplaceEvent.count({ where: { status: MarketplaceEventStatus.FAILED } }),
+      this.prisma.order.findMany({
+        take: 8,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          items: true,
+          channelOrder: { include: { channel: true } },
+        },
       }),
     ]);
 
-    const lowStockMaterials = materials.filter(
-      (m) => Number(m.currentQuantity) <= Number(m.minimumQuantity),
-    ).length;
+    // Saúde detalhada por conta de canal
+    const marketplaceHealth = channelAccounts.map((acc) => ({
+      accountId: acc.id,
+      accountName: acc.name,
+      channelName: acc.channel.name,
+      channelType: acc.channel.type,
+      status: acc.status,
+      lastSyncAt: acc.lastSyncAt,
+      publishedCount: acc._count.channelProducts,
+      recentOrdersCount: acc._count.channelOrders,
+    }));
 
-    const lowStockProducts = inventories.filter(
-      (i) => i.quantity - i.reservedQuantity <= i.minimumQuantity,
-    ).length;
+    // 6. Afiliados (F6)
+    const [
+      totalAffiliates,
+      activeAffiliates,
+      affiliateClicks,
+      affiliateConversions,
+    ] = await Promise.all([
+      this.prisma.affiliate.count(),
+      this.prisma.affiliate.count({ where: { status: 'ACTIVE' } }),
+      this.prisma.affiliateClick.count({
+        where: { createdAt: { gte: dates.current.start, lte: dates.current.end } },
+      }),
+      this.prisma.affiliateConversion.findMany({
+        where: { createdAt: { gte: dates.current.start, lte: dates.current.end } },
+      }),
+    ]);
 
-    const totalInventoryValue = inventories.reduce((acc, i) => {
-      const price = Number(i.product?.basePrice) || 0;
-      return acc + Math.max(0, i.quantity - i.reservedQuantity) * price;
-    }, 0);
+    let affiliatePendingCommission = new Prisma.Decimal(0);
+    let affiliateApprovedCommission = new Prisma.Decimal(0);
+    let affiliateTotalAmount = new Prisma.Decimal(0);
 
+    for (const c of affiliateConversions) {
+      affiliateTotalAmount = affiliateTotalAmount.add(c.amount);
+      if (c.status === 'PENDING') {
+        affiliatePendingCommission = affiliatePendingCommission.add(c.commissionAmount);
+      } else if (c.status === 'APPROVED') {
+        affiliateApprovedCommission = affiliateApprovedCommission.add(c.commissionAmount);
+      }
+    }
+
+    // 7. Consolidação Final da Central
     return {
+      period: {
+        filter: filter.period || '30d',
+        startDate: dates.current.start.toISOString(),
+        endDate: dates.current.end.toISOString(),
+      },
+      health: operationHealth,
+      alerts: alerts.slice(0, 8), // Top prioritários
+      sales: {
+        totalRevenue: currentRevenue.toFixed(2),
+        previousRevenue: previousRevenue.toFixed(2),
+        growthPercent: revenueGrowthPercent,
+        orderCount,
+        averageTicket,
+        periods: {
+          today: { orders: todayOrders.length, revenue: revenueToday.toFixed(2) },
+          days7: { orders: orders7d.length, revenue: revenue7d.toFixed(2) },
+          days30: { orders: orders30d.length, revenue: revenue30d.toFixed(2) },
+        },
+        originBreakdown: {
+          ownStore: revenueOwnStore.toFixed(2),
+          marketplace: revenueMarketplace.toFixed(2),
+          affiliate: revenueAffiliate.toFixed(2),
+        },
+      },
       products: {
         total: totalProducts,
-        active: totalActiveProducts,
+        active: activeProducts,
+        withoutCategory: productsWithoutCategory,
+        withoutBasePrice: productsWithoutBasePrice,
+        publishErrors: productsWithPublishError,
       },
-      niches: {
-        total: totalNiches,
-        active: totalActiveNiches,
+      inventory: {
+        availableQuantity: totalStockAvailable,
+        reservedQuantity: totalStockReserved,
+        criticalCount: criticalStockCount,
+        lowCount: lowStockCount,
+        criticalItems: criticalItems.slice(0, 6),
       },
-      categories: {
-        total: totalCategories,
-        active: totalActiveCategories,
+      production: {
+        activeJobsCount: activeJobs.length,
+        completedJobsCount: completedJobs,
+        recentJobs: activeJobs.map((j) => ({
+          id: j.id,
+          productName: j.product.name,
+          plannedQuantity: j.plannedQuantity,
+          printerName: j.printer.name,
+          status: j.status,
+          createdAt: j.createdAt,
+        })),
       },
-      tags: {
-        total: totalTags,
-      },
-      themes: {
-        total: totalThemes,
-      },
-      catalogs: {
-        total: totalCatalogs,
-        active: totalActiveCatalogs,
-      },
-      collections: {
-        total: totalCollections,
-        active: totalActiveCollections,
+      marketplaces: {
+        totalChannels: channels.length,
+        activeAccounts: channelAccounts.filter((a) => a.status === ChannelAccountStatus.ACTIVE).length,
+        publishedCount: publishedChannelProducts,
+        pendingEvents,
+        failedEvents,
+        accounts: marketplaceHealth,
       },
       affiliates: {
         total: totalAffiliates,
         active: activeAffiliates,
-        clicks: totalClicks,
-        conversions: totalConversions,
-        totalSales: affiliateSales.toFixed(2),
-        approvedCommissions: approvedCommissions.toFixed(2),
-        pendingCommissions: pendingCommissions.toFixed(2),
+        clicks: affiliateClicks,
+        conversions: affiliateConversions.length,
+        totalSales: affiliateTotalAmount.toFixed(2),
+        pendingCommissions: affiliatePendingCommission.toFixed(2),
+        approvedCommissions: affiliateApprovedCommission.toFixed(2),
       },
-      production: {
-        totalPrinters,
-        availablePrinters,
-        queuedJobs,
-        printingJobs,
-        completedJobs,
-        lowStockMaterials,
-      },
-      inventory: {
-        totalItemsTracked: inventories.length,
-        lowStockProducts,
-        totalInventoryValue: totalInventoryValue.toFixed(2),
-      },
+      recentOrders: recentOrders.map((ord: any) => {
+        let origin = 'Loja Própria';
+        if (ord.channelOrder?.channel) {
+          origin = ord.channelOrder.channel.name;
+        } else if (ord.affiliateCode) {
+          origin = `Afiliado (${ord.affiliateCode})`;
+        }
+        const itemCount = Array.isArray(ord.items)
+          ? ord.items.reduce((s: number, i: any) => s + (i.quantity || 0), 0)
+          : 0;
+        return {
+          id: ord.id,
+          customerName: ord.customerName,
+          total: Number(ord.total).toFixed(2),
+          status: ord.status,
+          origin,
+          createdAt: ord.createdAt,
+          itemCount,
+        };
+      }),
     };
+  }
+
+  /**
+   * Mantém retrocompatibilidade com o getSummary legado se algum teste chamar
+   */
+  async getSummary() {
+    return this.getCommercialSummary();
   }
 }

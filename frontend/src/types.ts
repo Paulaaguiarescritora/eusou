@@ -553,3 +553,130 @@ export interface DiscrepancyReport {
   };
 }
 
+// ==========================================
+// F14: CENTRAL DE OPERAÇÃO COMERCIAL TYPES
+// ==========================================
+
+export type AlertSeverity = 'CRITICAL' | 'WARNING' | 'INFO';
+
+export interface CommercialAlert {
+  id: string;
+  type: string;
+  severity: AlertSeverity;
+  title: string;
+  description: string;
+  entityRelated: string;
+  entityId?: string;
+  createdAt: string;
+  recommendedAction: 'VER' | 'CORRIGIR' | 'SINCRONIZAR' | 'REPROCESSAR' | 'IGNORAR';
+  actionUrl: string;
+}
+
+export type OperationHealthStatus = 'HEALTHY' | 'WARNING' | 'CRITICAL';
+
+export interface OperationHealth {
+  status: OperationHealthStatus;
+  label: string;
+  summary: string;
+  counts: {
+    critical: number;
+    warning: number;
+    info: number;
+    total: number;
+  };
+}
+
+export interface CommercialDashboardData {
+  period: {
+    filter: 'today' | '7d' | '30d' | '90d';
+    startDate: string;
+    endDate: string;
+  };
+  health: OperationHealth;
+  alerts: CommercialAlert[];
+  sales: {
+    totalRevenue: string;
+    previousRevenue: string;
+    growthPercent: number | null;
+    orderCount: number;
+    averageTicket: string;
+    periods: {
+      today: { orders: number; revenue: string };
+      days7: { orders: number; revenue: string };
+      days30: { orders: number; revenue: string };
+    };
+    originBreakdown: {
+      ownStore: string;
+      marketplace: string;
+      affiliate: string;
+    };
+  };
+  products: {
+    total: number;
+    active: number;
+    withoutCategory: number;
+    withoutBasePrice: number;
+    publishErrors: number;
+  };
+  inventory: {
+    availableQuantity: number;
+    reservedQuantity: number;
+    criticalCount: number;
+    lowCount: number;
+    criticalItems: {
+      productId: string;
+      productName: string;
+      sku?: string;
+      available: number;
+      minimum: number;
+      status: 'ESGOTADO' | 'BAIXO';
+    }[];
+  };
+  production: {
+    activeJobsCount: number;
+    completedJobsCount: number;
+    recentJobs: {
+      id: string;
+      productName: string;
+      plannedQuantity: number;
+      printerName: string;
+      status: string;
+      createdAt: string;
+    }[];
+  };
+  marketplaces: {
+    totalChannels: number;
+    activeAccounts: number;
+    publishedCount: number;
+    pendingEvents: number;
+    failedEvents: number;
+    accounts: {
+      accountId: string;
+      accountName: string;
+      channelName: string;
+      channelType: string;
+      status: string;
+      lastSyncAt?: string;
+      publishedCount: number;
+      recentOrdersCount: number;
+    }[];
+  };
+  affiliates: {
+    total: number;
+    active: number;
+    clicks: number;
+    conversions: number;
+    totalSales: string;
+    pendingCommissions: string;
+    approvedCommissions: string;
+  };
+  recentOrders: {
+    id: string;
+    customerName: string;
+    total: string;
+    status: string;
+    origin: string;
+    createdAt: string;
+    itemCount: number;
+  }[];
+}

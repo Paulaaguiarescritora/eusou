@@ -55,7 +55,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           label: 'Dashboard',
           route: '/admin/dashboard',
           icon: LayoutDashboard,
-          badge: 'Em breve',
         },
       ],
     },
