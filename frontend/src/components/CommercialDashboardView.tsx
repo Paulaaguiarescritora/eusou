@@ -21,6 +21,9 @@ import {
   ExternalLink,
   ArrowRight,
   DollarSign,
+  Plus,
+  Layers,
+  BookOpen,
 } from 'lucide-react';
 
 interface CommercialDashboardViewProps {
@@ -182,6 +185,46 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
 
       {/* Banner de Saúde Operacional */}
       {getHealthBanner()}
+
+      {/* AÇÕES RÁPIDAS DA OPERAÇÃO */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => onNavigate('/admin/products/new')}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition text-xs font-bold text-slate-800 shadow-2xs"
+        >
+          <Plus className="w-3.5 h-3.5 text-indigo-600" /> Adicionar Produto
+        </button>
+        <button
+          onClick={() => onNavigate('/admin/catalogs/new')}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition text-xs font-bold text-slate-800 shadow-2xs"
+        >
+          <BookOpen className="w-3.5 h-3.5 text-blue-600" /> Criar Catálogo
+        </button>
+        <button
+          onClick={() => onNavigate('/admin/orders')}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition text-xs font-bold text-slate-800 shadow-2xs"
+        >
+          <ShoppingBag className="w-3.5 h-3.5 text-emerald-600" /> Ver Pedidos
+        </button>
+        <button
+          onClick={() => onNavigate('/admin/inventory')}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition text-xs font-bold text-slate-800 shadow-2xs"
+        >
+          <Boxes className="w-3.5 h-3.5 text-amber-600" /> Ver Estoque
+        </button>
+        <button
+          onClick={() => onNavigate('/admin/production')}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition text-xs font-bold text-slate-800 shadow-2xs"
+        >
+          <Cpu className="w-3.5 h-3.5 text-cyan-600" /> Produção 3D
+        </button>
+        <button
+          onClick={() => onNavigate('/admin/marketplaces')}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition text-xs font-bold text-slate-800 shadow-2xs"
+        >
+          <Store className="w-3.5 h-3.5 text-purple-600" /> Publicar no Marketplace
+        </button>
+      </div>
 
       {/* 1. CENTRO DE ATENÇÃO / AÇÕES PRIORITÁRIAS */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4">
