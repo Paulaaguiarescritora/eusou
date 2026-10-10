@@ -166,6 +166,28 @@ export const AdminOrdersView: React.FC = () => {
                 </div>
               </div>
 
+              {selectedOrder.payments && selectedOrder.payments.length > 0 && (
+                <div className="bg-slate-50 p-3 rounded-lg space-y-2 border border-gray-100">
+                  <h4 className="font-bold text-slate-900">Transação de Pagamento</h4>
+                  {selectedOrder.payments.map((p) => (
+                    <div key={p.id} className="flex justify-between items-center text-[11px]">
+                      <div>
+                        <span className="font-semibold text-slate-800 block">
+                          Método: {p.method} | Gateway: {p.provider}
+                        </span>
+                        {p.providerPaymentId && (
+                          <span className="font-mono text-slate-500 block">ID Ext: {p.providerPaymentId}</span>
+                        )}
+                        <span className="text-slate-400 block">{new Date(p.createdAt).toLocaleString('pt-BR')}</span>
+                      </div>
+                      <span className="font-bold text-slate-800 uppercase px-2 py-0.5 rounded bg-white border border-gray-200">
+                        {p.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div className="flex justify-between items-center pt-2 font-bold text-sm">
                 <span>Total:</span>
                 <span className="text-base text-emerald-700">R$ {Number(selectedOrder.total).toFixed(2).replace('.', ',')}</span>

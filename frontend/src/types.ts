@@ -178,6 +178,39 @@ export interface Order {
   createdAt: string;
   items: OrderItem[];
   affiliateCode?: string | null;
+  payments?: Payment[];
+}
+
+export type PaymentStatus =
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'AUTHORIZED'
+  | 'PAID'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'REFUNDED'
+  | 'PARTIALLY_REFUNDED'
+  | 'EXPIRED';
+
+export type PaymentMethod = 'PIX' | 'CREDIT_CARD';
+
+export interface Payment {
+  id: string;
+  orderId: string;
+  provider: string;
+  providerPaymentId?: string | null;
+  method: PaymentMethod;
+  status: PaymentStatus;
+  amount: string | number;
+  currency: string;
+  paidAt?: string | null;
+  expiresAt?: string | null;
+  failureCode?: string | null;
+  failureMessage?: string | null;
+  pixQrCode?: string | null;
+  pixQrCodeBase64?: string | null;
+  createdAt: string;
+  order?: Order;
 }
 
 export interface Affiliate {

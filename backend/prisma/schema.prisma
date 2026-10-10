@@ -515,10 +515,59 @@ model Order {
   items           OrderItem[]
   conversion      AffiliateConversion?
   channelOrder    ChannelOrder?
+  payments        Payment[]
 
   @@index([customerEmail])
   @@index([status])
   @@index([affiliateCode])
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  AUTHORIZED
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  EXPIRED
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+}
+
+model Payment {
+  id                   String        @id @default(uuid())
+  orderId              String
+  provider             String        // 'MOCK_DEMO_PROVIDER', 'MERCADO_PAGO'
+  providerPaymentId    String?       // ID externo do pagamento no Mercado Pago
+  providerOrderId      String?       // ID externo da order se aplicável
+  method               PaymentMethod
+  status               PaymentStatus @default(PENDING)
+  amount               Decimal       @db.Decimal(10, 2)
+  currency             String        @default("BRL")
+  paidAt               DateTime?
+  expiresAt            DateTime?
+  failureCode          String?
+  failureMessage       String?
+  externalStatus       String?
+  externalStatusDetail String?
+  idempotencyKey       String?       @unique
+  pixQrCode            String?       // Payload copia e cola Pix
+  pixQrCodeBase64      String?       // Imagem QR code base64 se fornecida
+  metadata             Json?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  order                Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([providerPaymentId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model OrderItem {

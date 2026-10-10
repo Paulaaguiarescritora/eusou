@@ -23,6 +23,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { ProductionModule } from './production/production.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
 import { PricingModule } from './pricing/pricing.module';
+import { PaymentModule } from './payment/payment.module';
 import { PrismaService } from './prisma.service';
 import { AuditLogService } from './audit-log.service';
 
@@ -44,6 +45,7 @@ import { AuditLogService } from './audit-log.service';
     CatalogModule,
     CollectionModule,
     OrderModule,
+    PaymentModule,
     PublicStoreModule,
     AffiliateModule,
     InventoryModule,

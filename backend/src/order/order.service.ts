@@ -177,6 +177,9 @@ export class OrderService {
             variant: true,
           },
         },
+        payments: {
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
@@ -216,6 +219,10 @@ export class OrderService {
         orderBy: { createdAt: 'desc' },
         include: {
           _count: { select: { items: true } },
+          payments: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
         },
       }),
       this.prisma.order.count({ where }),
