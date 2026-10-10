@@ -164,6 +164,26 @@ export class AffiliateService {
     return affiliate;
   }
 
+  async findEligibleUsers(search?: string) {
+    const where: any = {
+      isActive: true,
+      affiliate: null,
+    };
+    if (search?.trim()) {
+      where.email = { contains: search.trim().toLowerCase(), mode: 'insensitive' };
+    }
+    return this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        email: true,
+        isActive: true,
+      },
+      take: 20,
+      orderBy: { email: 'asc' },
+    });
+  }
+
   async update(
     id: string,
     dto: UpdateAffiliateDto,

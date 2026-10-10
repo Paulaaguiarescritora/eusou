@@ -26,6 +26,9 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNavi
   const [newUserId, setNewUserId] = useState('');
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newCode, setNewCode] = useState('');
+  const [eligibleUsers, setEligibleUsers] = useState<{ id: string; email: string }[]>([]);
+  const [loadingEligible, setLoadingEligible] = useState(false);
+  const [userSearchText, setUserSearchText] = useState('');
 
   const loadData = async () => {
     setLoading(true);
@@ -78,8 +81,35 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNavi
     }
   };
 
+  const loadEligibleUsers = async (searchQuery?: string) => {
+    setLoadingEligible(true);
+    try {
+      const q = searchQuery?.trim() ? `?search=${encodeURIComponent(searchQuery.trim())}` : '';
+      const users = await fetchApi<{ id: string; email: string }[]>(`/admin/affiliates/eligible-users${q}`);
+      setEligibleUsers(Array.isArray(users) ? users : []);
+    } catch (e) {
+      console.error('Failed to load eligible users:', e);
+      setEligibleUsers([]);
+    } finally {
+      setLoadingEligible(false);
+    }
+  };
+
+  const handleOpenAffiliateModal = () => {
+    setNewUserId('');
+    setNewDisplayName('');
+    setNewCode('');
+    setUserSearchText('');
+    setShowAffiliateModal(true);
+    loadEligibleUsers();
+  };
+
   const handleCreateAffiliate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newUserId) {
+      alert('Selecione um usuário cadastrado para credenciar como afiliado.');
+      return;
+    }
     try {
       await fetchApi('/affiliates', {
         method: 'POST',
@@ -126,7 +156,7 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNavi
         <div className="flex items-center gap-3">
           {activeTab === 'affiliates' ? (
             <button
-              onClick={() => setShowAffiliateModal(true)}
+              onClick={handleOpenAffiliateModal}
               className="flex items-center gap-2 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold rounded-xl transition shadow-sm"
             >
               <UserCheck size={16} /> Credenciar Afiliado
@@ -385,15 +415,64 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNavi
             <h3 className="text-lg font-bold text-zinc-900 mb-4">Credenciar Novo Afiliado</h3>
             <form onSubmit={handleCreateAffiliate} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">User ID (UUID)</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="UUID do usuário cadastrado"
-                  value={newUserId}
-                  onChange={(e) => setNewUserId(e.target.value)}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none font-mono"
-                />
+                <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">
+                  Usuário da Plataforma *
+                </label>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Buscar por e-mail..."
+                      value={userSearchText}
+                      onChange={(e) => setUserSearchText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          loadEligibleUsers(userSearchText);
+                        }
+                      }}
+                      className="flex-1 px-3 py-1.5 border border-zinc-300 rounded-lg text-xs outline-none focus:border-zinc-900"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => loadEligibleUsers(userSearchText)}
+                      className="px-3 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-lg text-xs font-bold transition"
+                    >
+                      {loadingEligible ? 'Buscando...' : 'Buscar'}
+                    </button>
+                  </div>
+
+                  <select
+                    required
+                    value={newUserId}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      setNewUserId(selectedId);
+                      const found = eligibleUsers.find((u) => u.id === selectedId);
+                      if (found && !newDisplayName) {
+                        const defaultName = found.email.split('@')[0];
+                        setNewDisplayName(defaultName);
+                        if (!newCode) {
+                          setNewCode(defaultName.toLowerCase().replace(/[^a-z0-9]+/g, ''));
+                        }
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none bg-white"
+                  >
+                    <option value="">Selecione um usuário...</option>
+                    {eligibleUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.email}
+                      </option>
+                    ))}
+                  </select>
+
+                  {eligibleUsers.length === 0 && !loadingEligible && (
+                    <p className="text-[11px] text-zinc-500 italic">
+                      Nenhum usuário sem vínculo de afiliado encontrado. Digite um e-mail acima para filtrar.
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div>

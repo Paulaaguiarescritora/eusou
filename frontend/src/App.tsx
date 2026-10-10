@@ -25,12 +25,13 @@ import { AdminThemesView } from './components/AdminThemesView';
 import { AdminCollectionsView } from './components/AdminCollectionsView';
 import { AdminCatalogsView } from './components/AdminCatalogsView';
 import { AdminCatalogForm } from './components/AdminCatalogForm';
+import { AdminPricingView } from './components/AdminPricingView';
 import { CommercialDashboardView } from './components/CommercialDashboardView';
 import { LoginModal } from './components/LoginModal';
 import { useCart } from './useCart';
 import { fetchApi } from './api';
 import { Product, Catalog, Category, Collection, Order } from './types';
-import { Sparkles, ArrowRight } from 'lucide-react';
+import { Sparkles, ArrowRight, Filter, X } from 'lucide-react';
 
 export function App() {
   const [route, setRoute] = useState<string>(() => {
@@ -401,6 +402,7 @@ export function App() {
 
         {/* Existing modules */}
         {route === '/admin/orders' && <AdminOrdersView />}
+        {route === '/admin/pricing' && <AdminPricingView />}
         {route === '/admin/production' && <ProductionView />}
         {route === '/admin/inventory' && <InventoryView />}
         {route === '/admin/affiliates' && <AdminAffiliatesView onNavigate={navigateTo} />}
@@ -566,13 +568,74 @@ export function App() {
 
         {/* ROUTE: PRODUTOS (LISTAGEM) */}
         {route.startsWith('/produtos') && !selectedProduct && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-            <h1 className="text-2xl font-black text-slate-900 mb-6">Todos os Produtos</h1>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-black text-slate-900">Catálogo de Produtos</h1>
+                <p className="text-xs text-slate-500">Explore itens disponíveis e curadorias prontas para compra</p>
+              </div>
+
+              {/* Botão para limpar filtros se algum estiver ativo */}
+              {route.includes('?') && (
+                <button
+                  type="button"
+                  onClick={() => navigateTo('/produtos')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition cursor-pointer w-fit"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Limpar filtros
+                </button>
+              )}
+            </div>
+
+            {/* Filtros Visuais de Categorias */}
+            {homeData?.categories && homeData.categories.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                <span className="text-xs font-bold text-slate-400 flex items-center gap-1 shrink-0 mr-1">
+                  <Filter className="w-3.5 h-3.5" /> Categorias:
+                </span>
+                <button
+                  onClick={() => navigateTo('/produtos')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition cursor-pointer ${
+                    route === '/produtos'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white text-slate-700 border border-gray-200 hover:border-slate-800'
+                  }`}
+                >
+                  Todas
+                </button>
+                {homeData.categories.map((cat) => {
+                  const isActive = route.includes(`category=${cat.slug}`) || route.includes(`categoryId=${cat.id}`);
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => navigateTo(`/produtos?categoryId=${cat.id}`)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition cursor-pointer ${
+                        isActive
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-white text-slate-700 border border-gray-200 hover:border-indigo-400'
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {loading ? (
               <div className="py-20 text-center text-xs text-slate-400">Carregando catálogo...</div>
             ) : productsList.length === 0 ? (
-              <div className="p-16 text-center text-xs text-slate-400 bg-white rounded-2xl border border-gray-100">
-                Nenhum produto encontrado.
+              <div className="p-16 text-center text-xs text-slate-400 bg-white rounded-2xl border border-gray-100 space-y-3">
+                <p>Nenhum produto encontrado nesta seleção.</p>
+                {route.includes('?') && (
+                  <button
+                    onClick={() => navigateTo('/produtos')}
+                    className="text-xs text-indigo-600 hover:underline font-bold cursor-pointer"
+                  >
+                    Ver todos os produtos
+                  </button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">

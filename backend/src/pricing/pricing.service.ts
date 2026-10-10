@@ -418,6 +418,27 @@ export class PricingService {
     });
   }
 
+  async listProductPrices(search?: string, channelId?: string) {
+    const where: any = {};
+    if (channelId) where.channelId = channelId;
+    if (search?.trim()) {
+      where.product = {
+        name: { contains: search.trim(), mode: 'insensitive' },
+      };
+    }
+    return this.prisma.productChannelPrice.findMany({
+      where,
+      include: {
+        product: { select: { id: true, name: true, sku: true, basePrice: true } },
+        variant: { select: { id: true, sku: true, name: true, price: true } },
+        channel: { select: { id: true, name: true, type: true } },
+        pricingProfile: { select: { id: true, name: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+    });
+  }
+
   async getProfileById(id: string) {
     const profile = await this.prisma.pricingProfile.findUnique({
       where: { id },

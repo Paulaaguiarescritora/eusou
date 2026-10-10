@@ -82,19 +82,20 @@ describe('F14 — Central de Operação Comercial (Dashboard & Alertas)', () => 
 
   describe('1. CommercialAlertService — Alertas Operacionais Derivados', () => {
     it('deve gerar alerta crítico quando conta de marketplace estiver com ERRO ou DESCONECTADA', async () => {
+      const now = Date.now();
       prisma.channelAccount.findMany.mockResolvedValue([
         {
           id: 'acc-1',
           name: 'Conta ML Filial SP',
           status: ChannelAccountStatus.ERROR,
-          updatedAt: new Date(),
+          updatedAt: new Date(now + 1000),
           channel: { name: 'Mercado Livre' },
         },
         {
           id: 'acc-2',
           name: 'Conta Shopee Matriz',
           status: ChannelAccountStatus.DISCONNECTED,
-          updatedAt: new Date(),
+          updatedAt: new Date(now),
           channel: { name: 'Shopee' },
         },
       ]);

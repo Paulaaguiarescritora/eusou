@@ -37,6 +37,11 @@ export class AdminAffiliateController {
     return this.affiliateService.create(dto, req.user?.sub);
   }
 
+  @Get('eligible-users')
+  findEligibleUsers(@Query('search') search?: string) {
+    return this.affiliateService.findEligibleUsers(search);
+  }
+
   @Get()
   findAll(
     @Query('search') search?: string,

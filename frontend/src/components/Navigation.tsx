@@ -60,15 +60,9 @@ export const Header: React.FC<HeaderProps> = ({ totalItems, onNavigate }) => {
             </button>
             <button
               onClick={() => onNavigate('/affiliate')}
-              className="text-xs px-2.5 py-1 rounded bg-amber-500/20 text-amber-800 border border-amber-500/30 font-semibold hover:bg-amber-500/30"
+              className="text-xs px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-900 border border-amber-500/20 font-semibold hover:bg-amber-500/20 transition"
             >
-              Portal Afiliado
-            </button>
-            <button
-              onClick={() => onNavigate('/admin/products')}
-              className="text-xs px-2.5 py-1 rounded bg-slate-900 text-white font-semibold hover:bg-slate-800 shadow-xs"
-            >
-              Área Administrativa
+              Seja um Afiliado
             </button>
           </nav>
 
@@ -132,18 +126,9 @@ export const Header: React.FC<HeaderProps> = ({ totalItems, onNavigate }) => {
                 onNavigate('/affiliate');
                 setMobileMenuOpen(false);
               }}
-              className="block w-full text-left py-2 text-sm font-medium text-amber-800"
+              className="block w-full text-left py-2 text-sm font-medium text-amber-900"
             >
-              Portal Afiliado
-            </button>
-            <button
-              onClick={() => {
-                onNavigate('/admin/products');
-                setMobileMenuOpen(false);
-              }}
-              className="block w-full text-left py-2 text-xs font-semibold text-slate-900"
-            >
-              Área Administrativa
+              Seja um Afiliado
             </button>
           </div>
         )}

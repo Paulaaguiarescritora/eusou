@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -63,6 +64,14 @@ export class PricingController {
       channelId,
     );
     return { productId, channelId, effectivePrice: price };
+  }
+
+  @Get('products')
+  async listProductPrices(
+    @Query('search') search?: string,
+    @Query('channelId') channelId?: string,
+  ) {
+    return this.pricingService.listProductPrices(search, channelId);
   }
 
   // ==========================================

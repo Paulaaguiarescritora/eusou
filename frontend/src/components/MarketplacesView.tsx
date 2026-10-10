@@ -18,10 +18,13 @@ interface MarketplacesViewProps {
 
 export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => {
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'channels' | 'accounts' | 'products' | 'categories' | 'orders' | 'events' | 'reconciliation' | 'logs'
-  >('dashboard');
+    'general' | 'products' | 'orders' | 'publication' | 'reconciliation' | 'diagnostics'
+  >('general');
+  const [generalSubTab, setGeneralSubTab] = useState<'dashboard' | 'channels' | 'accounts'>('dashboard');
+  const [diagnosticsSubTab, setDiagnosticsSubTab] = useState<'events' | 'logs'>('logs');
 
   const [loading, setLoading] = useState(false);
+  const [expandedErrorId, setExpandedErrorId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Estados de dados
@@ -97,19 +100,21 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
   const loadData = async () => {
     setLoading(true);
     try {
-      if (activeTab === 'dashboard') {
-        const res = await fetchWithAuth('/admin/marketplaces/dashboard');
-        if (res.ok) setDashboard(await res.json());
-      } else if (activeTab === 'channels') {
-        const res = await fetchWithAuth('/admin/marketplaces/channels');
-        if (res.ok) setChannels(await res.json());
-      } else if (activeTab === 'accounts') {
-        const [accRes, chanRes] = await Promise.all([
-          fetchWithAuth('/admin/marketplaces/accounts'),
-          fetchWithAuth('/admin/marketplaces/channels'),
-        ]);
-        if (accRes.ok) setAccounts(await accRes.json());
-        if (chanRes.ok) setChannels(await chanRes.json());
+      if (activeTab === 'general') {
+        if (generalSubTab === 'dashboard') {
+          const res = await fetchWithAuth('/admin/marketplaces/dashboard');
+          if (res.ok) setDashboard(await res.json());
+        } else if (generalSubTab === 'channels') {
+          const res = await fetchWithAuth('/admin/marketplaces/channels');
+          if (res.ok) setChannels(await res.json());
+        } else if (generalSubTab === 'accounts') {
+          const [accRes, chanRes] = await Promise.all([
+            fetchWithAuth('/admin/marketplaces/accounts'),
+            fetchWithAuth('/admin/marketplaces/channels'),
+          ]);
+          if (accRes.ok) setAccounts(await accRes.json());
+          if (chanRes.ok) setChannels(await chanRes.json());
+        }
       } else if (activeTab === 'products') {
         const [cpRes, accRes, prodRes] = await Promise.all([
           fetchWithAuth('/admin/marketplaces/products'),
@@ -122,21 +127,25 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
           const pData = await prodRes.json();
           setProducts(Array.isArray(pData) ? pData : pData.items || []);
         }
-      } else if (activeTab === 'categories') {
-        const [catMapRes, chanRes, catRes] = await Promise.all([
+      } else if (activeTab === 'publication') {
+        const [catMapRes, chanRes, catRes, accRes, prodRes] = await Promise.all([
           fetchWithAuth('/admin/marketplaces/categories'),
           fetchWithAuth('/admin/marketplaces/channels'),
           fetchWithAuth('/categories'),
+          fetchWithAuth('/admin/marketplaces/accounts'),
+          fetchWithAuth('/products?limit=100'),
         ]);
         if (catMapRes.ok) setCategoryMappings(await catMapRes.json());
         if (chanRes.ok) setChannels(await chanRes.json());
         if (catRes.ok) setCategories(await catRes.json());
+        if (accRes.ok) setAccounts(await accRes.json());
+        if (prodRes.ok) {
+          const pData = await prodRes.json();
+          setProducts(Array.isArray(pData) ? pData : pData.items || []);
+        }
       } else if (activeTab === 'orders') {
         const res = await fetchWithAuth('/admin/marketplaces/orders');
         if (res.ok) setChannelOrders(await res.json());
-      } else if (activeTab === 'events') {
-        const res = await fetchWithAuth('/admin/marketplaces/events');
-        if (res.ok) setMarketplaceEvents(await res.json());
       } else if (activeTab === 'reconciliation') {
         const [cpRes, accRes] = await Promise.all([
           fetchWithAuth('/admin/marketplaces/products'),
@@ -144,9 +153,14 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
         ]);
         if (cpRes.ok) setChannelProducts(await cpRes.json());
         if (accRes.ok) setAccounts(await accRes.json());
-      } else if (activeTab === 'logs') {
-        const res = await fetchWithAuth('/admin/marketplaces/logs');
-        if (res.ok) setLogs(await res.json());
+      } else if (activeTab === 'diagnostics') {
+        if (diagnosticsSubTab === 'events') {
+          const res = await fetchWithAuth('/admin/marketplaces/events');
+          if (res.ok) setMarketplaceEvents(await res.json());
+        } else {
+          const res = await fetchWithAuth('/admin/marketplaces/logs');
+          if (res.ok) setLogs(await res.json());
+        }
       }
     } catch (err: any) {
       setMessage({ type: 'error', text: 'Erro ao carregar dados: ' + err.message });
@@ -157,7 +171,7 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
 
   useEffect(() => {
     loadData();
-  }, [activeTab]);
+  }, [activeTab, generalSubTab, diagnosticsSubTab]);
 
   // Ações
   const handleCreateChannel = async (e: React.FormEvent) => {
@@ -473,18 +487,16 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
       )}
 
       {/* Tabs */}
+      {/* Tabs Principais */}
       <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8 overflow-x-auto">
+        <nav className="-mb-px flex space-x-6 overflow-x-auto">
           {[
-            { id: 'dashboard', label: 'Visão Geral' },
-            { id: 'channels', label: 'Canais' },
-            { id: 'accounts', label: 'Contas Vinculadas' },
+            { id: 'general', label: 'Visão Geral & Canais' },
             { id: 'products', label: 'Produtos Publicados' },
-            { id: 'categories', label: 'Mapeamento de Categorias' },
             { id: 'orders', label: 'Pedidos dos Canais' },
-            { id: 'events', label: 'Fila de Eventos' },
+            { id: 'publication', label: 'Publicação & Categorias' },
             { id: 'reconciliation', label: 'Reconciliação' },
-            { id: 'logs', label: 'Logs de Sincronização' },
+            { id: 'diagnostics', label: 'Diagnóstico & Logs' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -501,12 +513,57 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
         </nav>
       </div>
 
+      {/* Sub-navegação para Aba Visão Geral */}
+      {activeTab === 'general' && (
+        <div className="flex space-x-2 bg-gray-100 p-1 rounded-lg w-fit text-xs font-semibold">
+          {[
+            { id: 'dashboard', label: 'Painel Geral' },
+            { id: 'channels', label: 'Canais Suportados' },
+            { id: 'accounts', label: 'Contas Vinculadas' },
+          ].map((sub) => (
+            <button
+              key={sub.id}
+              onClick={() => setGeneralSubTab(sub.id as any)}
+              className={`px-3 py-1.5 rounded-md transition-all ${
+                generalSubTab === sub.id
+                  ? 'bg-white text-indigo-700 shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {sub.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Sub-navegação para Diagnóstico & Logs */}
+      {activeTab === 'diagnostics' && (
+        <div className="flex space-x-2 bg-gray-100 p-1 rounded-lg w-fit text-xs font-semibold">
+          {[
+            { id: 'logs', label: 'Histórico de Sincronizações' },
+            { id: 'events', label: 'Fila de Eventos & Webhooks' },
+          ].map((sub) => (
+            <button
+              key={sub.id}
+              onClick={() => setDiagnosticsSubTab(sub.id as any)}
+              className={`px-3 py-1.5 rounded-md transition-all ${
+                diagnosticsSubTab === sub.id
+                  ? 'bg-white text-indigo-700 shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {sub.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {loading && (
         <div className="py-8 text-center text-gray-500">Carregando dados de marketplaces...</div>
       )}
 
-      {/* 1. ABA DASHBOARD */}
-      {!loading && activeTab === 'dashboard' && dashboard && (
+      {/* 1. ABA GERAL - DASHBOARD */}
+      {!loading && activeTab === 'general' && generalSubTab === 'dashboard' && dashboard && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
@@ -582,8 +639,8 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
         </div>
       )}
 
-      {/* 2. ABA CANAIS */}
-      {!loading && activeTab === 'channels' && (
+      {/* 2. ABA GERAL - CANAIS */}
+      {!loading && activeTab === 'general' && generalSubTab === 'channels' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-medium text-gray-900">Canais Suportados</h2>
@@ -619,8 +676,8 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
         </div>
       )}
 
-      {/* 3. ABA CONTAS */}
-      {!loading && activeTab === 'accounts' && (
+      {/* 3. ABA GERAL - CONTAS */}
+      {!loading && activeTab === 'general' && generalSubTab === 'accounts' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-medium text-gray-900">Contas Conectadas aos Canais</h2>
@@ -707,10 +764,13 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
       {!loading && activeTab === 'products' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-medium text-gray-900">Produtos Publicados em Canais</h2>
+            <div>
+              <h2 className="text-lg font-medium text-gray-900">Produtos Publicados em Canais</h2>
+              <p className="text-xs text-gray-500">Acompanhe e gerencie anúncios ativos ou com pendências em marketplaces</p>
+            </div>
             <button
               onClick={() => setShowPublishModal(true)}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700"
+              className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 shadow-xs"
             >
               + Publicar Produto em Canal
             </button>
@@ -730,74 +790,100 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {channelProducts.map((cp) => (
-                  <tr key={cp.id}>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{cp.product?.name}</div>
-                      <div className="text-xs text-gray-500">SKU: {cp.product?.sku}</div>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {cp.channelAccount?.name} ({cp.channelAccount?.channel?.name})
-                    </td>
-                    <td className="px-6 py-4 text-xs font-mono">
-                      {cp.externalUrl ? (
-                        <a
-                          href={cp.externalUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-indigo-600 hover:underline"
-                        >
-                          {cp.externalProductId || 'Ver Anúncio'}
-                        </a>
-                      ) : (
-                        cp.externalProductId || '-'
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                          cp.status === 'PUBLISHED'
-                            ? 'bg-green-100 text-green-800'
-                            : cp.status === 'ERROR'
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {cp.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 font-medium text-gray-900">
-                      R$ {Number(cp.priceOverride || cp.product?.basePrice || 0).toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 text-right space-x-2">
-                      <button
-                        onClick={() => handleSyncProductDetails(cp.id)}
-                        className="text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2 py-1 rounded"
-                        title="Verificar integridade do anúncio no marketplace"
-                      >
-                        Sinc. Anúncio
-                      </button>
-                      <button
-                        onClick={() => handleSyncPrice(cp.id)}
-                        className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded"
-                      >
-                        Sinc. Preço
-                      </button>
-                      <button
-                        onClick={() => handleSyncStock(cp.id)}
-                        className="text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 rounded"
-                      >
-                        Sinc. Estoque
-                      </button>
-                      {cp.status === 'PUBLISHED' && (
+                  <React.Fragment key={cp.id}>
+                    <tr>
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">{cp.product?.name}</div>
+                        <div className="text-xs text-gray-500">SKU: {cp.product?.sku}</div>
+                      </td>
+                      <td className="px-6 py-4 text-gray-600">
+                        {cp.channelAccount?.name} ({cp.channelAccount?.channel?.name})
+                      </td>
+                      <td className="px-6 py-4 text-xs font-mono">
+                        {cp.externalUrl ? (
+                          <a
+                            href={cp.externalUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-indigo-600 hover:underline"
+                          >
+                            {cp.externalProductId || 'Ver Anúncio'}
+                          </a>
+                        ) : (
+                          cp.externalProductId || '-'
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                              cp.status === 'PUBLISHED'
+                                ? 'bg-green-100 text-green-800'
+                                : cp.status === 'ERROR'
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}
+                          >
+                            {cp.status === 'PUBLISHED' ? 'Publicado' : cp.status === 'ERROR' ? 'Erro de Publicação' : cp.status}
+                          </span>
+                          {cp.lastError && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedErrorId(expandedErrorId === cp.id ? null : cp.id)}
+                              className="block mt-1 text-[11px] text-red-600 hover:underline font-medium text-left"
+                            >
+                              {expandedErrorId === cp.id ? 'Ocultar detalhes do erro ▲' : 'Ver detalhes do erro ▼'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-medium text-gray-900">
+                        R$ {Number(cp.priceOverride || cp.product?.basePrice || 0).toFixed(2)}
+                      </td>
+                      <td className="px-6 py-4 text-right space-x-2">
                         <button
-                          onClick={() => handleUnpublish(cp.id)}
-                          className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-2 py-1 rounded"
+                          onClick={() => handleSyncProductDetails(cp.id)}
+                          className="text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2 py-1 rounded"
+                          title="Verificar integridade do anúncio no marketplace"
                         >
-                          Despublicar
+                          Sinc. Anúncio
                         </button>
-                      )}
-                    </td>
-                  </tr>
+                        <button
+                          onClick={() => handleSyncPrice(cp.id)}
+                          className="text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 px-2 py-1 rounded"
+                        >
+                          Sinc. Preço
+                        </button>
+                        <button
+                          onClick={() => handleSyncStock(cp.id)}
+                          className="text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 px-2 py-1 rounded"
+                        >
+                          Sinc. Estoque
+                        </button>
+                        {cp.status === 'PUBLISHED' && (
+                          <button
+                            onClick={() => handleUnpublish(cp.id)}
+                            className="text-xs bg-red-50 text-red-700 hover:bg-red-100 px-2 py-1 rounded"
+                          >
+                            Despublicar
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                    {expandedErrorId === cp.id && cp.lastError && (
+                      <tr className="bg-red-50/50">
+                        <td colSpan={6} className="px-6 py-3 border-t border-red-100">
+                          <div className="text-xs text-red-800 space-y-1">
+                            <strong className="block text-red-900">Motivo retornado pelo canal externo:</strong>
+                            <p className="font-medium">{cp.lastError}</p>
+                            <p className="text-[11px] text-gray-600 mt-1">
+                              Dica: Verifique se os atributos do produto, categoria mapeada ou fotos atendem aos requisitos exigidos pelo marketplace.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
                 {channelProducts.length === 0 && (
                   <tr>
@@ -812,261 +898,245 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
         </div>
       )}
 
-      {/* 5. ABA MAPEAMENTO DE CATEGORIAS */}
-      {!loading && activeTab === 'categories' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-medium text-gray-900">Mapeamento de Categorias de Marketplace</h2>
+      {/* 5. ABA PUBLICAÇÃO & CATEGORIAS */}
+      {!loading && activeTab === 'publication' && (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-indigo-50 to-white p-5 rounded-xl border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-bold text-indigo-950">Publicar Novos Produtos nos Canais</h2>
+              <p className="text-xs text-indigo-700 mt-1">
+                Utilize o assistente de publicação para validar estoque, preço e regras antes de enviar para os marketplaces.
+              </p>
+            </div>
             <button
-              onClick={() => setShowCategoryModal(true)}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700"
+              onClick={() => setShowPublishModal(true)}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 shadow-xs"
             >
-              + Novo Mapeamento
+              Iniciar Publicação de Produto &rarr;
             </button>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
-                <tr>
-                  <th className="px-6 py-3">Canal</th>
-                  <th className="px-6 py-3">Categoria Interna</th>
-                  <th className="px-6 py-3">ID Externo</th>
-                  <th className="px-6 py-3">Nome Externo da Categoria</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {categoryMappings.map((cm) => (
-                  <tr key={cm.id}>
-                    <td className="px-6 py-4 font-medium text-gray-900">{cm.channel?.name}</td>
-                    <td className="px-6 py-4 text-gray-600">{cm.category?.name}</td>
-                    <td className="px-6 py-4 font-mono text-xs">{cm.externalCategoryId}</td>
-                    <td className="px-6 py-4 text-gray-800">{cm.externalCategoryName}</td>
-                  </tr>
-                ))}
-                {categoryMappings.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-6 text-center text-gray-400">
-                      Nenhum mapeamento de categoria cadastrado.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* 6. ABA LOGS */}
-      {!loading && activeTab === 'logs' && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-medium text-gray-900">Histórico de Sincronizações</h2>
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
-                <tr>
-                  <th className="px-4 py-3">Data/Hora</th>
-                  <th className="px-4 py-3">Conta de Canal</th>
-                  <th className="px-4 py-3">Produto</th>
-                  <th className="px-4 py-3">Operação</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Duração</th>
-                  <th className="px-4 py-3">Detalhes / Mensagem</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {logs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                      {new Date(log.createdAt).toLocaleString('pt-BR')}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-gray-900">
-                      {log.channelAccount?.name}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {log.channelProduct?.product?.name || '-'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-800">
-                        {log.operation}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                          log.status === 'SUCCESS'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {log.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {log.durationMs ? `${log.durationMs}ms` : '-'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">{log.message}</td>
-                  </tr>
-                ))}
-                {logs.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
-                      Nenhum log encontrado.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB: PEDIDOS DOS CANAIS (F13A / F13B) */}
-      {activeTab === 'orders' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-medium text-gray-900">Pedidos Recebidos de Marketplaces</h2>
-            <button
-              onClick={loadData}
-              className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-medium"
-            >
-              Atualizar Pedidos
-            </button>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
-                <tr>
-                  <th className="px-4 py-3">Canal</th>
-                  <th className="px-4 py-3">ID Pedido Externo</th>
-                  <th className="px-4 py-3">Comprador</th>
-                  <th className="px-4 py-3">Total Externo</th>
-                  <th className="px-4 py-3">Status Externo</th>
-                  <th className="px-4 py-3">Pedido EuSou (F5)</th>
-                  <th className="px-4 py-3">Data Sincronização</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {channelOrders.map((ord) => (
-                  <tr key={ord.id}>
-                    <td className="px-4 py-3 font-semibold text-gray-900">{ord.channel?.name}</td>
-                    <td className="px-4 py-3 text-indigo-600 font-mono text-xs">{ord.externalOrderId}</td>
-                    <td className="px-4 py-3 text-gray-700">{ord.externalBuyerId || ord.order?.customerName || '-'}</td>
-                    <td className="px-4 py-3 font-medium text-gray-900">
-                      R$ {Number(ord.externalTotal).toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 font-medium">
-                        {ord.externalStatus}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {ord.order ? `Pedido #${ord.order.id.slice(0, 8)} (${ord.order.status})` : 'Vinculado'}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {new Date(ord.syncedAt).toLocaleString('pt-BR')}
-                    </td>
-                  </tr>
-                ))}
-                {channelOrders.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                      Nenhum pedido de marketplace registrado até o momento.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* TAB: FILA DE EVENTOS WEBHOOK (F13A / F13B) */}
-      {activeTab === 'events' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-medium text-gray-900">Fila de Eventos & Webhooks Recebidos</h2>
-            <div className="flex space-x-2">
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Mapeamento de Categorias de Marketplace</h3>
+                <p className="text-xs text-gray-500">Associe as categorias do EuSou às categorias exigidas por cada canal parceiro</p>
+              </div>
               <button
-                onClick={async () => {
-                  try {
-                    const res = await fetchWithAuth('/admin/marketplaces/events/process-retries', { method: 'POST' });
-                    const d = await res.json();
-                    setMessage({ type: 'success', text: `Retentativas processadas: ${d.processedCount} eventos executados.` });
-                    loadData();
-                  } catch (e: any) {
-                    setMessage({ type: 'error', text: e.message });
-                  }
-                }}
-                className="px-3 py-1.5 text-xs bg-amber-500 hover:bg-amber-600 text-white rounded font-medium"
+                onClick={() => setShowCategoryModal(true)}
+                className="bg-gray-100 text-gray-800 hover:bg-gray-200 px-3 py-1.5 rounded-md text-xs font-semibold"
               >
-                Re-processar Falhos
-              </button>
-              <button
-                onClick={loadData}
-                className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-medium"
-              >
-                Atualizar Fila
+                + Novo Mapeamento
               </button>
             </div>
-          </div>
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200 text-sm">
-              <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
-                <tr>
-                  <th className="px-4 py-3">Recebido Em</th>
-                  <th className="px-4 py-3">Canal</th>
-                  <th className="px-4 py-3">Tópico</th>
-                  <th className="px-4 py-3">ID Externo Evento</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Tentativas</th>
-                  <th className="px-4 py-3">Erro / Próxima Tentativa</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {marketplaceEvents.map((ev) => (
-                  <tr key={ev.id}>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {new Date(ev.receivedAt).toLocaleString('pt-BR')}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-gray-900">{ev.channel?.name}</td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700 font-mono">
-                        {ev.topic}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-600">{ev.externalEventId}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                          ev.status === 'PROCESSED'
-                            ? 'bg-green-100 text-green-800'
-                            : ev.status === 'FAILED'
-                            ? 'bg-red-100 text-red-800'
-                            : ev.status === 'PROCESSING'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}
-                      >
-                        {ev.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-600">{ev.attempts}</td>
-                    <td className="px-4 py-3 text-xs text-red-600 max-w-xs truncate">
-                      {ev.lastError || (ev.nextAttemptAt ? `Re-tentativa: ${new Date(ev.nextAttemptAt).toLocaleTimeString('pt-BR')}` : '-')}
-                    </td>
-                  </tr>
-                ))}
-                {marketplaceEvents.length === 0 && (
+
+            <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                      Nenhum evento registrado na fila.
-                    </td>
+                    <th className="px-6 py-3">Canal</th>
+                    <th className="px-6 py-3">Categoria Interna</th>
+                    <th className="px-6 py-3">ID Externo</th>
+                    <th className="px-6 py-3">Nome Externo da Categoria</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {categoryMappings.map((cm) => (
+                    <tr key={cm.id}>
+                      <td className="px-6 py-4 font-medium text-gray-900">{cm.channel?.name}</td>
+                      <td className="px-6 py-4 text-gray-600">{cm.category?.name}</td>
+                      <td className="px-6 py-4 font-mono text-xs">{cm.externalCategoryId}</td>
+                      <td className="px-6 py-4 text-gray-800">{cm.externalCategoryName}</td>
+                    </tr>
+                  ))}
+                  {categoryMappings.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-6 text-center text-gray-400">
+                        Nenhum mapeamento de categoria cadastrado.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* 6. ABA DIAGNÓSTICO & LOGS */}
+      {!loading && activeTab === 'diagnostics' && (
+        <div className="space-y-4">
+          {diagnosticsSubTab === 'logs' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-lg font-medium text-gray-900">Histórico de Sincronizações</h2>
+                  <p className="text-xs text-gray-500">Registro de comunicações e atualizações automáticas entre canais</p>
+                </div>
+                <button
+                  onClick={loadData}
+                  className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-medium"
+                >
+                  Atualizar
+                </button>
+              </div>
+
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                    <tr>
+                      <th className="px-4 py-3">Data/Hora</th>
+                      <th className="px-4 py-3">Conta de Canal</th>
+                      <th className="px-4 py-3">Produto</th>
+                      <th className="px-4 py-3">Operação</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Duração</th>
+                      <th className="px-4 py-3">Detalhes / Mensagem</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {logs.map((log) => (
+                      <tr key={log.id}>
+                        <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                          {new Date(log.createdAt).toLocaleString('pt-BR')}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900">
+                          {log.channelAccount?.name}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {log.channelProduct?.product?.name || '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-800">
+                            {log.operation === 'PUBLISH'
+                              ? 'Publicação'
+                              : log.operation === 'PRICE'
+                              ? 'Sinc. Preço'
+                              : log.operation === 'STOCK'
+                              ? 'Sinc. Estoque'
+                              : log.operation}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                              log.status === 'SUCCESS'
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {log.status === 'SUCCESS' ? 'Sucesso' : 'Falha'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500">
+                          {log.durationMs ? `${log.durationMs}ms` : '-'}
+                        </td>
+                        <td className="px-4 py-3 text-gray-600 text-xs">{log.message}</td>
+                      </tr>
+                    ))}
+                    {logs.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
+                          Nenhum log encontrado.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {diagnosticsSubTab === 'events' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-lg font-medium text-gray-900">Fila de Eventos & Notificações Externas</h2>
+                  <p className="text-xs text-gray-500">Notificações em tempo real recebidas de plataformas parceiras</p>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await fetchWithAuth('/admin/marketplaces/events/process-retries', { method: 'POST' });
+                        const d = await res.json();
+                        setMessage({ type: 'success', text: `Retentativas processadas: ${d.processedCount} eventos executados.` });
+                        loadData();
+                      } catch (e: any) {
+                        setMessage({ type: 'error', text: e.message });
+                      }
+                    }}
+                    className="px-3 py-1.5 text-xs bg-amber-500 hover:bg-amber-600 text-white rounded font-medium"
+                  >
+                    Re-processar Pendentes
+                  </button>
+                  <button
+                    onClick={loadData}
+                    className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-medium"
+                  >
+                    Atualizar Fila
+                  </button>
+                </div>
+              </div>
+              <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                    <tr>
+                      <th className="px-4 py-3">Recebido Em</th>
+                      <th className="px-4 py-3">Canal</th>
+                      <th className="px-4 py-3">Tópico</th>
+                      <th className="px-4 py-3">ID Notificação</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Tentativas</th>
+                      <th className="px-4 py-3">Diagnóstico / Próxima Tentativa</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {marketplaceEvents.map((ev) => (
+                      <tr key={ev.id}>
+                        <td className="px-4 py-3 text-xs text-gray-500">
+                          {new Date(ev.receivedAt).toLocaleString('pt-BR')}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900">{ev.channel?.name}</td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700 font-mono">
+                            {ev.topic}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-600">{ev.externalEventId}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                              ev.status === 'PROCESSED'
+                                ? 'bg-green-100 text-green-800'
+                                : ev.status === 'FAILED'
+                                ? 'bg-red-100 text-red-800'
+                                : ev.status === 'PROCESSING'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}
+                          >
+                            {ev.status === 'PROCESSED' ? 'Processado' : ev.status === 'FAILED' ? 'Falha' : ev.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-600">{ev.attempts}</td>
+                        <td className="px-4 py-3 text-xs text-red-600 max-w-xs truncate">
+                          {ev.lastError || (ev.nextAttemptAt ? `Re-tentativa: ${new Date(ev.nextAttemptAt).toLocaleTimeString('pt-BR')}` : '-')}
+                        </td>
+                      </tr>
+                    ))}
+                    {marketplaceEvents.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                          Nenhum evento registrado na fila.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1309,8 +1379,8 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 space-y-6">
             <div className="border-b pb-4 flex justify-between items-center">
               <div>
-                <h3 className="text-xl font-bold text-gray-900">Assistente de Publicação em Canal (Hub F13B)</h3>
-                <p className="text-xs text-gray-500">Fluxo validado de publicação: Produto &rarr; Mapeamentos &rarr; F12 &rarr; F7 &rarr; Marketplace</p>
+                <h3 className="text-xl font-bold text-gray-900">Assistente de Publicação em Marketplaces</h3>
+                <p className="text-xs text-gray-500">Validação completa: Produto &rarr; Mapeamento de Categoria &rarr; Regras de Preço &rarr; Saldo de Estoque</p>
               </div>
               <button
                 type="button"
@@ -1332,10 +1402,10 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
                 1. Produto & Canal
               </div>
               <div className={`p-2 rounded text-center border ${wizardStep === 2 ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-gray-50 text-gray-500'}`}>
-                2. Preço (F12) & Estoque (F7)
+                2. Preço & Margem
               </div>
               <div className={`p-2 rounded text-center border ${wizardStep === 3 ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-gray-50 text-gray-500'}`}>
-                3. Validação do Hub
+                3. Pré-validação
               </div>
               <div className={`p-2 rounded text-center border ${wizardStep === 4 ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-gray-50 text-gray-500'}`}>
                 4. Confirmação
@@ -1346,7 +1416,7 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
             {wizardStep === 1 && (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Selecione o Produto Interno</label>
+                  <label className="block text-sm font-medium text-gray-700">Selecione o Produto</label>
                   <select
                     required
                     value={publishForm.productId}
@@ -1366,7 +1436,7 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Selecione a Conta de Canal</label>
+                  <label className="block text-sm font-medium text-gray-700">Canal Destino</label>
                   <select
                     required
                     value={publishForm.channelAccountId}
@@ -1419,19 +1489,19 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
             {wizardStep === 2 && (
               <div className="space-y-4">
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
-                  <h4 className="text-sm font-bold text-gray-800">Precificação Inteligente (F12)</h4>
+                  <h4 className="text-sm font-bold text-gray-800">Cálculo de Preço Sugerido</h4>
                   <p className="text-xs text-gray-600">
-                    O EuSou utiliza o Pricing Engine (F12) para calcular a margem líquida considerando taxas do canal, embalagem e impostos.
+                    O EuSou calcula a margem líquida ideal considerando as comissões do canal, taxas de venda e custos de envio.
                   </p>
                   {pricingDetails ? (
                     <div className="mt-2 p-2.5 bg-white border rounded text-xs text-gray-700 space-y-1">
                       <div className="flex justify-between">
-                        <span>Preço Calculado (Sugerido F12):</span>
+                        <span>Preço de Venda Sugerido:</span>
                         <strong className="text-green-700">R$ {Number(pricingDetails.calculatedPrice || 0).toFixed(2)}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span>Margem Líquida Alvo:</span>
-                        <span>{pricingDetails.targetMarginPercent ? `${pricingDetails.targetMarginPercent}%` : 'Conforme regra'}</span>
+                        <span>{pricingDetails.targetMarginPercent ? `${pricingDetails.targetMarginPercent}%` : 'Padrão da regra'}</span>
                       </div>
                     </div>
                   ) : (
@@ -1440,14 +1510,14 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
                       onClick={handleValidateProduct}
                       className="text-xs text-indigo-600 hover:underline font-medium"
                     >
-                      Carregar simulação de preço F12
+                      Calcular preço sugerido
                     </button>
                   )}
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Preço Manual Override (Opcional - Fixa preço em MANUAL no F12)
+                    Preço Manual Personalizado (Opcional)
                   </label>
                   <input
                     type="number"
@@ -1455,10 +1525,10 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
                     value={publishForm.priceOverride}
                     onChange={(e) => setPublishForm({ ...publishForm, priceOverride: e.target.value })}
                     className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                    placeholder="Em branco = usa preço efetivo automático do F12"
+                    placeholder="Em branco = utiliza o preço calculado automaticamente"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Se preenchido, define modo MANUAL em <code>ProductChannelPrice</code>.
+                    Se você informar um valor manual, o produto será anunciado exatamente por este preço.
                   </p>
                 </div>
 
@@ -1478,7 +1548,7 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
                     }}
                     className="px-4 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 font-medium"
                   >
-                    Validar no Hub &rarr;
+                    Validar Anúncio &rarr;
                   </button>
                 </div>
               </div>
@@ -1487,24 +1557,24 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
             {/* ETAPA 3: Validação do Hub */}
             {wizardStep === 3 && (
               <div className="space-y-4">
-                <h4 className="text-sm font-bold text-gray-800">Resultado da Validação Pré-Publicação</h4>
+                <h4 className="text-sm font-bold text-gray-800">Resultado da Validação do Anúncio</h4>
                 {validationResult ? (
                   <div className="space-y-3">
                     <div className={`p-4 rounded-lg border ${validationResult.isValid ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                       <div className="flex items-center space-x-2">
                         <span className={`w-3 h-3 rounded-full ${validationResult.isValid ? 'bg-green-500' : 'bg-red-500'}`}></span>
                         <strong className={`text-sm ${validationResult.isValid ? 'text-green-800' : 'text-red-800'}`}>
-                          {validationResult.isValid ? 'PRODUTO APTO PARA PUBLICAÇÃO' : 'BLOQUEIO DE PUBLICAÇÃO'}
+                          {validationResult.isValid ? 'PRODUTO APTO PARA PUBLICAÇÃO' : 'PENDÊNCIAS ANTES DE PUBLICAR'}
                         </strong>
                       </div>
                       <p className="text-xs text-gray-600 mt-1">
-                        Canal: <strong>{validationResult.channelName}</strong> | Preço Validado: <strong>R$ {Number(validationResult.effectivePrice || 0).toFixed(2)}</strong> | Estoque Saldo: <strong>{validationResult.availableStock || 0} unid.</strong>
+                        Canal: <strong>{validationResult.channelName}</strong> | Preço de Venda: <strong>R$ {Number(validationResult.effectivePrice || 0).toFixed(2)}</strong> | Estoque Disponível: <strong>{validationResult.availableStock || 0} un.</strong>
                       </p>
                     </div>
 
                     {validationResult.errors?.length > 0 && (
                       <div className="p-3 bg-red-50 border border-red-200 rounded text-xs text-red-700 space-y-1">
-                        <strong>Erros Críticos (Impedem Publicação):</strong>
+                        <strong>Itens Obrigatórios Pendentes:</strong>
                         <ul className="list-disc pl-5">
                           {validationResult.errors.map((err: string, i: number) => (
                             <li key={i}>{err}</li>
@@ -1515,7 +1585,7 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
 
                     {validationResult.warnings?.length > 0 && (
                       <div className="p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800 space-y-1">
-                        <strong>Avisos (Não impedem):</strong>
+                        <strong>Recomendações (Não bloqueiam a publicação):</strong>
                         <ul className="list-disc pl-5">
                           {validationResult.warnings.map((w: string, i: number) => (
                             <li key={i}>{w}</li>
@@ -1526,7 +1596,7 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
                   </div>
                 ) : (
                   <div className="text-center py-4 text-xs text-gray-500">
-                    Validando regras de canal e conectores...
+                    Validando requisitos exigidos pelo marketplace...
                   </div>
                 )}
 
@@ -1557,9 +1627,9 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
                   <h4 className="font-bold text-sm">Resumo da Publicação</h4>
                   <p><strong>Produto:</strong> {products.find((p) => p.id === publishForm.productId)?.name}</p>
                   <p><strong>Conta:</strong> {accounts.find((a) => a.id === publishForm.channelAccountId)?.name}</p>
-                  <p><strong>Preço:</strong> {publishForm.priceOverride ? `R$ ${parseFloat(publishForm.priceOverride).toFixed(2)} (MANUAL)` : 'Conforme Preço Efetivo F12'}</p>
+                  <p><strong>Preço de Venda:</strong> {publishForm.priceOverride ? `R$ ${parseFloat(publishForm.priceOverride).toFixed(2)} (Manual)` : 'Preço Calculado Automaticamente'}</p>
                   <p className="text-gray-600">
-                    Ao confirmar, o EuSou registrará a publicação de forma idempotente, sincronizará atributos mapeados e enviará a carga ao conector do canal.
+                    Ao confirmar, o EuSou registrará a sincronização e enviará os dados do produto ao canal parceiro.
                   </p>
                 </div>
 

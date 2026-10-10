@@ -18,6 +18,9 @@ import {
   LogOut,
   ArrowLeft,
   ChevronRight,
+  Menu,
+  X,
+  DollarSign,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -47,6 +50,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   userEmail,
   children,
 }) => {
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+
+  const handleMobileNavigate = (route: string) => {
+    onNavigate(route);
+    setMobileMenuOpen(false);
+  };
+
   const navSections: NavSection[] = [
     {
       title: 'VISÃO GERAL',
@@ -80,6 +90,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       title: 'OPERAÇÃO',
       items: [
         { label: 'Pedidos', route: '/admin/orders', icon: ShoppingBag },
+        { label: 'Precificação', route: '/admin/pricing', icon: DollarSign },
         { label: 'Produção 3D', route: '/admin/production', icon: Cpu },
         { label: 'Estoque', route: '/admin/inventory', icon: Boxes },
       ],
@@ -96,8 +107,46 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row text-slate-900 font-sans antialiased">
-      {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800">
+      {/* Mobile Top Header */}
+      <header className="md:hidden bg-slate-900 text-white px-4 py-3 flex items-center justify-between border-b border-slate-800 sticky top-0 z-40">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-amber-500 text-slate-950 font-black flex items-center justify-center text-xs shadow-xs">
+            E
+          </div>
+          <span className="font-extrabold text-sm tracking-tight">EuSou Admin</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onNavigate('/')}
+            title="Voltar à loja"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700"
+            aria-label="Menu"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+      </header>
+
+      {/* Mobile Backdrop Overlay */}
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className="md:hidden fixed inset-0 bg-black/60 z-40 backdrop-blur-xs transition-opacity"
+        />
+      )}
+
+      {/* Sidebar (Desktop fixed + Mobile drawer) */}
+      <aside
+        className={`fixed md:static inset-y-0 left-0 z-50 w-72 md:w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0 border-r border-slate-800 transition-transform duration-200 ease-in-out ${
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
         {/* Brand */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -111,13 +160,21 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               </span>
             </div>
           </div>
-          <button
-            onClick={() => onNavigate('/')}
-            title="Voltar para a Loja"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-xs flex items-center gap-1"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onNavigate('/')}
+              title="Voltar para a Loja"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-xs flex items-center gap-1"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Navigation Sections */}
@@ -135,7 +192,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                     <button
                       key={item.route}
                       disabled={Boolean(item.badge)}
-                      onClick={() => onNavigate(item.route)}
+                      onClick={() => handleMobileNavigate(item.route)}
                       className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition text-left ${
                         isActive
                           ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
