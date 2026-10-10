@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   Query,
@@ -18,7 +19,13 @@ import {
   MapCategoryDto,
   CompleteOAuthDto,
   ValidateProductDto,
+  CreateAttributeMappingDto,
+  IngestChannelOrderDto,
 } from './dto/marketplace.dto';
+import { ChannelAttributeMappingService } from './channel-attribute-mapping.service';
+import { ChannelOrderIngestionService } from './channel-order-ingestion.service';
+import { MarketplaceWebhookService } from './marketplace-webhook.service';
+import { MarketplaceReconciliationService } from './marketplace-reconciliation.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -27,7 +34,13 @@ import { Roles } from '../auth/roles.decorator';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
 export class MarketplaceController {
-  constructor(private readonly marketplaceService: MarketplaceService) {}
+  constructor(
+    private readonly marketplaceService: MarketplaceService,
+    private readonly attributeMappingService: ChannelAttributeMappingService,
+    private readonly orderIngestionService: ChannelOrderIngestionService,
+    private readonly webhookService: MarketplaceWebhookService,
+    private readonly reconciliationService: MarketplaceReconciliationService,
+  ) {}
 
   // 1. Dashboard Metrics
   @Get('dashboard')
@@ -162,4 +175,86 @@ export class MarketplaceController {
       limit ? parseInt(limit, 10) : 50,
     );
   }
+
+  // 10. Channel Attribute Mappings (F13A)
+  @Get('attribute-mappings')
+  async listAttributeMappings(
+    @Query('channelId') channelId: string,
+    @Query('externalCategoryId') externalCategoryId?: string,
+  ) {
+    return this.attributeMappingService.listMappings(channelId, externalCategoryId);
+  }
+
+  @Post('attribute-mappings')
+  async upsertAttributeMapping(@Body() dto: CreateAttributeMappingDto) {
+    return this.attributeMappingService.upsertMapping(dto);
+  }
+
+  @Delete('attribute-mappings/:id')
+  async deleteAttributeMapping(@Param('id') id: string) {
+    return this.attributeMappingService.deleteMapping(id);
+  }
+
+  // 11. Channel Orders (F13A)
+  @Get('orders')
+  async listChannelOrders(
+    @Query('channelId') channelId?: string,
+    @Query('channelAccountId') channelAccountId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.orderIngestionService.listChannelOrders({
+      channelId,
+      channelAccountId,
+      limit: limit ? parseInt(limit, 10) : 50,
+    });
+  }
+
+  @Get('orders/:id')
+  async getChannelOrder(@Param('id') id: string) {
+    return this.orderIngestionService.getChannelOrder(id);
+  }
+
+  @Post('orders/ingest')
+  async ingestOrder(@Body() dto: IngestChannelOrderDto, @Request() req: any) {
+    return this.orderIngestionService.ingestOrder(dto, req.user?.id);
+  }
+
+  // 12. Reconciliation (F13A)
+  @Post('products/:id/reconcile')
+  async reconcileProduct(@Param('id') channelProductId: string) {
+    return this.reconciliationService.reconcileProduct(channelProductId);
+  }
+
+  @Post('accounts/:id/reconcile')
+  async reconcileAccount(@Param('id') channelAccountId: string) {
+    return this.reconciliationService.reconcileAccount(channelAccountId);
+  }
+
+  // 13. Marketplace Webhook Events (F13A / F13B)
+  @Get('events')
+  async listMarketplaceEvents(
+    @Query('channelId') channelId?: string,
+    @Query('topic') topic?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.webhookService.listEvents({
+      channelId,
+      topic,
+      limit: limit ? parseInt(limit, 10) : 50,
+    });
+  }
+
+  @Post('events/process-retries')
+  async processEventRetries(@Query('limit') limit?: string) {
+    return this.webhookService.processPendingRetries(limit ? parseInt(limit, 10) : 20);
+  }
+
+  @Post('accounts/:id/recover-missed-feeds')
+  async recoverMissedFeeds(
+    @Param('id') accountId: string,
+    @Query('channelId') channelId: string,
+  ) {
+    return this.webhookService.recoverMissedFeeds(channelId, accountId);
+  }
 }
+

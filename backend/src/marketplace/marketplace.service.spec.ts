@@ -3,6 +3,9 @@ import { MarketplaceService } from './marketplace.service';
 import { MockMarketplaceConnector } from './mock-marketplace.connector';
 import { MercadoLivreConnector } from './mercadolivre.connector';
 import { ProductMapperService } from './product-mapper.service';
+import { HubValidatorService } from './hub-validator.service';
+import { ChannelAttributeMappingService } from './channel-attribute-mapping.service';
+import { PricingService } from '../pricing/pricing.service';
 import { PrismaService } from '../prisma.service';
 import { AuditLogService } from '../audit-log.service';
 import {
@@ -44,6 +47,13 @@ describe('MarketplaceService', () => {
         findMany: jest.fn(),
         findUnique: jest.fn(),
         upsert: jest.fn(),
+      },
+      channelAttributeMapping: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
       },
       channelSyncLog: {
         findMany: jest.fn(),
@@ -103,6 +113,14 @@ describe('MarketplaceService', () => {
         MockMarketplaceConnector,
         { provide: MercadoLivreConnector, useValue: mlConnectorMock },
         ProductMapperService,
+        HubValidatorService,
+        ChannelAttributeMappingService,
+        {
+          provide: PricingService,
+          useValue: {
+            getEffectivePrice: jest.fn().mockResolvedValue(null),
+          },
+        },
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLog },
       ],

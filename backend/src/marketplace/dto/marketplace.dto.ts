@@ -118,3 +118,103 @@ export class ValidateProductDto {
   @IsOptional()
   priceOverride?: number;
 }
+
+export class CreateAttributeMappingDto {
+  @IsString()
+  @IsNotEmpty()
+  channelId: string;
+
+  @IsString()
+  @IsOptional()
+  externalCategoryId?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  attributeDefinitionId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  externalAttributeId: string;
+
+  @IsString()
+  @IsOptional()
+  externalAttributeName?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  isRequired?: boolean;
+
+  @IsString()
+  @IsOptional()
+  defaultValue?: string;
+
+  @IsOptional()
+  valueMapping?: Record<string, any>;
+}
+
+export class IngestChannelOrderDto {
+  @IsString()
+  @IsNotEmpty()
+  channelId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  channelAccountId: string;
+
+  @IsString()
+  @IsNotEmpty()
+  externalOrderId: string;
+
+  @IsString()
+  @IsOptional()
+  externalBuyerId?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  externalStatus: string;
+
+  @IsNumber()
+  externalTotal: number;
+
+  @IsString()
+  @IsOptional()
+  externalCurrency?: string;
+
+  @IsNumber()
+  @IsOptional()
+  commissionFee?: number;
+
+  @IsNumber()
+  @IsOptional()
+  shippingFee?: number;
+
+  @IsOptional()
+  rawPayload?: Record<string, any>;
+
+  // Customer info for internal Order creation
+  @IsOptional()
+  customer?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    street?: string;
+    number?: string;
+    complement?: string;
+    neighborhood?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+  };
+
+  // Order items
+  @IsOptional()
+  items?: Array<{
+    productId?: string;
+    sku?: string;
+    externalItemId?: string;
+    quantity: number;
+    unitPrice: number;
+    title?: string;
+  }>;
+}
+

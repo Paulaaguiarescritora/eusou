@@ -10,6 +10,8 @@ export class ProductMapperService {
     product: any,
     options?: {
       priceOverride?: number;
+      resolvedEffectivePrice?: number;
+      availableStock?: number;
       externalCategoryId?: string;
       customAttributes?: Record<string, string>;
     },
@@ -37,15 +39,21 @@ export class ProductMapperService {
       }
     }
 
-    // 3. Preço efetivo
-    const price =
-      options?.priceOverride !== undefined && options?.priceOverride !== null
-        ? Number(options.priceOverride)
-        : Number(product.basePrice || product.price || 0);
+    // 3. Preço efetivo (Prioridade: priceOverride explícito > resolvedEffectivePrice do F12 > basePrice > price)
+    let price = 0;
+    if (options?.priceOverride !== undefined && options?.priceOverride !== null) {
+      price = Number(options.priceOverride);
+    } else if (options?.resolvedEffectivePrice !== undefined && options?.resolvedEffectivePrice !== null) {
+      price = Number(options.resolvedEffectivePrice);
+    } else {
+      price = Number(product.basePrice || product.price || 0);
+    }
 
-    // 4. Quantidade de estoque total (soma de inventários se existirem)
+    // 4. Quantidade de estoque total (Prioridade: availableStock explícito > inventários F7 > stockQuantity)
     let stockQuantity = 0;
-    if (product.inventories && Array.isArray(product.inventories)) {
+    if (options?.availableStock !== undefined && options?.availableStock !== null) {
+      stockQuantity = Number(options.availableStock);
+    } else if (product.inventories && Array.isArray(product.inventories)) {
       stockQuantity = product.inventories.reduce(
         (sum: number, inv: any) =>
           sum + Math.max(0, (inv.quantity || 0) - (inv.reservedQuantity || 0)),

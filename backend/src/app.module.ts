@@ -22,6 +22,7 @@ import { AffiliateModule } from './affiliate/affiliate.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { ProductionModule } from './production/production.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
+import { PricingModule } from './pricing/pricing.module';
 import { PrismaService } from './prisma.service';
 import { AuditLogService } from './audit-log.service';
 
@@ -48,6 +49,7 @@ import { AuditLogService } from './audit-log.service';
     InventoryModule,
     ProductionModule,
     MarketplaceModule,
+    PricingModule,
   ],
   controllers: [HealthController, InfoController],
   providers: [PrismaService, AuditLogService],

@@ -29,6 +29,9 @@ import {
   ChannelSyncOperation,
   ChannelSyncStatus,
 } from '@prisma/client';
+import { HubValidatorService } from './hub-validator.service';
+import { ChannelAttributeMappingService } from './channel-attribute-mapping.service';
+import { PricingService } from '../pricing/pricing.service';
 
 @Injectable()
 export class MarketplaceService {
@@ -40,6 +43,9 @@ export class MarketplaceService {
     private readonly mockConnector: MockMarketplaceConnector,
     private readonly mlConnector: MercadoLivreConnector,
     private readonly productMapper: ProductMapperService,
+    private readonly hubValidator: HubValidatorService,
+    private readonly attributeMappingService: ChannelAttributeMappingService,
+    private readonly pricingService: PricingService,
   ) {}
 
   /**
@@ -460,17 +466,48 @@ export class MarketplaceService {
       }
     }
 
-    const validation = this.productMapper.validateForMercadoLivre(product, {
+    let resolvedPrice: number | undefined;
+    if (dto.priceOverride !== undefined && dto.priceOverride !== null) {
+      resolvedPrice = Number(dto.priceOverride);
+    } else {
+      const effectiveDec = await this.pricingService.getEffectivePrice(
+        product.id,
+        account.channelId,
+      );
+      if (effectiveDec) {
+        resolvedPrice = Number(effectiveDec);
+      } else {
+        resolvedPrice = Number(product.basePrice || 0);
+      }
+    }
+
+    const availableStock = product.inventories.reduce(
+      (sum: number, inv: any) =>
+        sum + Math.max(0, (inv.quantity || 0) - (inv.reservedQuantity || 0)),
+      0,
+    );
+
+    const validation = this.hubValidator.validateForPublication(product, {
+      channelType: account.channel.type,
       externalCategoryId,
-      priceOverride: dto.priceOverride,
+      resolvedPrice,
+      availableStock,
     });
+
+    const stringErrors = validation.errors.map((e) => e.message);
 
     return {
       productId: product.id,
       productName: product.name,
       channelName: account.name,
       externalCategoryId,
-      ...validation,
+      resolvedPrice,
+      availableStock,
+      isValid: validation.isValid,
+      errors: stringErrors,
+      structuredErrors: validation.errors,
+      warnings: validation.warnings,
+      info: validation.info,
     };
   }
 
@@ -516,18 +553,50 @@ export class MarketplaceService {
       }
     }
 
-    // 2. Validação obrigatória antes de qualquer chamada externa
-    const validation = this.productMapper.validateForMercadoLivre(product, {
+    // 2. Resolução de Preço Efetivo (F12) e Estoque Disponível (F7)
+    let resolvedPrice: number | undefined;
+    if (dto.priceOverride !== undefined && dto.priceOverride !== null) {
+      resolvedPrice = Number(dto.priceOverride);
+    } else {
+      const effectiveDec = await this.pricingService.getEffectivePrice(
+        product.id,
+        account.channelId,
+      );
+      if (effectiveDec) {
+        resolvedPrice = Number(effectiveDec);
+      } else {
+        resolvedPrice = Number(product.basePrice || 0);
+      }
+    }
+
+    const availableStock = product.inventories.reduce(
+      (sum: number, inv: any) =>
+        sum + Math.max(0, (inv.quantity || 0) - (inv.reservedQuantity || 0)),
+      0,
+    );
+
+    // 3. Validação agnóstica via HubValidatorService
+    const validation = this.hubValidator.validateForPublication(product, {
+      channelType: account.channel.type,
       externalCategoryId,
-      priceOverride: dto.priceOverride,
+      resolvedPrice,
+      availableStock,
     });
     if (!validation.isValid) {
+      const errMsgs = validation.errors.map((e) => e.message).join(' ');
       throw new BadRequestException(
-        `Produto não pode ser publicado no ${account.channel.name}: ${validation.errors.join(' ')}`,
+        `Produto não pode ser publicado no ${account.channel.name}: ${errMsgs}`,
       );
     }
 
-    // 3. Verificação de IDEMPOTÊNCIA: Se já foi publicado e tem externalProductId, sincroniza em vez de duplicar
+    // 4. Resolve atributos mapeados dinâmicos
+    const customAttributes = await this.attributeMappingService.resolveMappedAttributes(
+      account.channelId,
+      product,
+      externalCategoryId,
+    );
+
+    // 5. Verificação de IDEMPOTÊNCIA: Se já foi publicado e tem externalProductId, sincroniza em vez de duplicar
     const existingChannelProduct = await this.prisma.channelProduct.findUnique({
       where: {
         productId_channelAccountId: {
@@ -540,7 +609,10 @@ export class MarketplaceService {
     const connector = this.getConnector(account.channel.type);
     const payload = this.productMapper.mapToExternalPayload(product, {
       priceOverride: dto.priceOverride,
+      resolvedEffectivePrice: resolvedPrice,
+      availableStock,
       externalCategoryId,
+      customAttributes,
     });
 
     if (
@@ -700,10 +772,20 @@ export class MarketplaceService {
       );
     }
 
-    const price =
-      cp.priceOverride !== null
-        ? Number(cp.priceOverride)
-        : Number(cp.product.basePrice);
+    let price: number;
+    if (cp.priceOverride !== null) {
+      price = Number(cp.priceOverride);
+    } else {
+      const effectiveDec = await this.pricingService.getEffectivePrice(
+        cp.productId,
+        cp.channelAccount.channelId,
+      );
+      if (effectiveDec) {
+        price = Number(effectiveDec);
+      } else {
+        price = Number(cp.product.basePrice || 0);
+      }
+    }
 
     const connector = this.getConnector(cp.channelAccount.channel.type);
 

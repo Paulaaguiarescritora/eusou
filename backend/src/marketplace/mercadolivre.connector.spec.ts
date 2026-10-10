@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { MercadoLivreConnector } from './mercadolivre.connector';
 import { CredentialEncryptionService } from './credential-encryption.service';
 import { ProductMapperService } from './product-mapper.service';
+import { MercadoLivrePriceAdapter } from './mercadolivre-price.adapter';
+import { MercadoLivreStockAdapter } from './mercadolivre-stock.adapter';
 
 describe('MercadoLivreConnector', () => {
   let connector: MercadoLivreConnector;
@@ -26,6 +28,8 @@ describe('MercadoLivreConnector', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MercadoLivreConnector,
+        MercadoLivrePriceAdapter,
+        MercadoLivreStockAdapter,
         CredentialEncryptionService,
         ProductMapperService,
         { provide: ConfigService, useValue: config },

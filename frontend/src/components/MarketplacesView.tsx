@@ -5,6 +5,9 @@ import {
   ChannelProduct,
   ChannelSyncLog,
   ChannelCategoryMapping,
+  ChannelOrder,
+  MarketplaceEvent,
+  DiscrepancyReport,
   Product,
   Category,
 } from '../types';
@@ -15,7 +18,7 @@ interface MarketplacesViewProps {
 
 export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => {
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'channels' | 'accounts' | 'products' | 'categories' | 'logs'
+    'dashboard' | 'channels' | 'accounts' | 'products' | 'categories' | 'orders' | 'events' | 'reconciliation' | 'logs'
   >('dashboard');
 
   const [loading, setLoading] = useState(false);
@@ -34,7 +37,14 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
   const [accounts, setAccounts] = useState<ChannelAccount[]>([]);
   const [channelProducts, setChannelProducts] = useState<ChannelProduct[]>([]);
   const [categoryMappings, setCategoryMappings] = useState<ChannelCategoryMapping[]>([]);
+  const [channelOrders, setChannelOrders] = useState<ChannelOrder[]>([]);
+  const [marketplaceEvents, setMarketplaceEvents] = useState<MarketplaceEvent[]>([]);
+  const [reconciliationReports, setReconciliationReports] = useState<DiscrepancyReport[]>([]);
   const [logs, setLogs] = useState<ChannelSyncLog[]>([]);
+
+  // Wizard / Detalhes de validação e precificação
+  const [validationResult, setValidationResult] = useState<any | null>(null);
+  const [pricingDetails, setPricingDetails] = useState<any | null>(null);
 
   // Dados auxiliares para selects
   const [products, setProducts] = useState<Product[]>([]);
@@ -56,6 +66,7 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
   });
 
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [wizardStep, setWizardStep] = useState<number>(1);
   const [publishForm, setPublishForm] = useState({
     productId: '',
     channelAccountId: '',
@@ -120,6 +131,19 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
         if (catMapRes.ok) setCategoryMappings(await catMapRes.json());
         if (chanRes.ok) setChannels(await chanRes.json());
         if (catRes.ok) setCategories(await catRes.json());
+      } else if (activeTab === 'orders') {
+        const res = await fetchWithAuth('/admin/marketplaces/orders');
+        if (res.ok) setChannelOrders(await res.json());
+      } else if (activeTab === 'events') {
+        const res = await fetchWithAuth('/admin/marketplaces/events');
+        if (res.ok) setMarketplaceEvents(await res.json());
+      } else if (activeTab === 'reconciliation') {
+        const [cpRes, accRes] = await Promise.all([
+          fetchWithAuth('/admin/marketplaces/products'),
+          fetchWithAuth('/admin/marketplaces/accounts'),
+        ]);
+        if (cpRes.ok) setChannelProducts(await cpRes.json());
+        if (accRes.ok) setAccounts(await accRes.json());
       } else if (activeTab === 'logs') {
         const res = await fetchWithAuth('/admin/marketplaces/logs');
         if (res.ok) setLogs(await res.json());
@@ -270,6 +294,28 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
         body: JSON.stringify(payload),
       });
       const data = await res.json();
+      setValidationResult(data);
+
+      // Simula / busca cálculo do F12 para este canal se disponível
+      const selectedAcc = accounts.find((a) => a.id === publishForm.channelAccountId);
+      if (selectedAcc?.channelId) {
+        try {
+          const priceRes = await fetchWithAuth('/pricing/simulate', {
+            method: 'POST',
+            body: JSON.stringify({
+              productId: publishForm.productId,
+              channelId: selectedAcc.channelId,
+            }),
+          });
+          if (priceRes.ok) {
+            const pData = await priceRes.json();
+            setPricingDetails(pData);
+          }
+        } catch {
+          // Fallback gracioso
+        }
+      }
+
       if (data.isValid) {
         setMessage({
           type: 'success',
@@ -435,6 +481,9 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
             { id: 'accounts', label: 'Contas Vinculadas' },
             { id: 'products', label: 'Produtos Publicados' },
             { id: 'categories', label: 'Mapeamento de Categorias' },
+            { id: 'orders', label: 'Pedidos dos Canais' },
+            { id: 'events', label: 'Fila de Eventos' },
+            { id: 'reconciliation', label: 'Reconciliação' },
             { id: 'logs', label: 'Logs de Sincronização' },
           ].map((tab) => (
             <button
@@ -872,6 +921,262 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
         </div>
       )}
 
+      {/* TAB: PEDIDOS DOS CANAIS (F13A / F13B) */}
+      {activeTab === 'orders' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-medium text-gray-900">Pedidos Recebidos de Marketplaces</h2>
+            <button
+              onClick={loadData}
+              className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-medium"
+            >
+              Atualizar Pedidos
+            </button>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                <tr>
+                  <th className="px-4 py-3">Canal</th>
+                  <th className="px-4 py-3">ID Pedido Externo</th>
+                  <th className="px-4 py-3">Comprador</th>
+                  <th className="px-4 py-3">Total Externo</th>
+                  <th className="px-4 py-3">Status Externo</th>
+                  <th className="px-4 py-3">Pedido EuSou (F5)</th>
+                  <th className="px-4 py-3">Data Sincronização</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {channelOrders.map((ord) => (
+                  <tr key={ord.id}>
+                    <td className="px-4 py-3 font-semibold text-gray-900">{ord.channel?.name}</td>
+                    <td className="px-4 py-3 text-indigo-600 font-mono text-xs">{ord.externalOrderId}</td>
+                    <td className="px-4 py-3 text-gray-700">{ord.externalBuyerId || ord.order?.customerName || '-'}</td>
+                    <td className="px-4 py-3 font-medium text-gray-900">
+                      R$ {Number(ord.externalTotal).toFixed(2)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 font-medium">
+                        {ord.externalStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      {ord.order ? `Pedido #${ord.order.id.slice(0, 8)} (${ord.order.status})` : 'Vinculado'}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      {new Date(ord.syncedAt).toLocaleString('pt-BR')}
+                    </td>
+                  </tr>
+                ))}
+                {channelOrders.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                      Nenhum pedido de marketplace registrado até o momento.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: FILA DE EVENTOS WEBHOOK (F13A / F13B) */}
+      {activeTab === 'events' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-medium text-gray-900">Fila de Eventos & Webhooks Recebidos</h2>
+            <div className="flex space-x-2">
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetchWithAuth('/admin/marketplaces/events/process-retries', { method: 'POST' });
+                    const d = await res.json();
+                    setMessage({ type: 'success', text: `Retentativas processadas: ${d.processedCount} eventos executados.` });
+                    loadData();
+                  } catch (e: any) {
+                    setMessage({ type: 'error', text: e.message });
+                  }
+                }}
+                className="px-3 py-1.5 text-xs bg-amber-500 hover:bg-amber-600 text-white rounded font-medium"
+              >
+                Re-processar Falhos
+              </button>
+              <button
+                onClick={loadData}
+                className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded font-medium"
+              >
+                Atualizar Fila
+              </button>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                <tr>
+                  <th className="px-4 py-3">Recebido Em</th>
+                  <th className="px-4 py-3">Canal</th>
+                  <th className="px-4 py-3">Tópico</th>
+                  <th className="px-4 py-3">ID Externo Evento</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Tentativas</th>
+                  <th className="px-4 py-3">Erro / Próxima Tentativa</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {marketplaceEvents.map((ev) => (
+                  <tr key={ev.id}>
+                    <td className="px-4 py-3 text-xs text-gray-500">
+                      {new Date(ev.receivedAt).toLocaleString('pt-BR')}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{ev.channel?.name}</td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700 font-mono">
+                        {ev.topic}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-600">{ev.externalEventId}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                          ev.status === 'PROCESSED'
+                            ? 'bg-green-100 text-green-800'
+                            : ev.status === 'FAILED'
+                            ? 'bg-red-100 text-red-800'
+                            : ev.status === 'PROCESSING'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        {ev.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-600">{ev.attempts}</td>
+                    <td className="px-4 py-3 text-xs text-red-600 max-w-xs truncate">
+                      {ev.lastError || (ev.nextAttemptAt ? `Re-tentativa: ${new Date(ev.nextAttemptAt).toLocaleTimeString('pt-BR')}` : '-')}
+                    </td>
+                  </tr>
+                ))}
+                {marketplaceEvents.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                      Nenhum evento registrado na fila.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB: RECONCILIAÇÃO OPERACIONAL (F13A / F13B) */}
+      {activeTab === 'reconciliation' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-lg font-medium text-gray-900">Reconciliação Local vs Remoto</h2>
+              <p className="text-xs text-gray-500">
+                Detecta divergências de preço efetivo (F12), saldo de estoque (F7) e status remoto do marketplace.
+              </p>
+            </div>
+            <div className="flex space-x-2">
+              {accounts.map((acc) => (
+                <button
+                  key={acc.id}
+                  onClick={async () => {
+                    try {
+                      setLoading(true);
+                      const res = await fetchWithAuth(`/admin/marketplaces/accounts/${acc.id}/reconcile`, { method: 'POST' });
+                      const d = await res.json();
+                      setReconciliationReports(d);
+                      setMessage({ type: 'success', text: `Reconciliação da conta ${acc.name} concluída. ${d.length} anúncios avaliados.` });
+                    } catch (e: any) {
+                      setMessage({ type: 'error', text: e.message });
+                    } finally {
+                      setLoading(false);
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium"
+                >
+                  Reconciliar Conta {acc.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase">
+                <tr>
+                  <th className="px-4 py-3">Produto / Anúncio</th>
+                  <th className="px-4 py-3">Canal</th>
+                  <th className="px-4 py-3">Divergência de Preço</th>
+                  <th className="px-4 py-3">Divergência de Estoque</th>
+                  <th className="px-4 py-3">Divergência de Status</th>
+                  <th className="px-4 py-3">Ação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {reconciliationReports.map((rep) => (
+                  <tr key={rep.channelProductId}>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-gray-900">ID Anúncio: {rep.externalProductId}</div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">{rep.channelName}</td>
+                    <td className="px-4 py-3">
+                      {rep.discrepancies.price ? (
+                        <span className="px-2 py-0.5 rounded text-xs bg-red-100 text-red-800 font-medium">
+                          Local: R$ {rep.discrepancies.price.localEffectivePrice.toFixed(2)} | Remoto: R$ {rep.discrepancies.price.remotePrice.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-green-600 font-medium">Preço consistente</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {rep.discrepancies.stock ? (
+                        <span className="px-2 py-0.5 rounded text-xs bg-red-100 text-red-800 font-medium">
+                          Local: {rep.discrepancies.stock.localAvailableStock} | Remoto: {rep.discrepancies.stock.remoteStock}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-green-600 font-medium">Estoque consistente</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {rep.discrepancies.status ? (
+                        <span className="px-2 py-0.5 rounded text-xs bg-yellow-100 text-yellow-800 font-medium">
+                          Local: {rep.discrepancies.status.localStatus} | Remoto: {rep.discrepancies.status.remoteStatus}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-green-600 font-medium">Status consistente</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={async () => {
+                          await handleSyncPrice(rep.channelProductId);
+                          await handleSyncStock(rep.channelProductId);
+                        }}
+                        className="px-2.5 py-1 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded font-medium"
+                      >
+                        Sincronizar Agora
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {reconciliationReports.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                      Clique em "Reconciliar Conta" acima para avaliar as divergências entre o EuSou e os canais externos.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* MODAL: NOVO CANAL */}
       {showChannelModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
@@ -998,80 +1303,288 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
         </div>
       )}
 
-      {/* MODAL: PUBLICAR PRODUTO */}
+      {/* MODAL: ASSISTENTE DE PUBLICAÇÃO MULTI-ETAPAS (WIZARD 8 PASSOS F13B) */}
       {showPublishModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 space-y-4">
-            <h3 className="text-lg font-bold text-gray-900">Publicar Produto em Canal</h3>
-            <form onSubmit={handlePublishProduct} className="space-y-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 space-y-6">
+            <div className="border-b pb-4 flex justify-between items-center">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Produto Interno</label>
-                <select
-                  required
-                  value={publishForm.productId}
-                  onChange={(e) => setPublishForm({ ...publishForm, productId: e.target.value })}
-                  className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                >
-                  <option value="">Selecione um produto...</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} ({p.sku || 'Sem SKU'}) - R$ {Number(p.basePrice || 0).toFixed(2)}
-                    </option>
-                  ))}
-                </select>
+                <h3 className="text-xl font-bold text-gray-900">Assistente de Publicação em Canal (Hub F13B)</h3>
+                <p className="text-xs text-gray-500">Fluxo validado de publicação: Produto &rarr; Mapeamentos &rarr; F12 &rarr; F7 &rarr; Marketplace</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Conta de Canal</label>
-                <select
-                  required
-                  value={publishForm.channelAccountId}
-                  onChange={(e) => setPublishForm({ ...publishForm, channelAccountId: e.target.value })}
-                  className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                >
-                  <option value="">Selecione uma conta...</option>
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({a.channel?.name})
-                    </option>
-                  ))}
-                </select>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPublishModal(false);
+                  setWizardStep(1);
+                  setValidationResult(null);
+                  setPricingDetails(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 text-lg font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Stepper Indicators */}
+            <div className="grid grid-cols-4 gap-2 text-xs font-semibold">
+              <div className={`p-2 rounded text-center border ${wizardStep === 1 ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-gray-50 text-gray-500'}`}>
+                1. Produto & Canal
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Preço Específico para este Canal (Opcional)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={publishForm.priceOverride}
-                  onChange={(e) => setPublishForm({ ...publishForm, priceOverride: e.target.value })}
-                  className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm"
-                  placeholder="Deixe em branco para usar o preço base"
-                />
+              <div className={`p-2 rounded text-center border ${wizardStep === 2 ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-gray-50 text-gray-500'}`}>
+                2. Preço (F12) & Estoque (F7)
               </div>
-              <div className="flex justify-end space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPublishModal(false)}
-                  className="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={handleValidateProduct}
-                  className="px-4 py-2 bg-amber-500 text-white rounded text-sm hover:bg-amber-600 font-medium"
-                >
-                  Validar Produto
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 font-medium"
-                >
-                  Publicar no Canal
-                </button>
+              <div className={`p-2 rounded text-center border ${wizardStep === 3 ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-gray-50 text-gray-500'}`}>
+                3. Validação do Hub
               </div>
-            </form>
+              <div className={`p-2 rounded text-center border ${wizardStep === 4 ? 'bg-indigo-50 border-indigo-500 text-indigo-700' : 'bg-gray-50 text-gray-500'}`}>
+                4. Confirmação
+              </div>
+            </div>
+
+            {/* ETAPA 1: Seleção de Produto e Canal */}
+            {wizardStep === 1 && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Selecione o Produto Interno</label>
+                  <select
+                    required
+                    value={publishForm.productId}
+                    onChange={(e) => {
+                      setPublishForm({ ...publishForm, productId: e.target.value });
+                      setValidationResult(null);
+                      setPricingDetails(null);
+                    }}
+                    className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="">Selecione um produto cadastrado...</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} (SKU: {p.sku || 'Sem SKU'}) - Base: R$ {Number(p.basePrice || 0).toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Selecione a Conta de Canal</label>
+                  <select
+                    required
+                    value={publishForm.channelAccountId}
+                    onChange={(e) => {
+                      setPublishForm({ ...publishForm, channelAccountId: e.target.value });
+                      setValidationResult(null);
+                      setPricingDetails(null);
+                    }}
+                    className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="">Selecione a conta destino...</option>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({a.channel?.name} - {a.channel?.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {publishForm.productId && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
+                    <strong>Produto Selecionado:</strong>{' '}
+                    {products.find((p) => p.id === publishForm.productId)?.name} |{' '}
+                    SKU: {products.find((p) => p.id === publishForm.productId)?.sku}
+                  </div>
+                )}
+                <div className="flex justify-end space-x-3 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowPublishModal(false)}
+                    className="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!publishForm.productId || !publishForm.channelAccountId}
+                    onClick={() => {
+                      handleValidateProduct();
+                      setWizardStep(2);
+                    }}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 disabled:opacity-50 font-medium"
+                  >
+                    Avançar &rarr;
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ETAPA 2: Preço & Estoque */}
+            {wizardStep === 2 && (
+              <div className="space-y-4">
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+                  <h4 className="text-sm font-bold text-gray-800">Precificação Inteligente (F12)</h4>
+                  <p className="text-xs text-gray-600">
+                    O EuSou utiliza o Pricing Engine (F12) para calcular a margem líquida considerando taxas do canal, embalagem e impostos.
+                  </p>
+                  {pricingDetails ? (
+                    <div className="mt-2 p-2.5 bg-white border rounded text-xs text-gray-700 space-y-1">
+                      <div className="flex justify-between">
+                        <span>Preço Calculado (Sugerido F12):</span>
+                        <strong className="text-green-700">R$ {Number(pricingDetails.calculatedPrice || 0).toFixed(2)}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Margem Líquida Alvo:</span>
+                        <span>{pricingDetails.targetMarginPercent ? `${pricingDetails.targetMarginPercent}%` : 'Conforme regra'}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleValidateProduct}
+                      className="text-xs text-indigo-600 hover:underline font-medium"
+                    >
+                      Carregar simulação de preço F12
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Preço Manual Override (Opcional - Fixa preço em MANUAL no F12)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={publishForm.priceOverride}
+                    onChange={(e) => setPublishForm({ ...publishForm, priceOverride: e.target.value })}
+                    className="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm"
+                    placeholder="Em branco = usa preço efetivo automático do F12"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Se preenchido, define modo MANUAL em <code>ProductChannelPrice</code>.
+                  </p>
+                </div>
+
+                <div className="flex justify-between pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setWizardStep(1)}
+                    className="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50"
+                  >
+                    &larr; Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleValidateProduct();
+                      setWizardStep(3);
+                    }}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 font-medium"
+                  >
+                    Validar no Hub &rarr;
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ETAPA 3: Validação do Hub */}
+            {wizardStep === 3 && (
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold text-gray-800">Resultado da Validação Pré-Publicação</h4>
+                {validationResult ? (
+                  <div className="space-y-3">
+                    <div className={`p-4 rounded-lg border ${validationResult.isValid ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                      <div className="flex items-center space-x-2">
+                        <span className={`w-3 h-3 rounded-full ${validationResult.isValid ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                        <strong className={`text-sm ${validationResult.isValid ? 'text-green-800' : 'text-red-800'}`}>
+                          {validationResult.isValid ? 'PRODUTO APTO PARA PUBLICAÇÃO' : 'BLOQUEIO DE PUBLICAÇÃO'}
+                        </strong>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Canal: <strong>{validationResult.channelName}</strong> | Preço Validado: <strong>R$ {Number(validationResult.effectivePrice || 0).toFixed(2)}</strong> | Estoque Saldo: <strong>{validationResult.availableStock || 0} unid.</strong>
+                      </p>
+                    </div>
+
+                    {validationResult.errors?.length > 0 && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded text-xs text-red-700 space-y-1">
+                        <strong>Erros Críticos (Impedem Publicação):</strong>
+                        <ul className="list-disc pl-5">
+                          {validationResult.errors.map((err: string, i: number) => (
+                            <li key={i}>{err}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {validationResult.warnings?.length > 0 && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800 space-y-1">
+                        <strong>Avisos (Não impedem):</strong>
+                        <ul className="list-disc pl-5">
+                          {validationResult.warnings.map((w: string, i: number) => (
+                            <li key={i}>{w}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-xs text-gray-500">
+                    Validando regras de canal e conectores...
+                  </div>
+                )}
+
+                <div className="flex justify-between pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setWizardStep(2)}
+                    className="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50"
+                  >
+                    &larr; Voltar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={validationResult && !validationResult.isValid}
+                    onClick={() => setWizardStep(4)}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 disabled:opacity-50 font-medium"
+                  >
+                    Prosseguir para Publicação &rarr;
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ETAPA 4: Confirmação & Execução */}
+            {wizardStep === 4 && (
+              <div className="space-y-4">
+                <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-xs text-indigo-900 space-y-2">
+                  <h4 className="font-bold text-sm">Resumo da Publicação</h4>
+                  <p><strong>Produto:</strong> {products.find((p) => p.id === publishForm.productId)?.name}</p>
+                  <p><strong>Conta:</strong> {accounts.find((a) => a.id === publishForm.channelAccountId)?.name}</p>
+                  <p><strong>Preço:</strong> {publishForm.priceOverride ? `R$ ${parseFloat(publishForm.priceOverride).toFixed(2)} (MANUAL)` : 'Conforme Preço Efetivo F12'}</p>
+                  <p className="text-gray-600">
+                    Ao confirmar, o EuSou registrará a publicação de forma idempotente, sincronizará atributos mapeados e enviará a carga ao conector do canal.
+                  </p>
+                </div>
+
+                <div className="flex justify-between pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setWizardStep(3)}
+                    className="px-4 py-2 border rounded text-sm text-gray-600 hover:bg-gray-50"
+                  >
+                    &larr; Voltar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      handlePublishProduct(e);
+                      setShowPublishModal(false);
+                      setWizardStep(1);
+                    }}
+                    className="px-6 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700 font-bold shadow-md"
+                  >
+                    Confirmar e Publicar Agora
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

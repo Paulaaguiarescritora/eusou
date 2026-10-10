@@ -468,3 +468,88 @@ export interface ChannelSyncLog {
   channelAccount?: ChannelAccount;
   channelProduct?: ChannelProduct;
 }
+
+// F13A / F13B Types
+export interface ChannelOrder {
+  id: string;
+  channelId: string;
+  channelAccountId: string;
+  orderId: string;
+  externalOrderId: string;
+  externalBuyerId?: string | null;
+  externalStatus: string;
+  externalTotal: number | string;
+  externalCurrency: string;
+  commissionFee?: number | string | null;
+  shippingFee?: number | string | null;
+  rawPayload?: any;
+  syncedAt: string;
+  createdAt: string;
+  channel?: Channel;
+  channelAccount?: ChannelAccount;
+  order?: {
+    id: string;
+    customerName: string;
+    customerEmail: string;
+    status: string;
+    total: number | string;
+  };
+}
+
+export interface MarketplaceEvent {
+  id: string;
+  channelId: string;
+  externalEventId: string;
+  topic: string;
+  resource?: string | null;
+  payload: any;
+  status: 'RECEIVED' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'IGNORED';
+  attempts: number;
+  lastError?: string | null;
+  nextAttemptAt?: string | null;
+  receivedAt: string;
+  processedAt?: string | null;
+  channel?: Channel;
+}
+
+export interface ChannelAttributeMapping {
+  id: string;
+  channelId: string;
+  externalCategoryId?: string | null;
+  attributeDefinitionId: string;
+  externalAttributeId: string;
+  externalAttributeName?: string | null;
+  isRequired: boolean;
+  defaultValue?: string | null;
+  valueMapping?: Record<string, string> | null;
+  attributeDefinition?: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+}
+
+export interface DiscrepancyReport {
+  channelProductId: string;
+  productId: string;
+  channelName: string;
+  externalProductId: string;
+  hasDiscrepancy: boolean;
+  discrepancies: {
+    price?: {
+      localEffectivePrice: number;
+      remotePrice: number;
+      delta: number;
+    };
+    stock?: {
+      localAvailableStock: number;
+      remoteStock: number;
+      delta: number;
+    };
+    status?: {
+      localStatus: string;
+      remoteStatus: string;
+    };
+  };
+}
+

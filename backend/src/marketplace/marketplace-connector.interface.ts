@@ -73,5 +73,16 @@ export interface MarketplaceConnector {
     accountConfig: Record<string, any>,
   ): Promise<SyncResult>;
 
+  getExternalState?(
+    externalProductId: string,
+    accountConfig: Record<string, any>,
+    variationId?: string,
+  ): Promise<{
+    price: number | null;
+    stock: number | null;
+    status: string | null;
+    raw: any;
+  }>;
+
   disconnect?(accountConfig: Record<string, any>): Promise<SyncResult>;
 }

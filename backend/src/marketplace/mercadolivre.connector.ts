@@ -7,6 +7,8 @@ import {
 } from './marketplace-connector.interface';
 import { CredentialEncryptionService } from './credential-encryption.service';
 import { ProductMapperService } from './product-mapper.service';
+import { MercadoLivrePriceAdapter } from './mercadolivre-price.adapter';
+import { MercadoLivreStockAdapter } from './mercadolivre-stock.adapter';
 
 export interface MercadoLivreTokenResponse {
   access_token: string;
@@ -28,6 +30,8 @@ export class MercadoLivreConnector implements MarketplaceConnector {
     private readonly config: ConfigService,
     private readonly encryption: CredentialEncryptionService,
     private readonly mapper: ProductMapperService,
+    private readonly priceAdapter: MercadoLivrePriceAdapter,
+    private readonly stockAdapter: MercadoLivreStockAdapter,
   ) {}
 
   // =========================================================================
@@ -432,40 +436,11 @@ export class MercadoLivreConnector implements MarketplaceConnector {
   ): Promise<SyncResult> {
     try {
       const token = await this.getValidAccessToken(accountConfig);
-
-      // No Mercado Livre, o PUT /items/{id} com price atualiza o preço do anúncio
-      const response = await fetch(
-        `${this.apiBaseUrl}/items/${externalProductId}`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({ price }),
-        },
-      );
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        return {
-          success: false,
-          errorCode: `PRICE_${response.status}`,
-          message: `Falha ao sincronizar preço no Mercado Livre: ${data.message || response.statusText}`,
-          rawResponse: data,
-          timestamp: new Date(),
-        };
+      const res = await this.priceAdapter.updatePrice(externalProductId, price, token);
+      if (res.success) {
+        res.externalProductId = externalProductId;
       }
-
-      return {
-        success: true,
-        externalProductId,
-        message: `Preço do anúncio ${externalProductId} atualizado para R$ ${price.toFixed(2)} no Mercado Livre.`,
-        rawResponse: { price: data.price },
-        timestamp: new Date(),
-      };
+      return res;
     } catch (err: any) {
       return {
         success: false,
@@ -483,39 +458,11 @@ export class MercadoLivreConnector implements MarketplaceConnector {
   ): Promise<SyncResult> {
     try {
       const token = await this.getValidAccessToken(accountConfig);
-
-      const response = await fetch(
-        `${this.apiBaseUrl}/items/${externalProductId}`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-          },
-          body: JSON.stringify({ available_quantity: Math.max(0, quantity) }),
-        },
-      );
-
-      const data = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        return {
-          success: false,
-          errorCode: `STOCK_${response.status}`,
-          message: `Falha ao sincronizar estoque no Mercado Livre: ${data.message || response.statusText}`,
-          rawResponse: data,
-          timestamp: new Date(),
-        };
+      const res = await this.stockAdapter.updateStock(externalProductId, quantity, token);
+      if (res.success) {
+        res.externalProductId = externalProductId;
       }
-
-      return {
-        success: true,
-        externalProductId,
-        message: `Estoque do anúncio ${externalProductId} atualizado para ${quantity} un. no Mercado Livre.`,
-        rawResponse: { available_quantity: data.available_quantity },
-        timestamp: new Date(),
-      };
+      return res;
     } catch (err: any) {
       return {
         success: false,
@@ -634,6 +581,32 @@ export class MercadoLivreConnector implements MarketplaceConnector {
     accountConfig: Record<string, any>,
   ): Promise<SyncResult> {
     return this.syncProduct(externalProductId, accountConfig);
+  }
+
+  /**
+   * Consulta o estado externo consolidado (preço, estoque, status) via Adapters dedicados
+   */
+  async getExternalState(
+    externalProductId: string,
+    accountConfig: Record<string, any>,
+    variationId?: string,
+  ): Promise<{
+    price: number | null;
+    stock: number | null;
+    status: string | null;
+    raw: any;
+  }> {
+    const token = await this.getValidAccessToken(accountConfig);
+    const priceState = await this.priceAdapter.getExternalPrice(externalProductId, token, variationId);
+    const stockState = await this.stockAdapter.getExternalStock(externalProductId, token, variationId);
+    const syncRes = await this.syncProduct(externalProductId, accountConfig);
+
+    return {
+      price: priceState ? priceState.rawPrice : (syncRes.rawResponse?.price ?? null),
+      stock: stockState ? stockState.availableQuantity : (syncRes.rawResponse?.available_quantity ?? null),
+      status: syncRes.rawResponse?.status ? String(syncRes.rawResponse.status).toUpperCase() : null,
+      raw: syncRes.rawResponse,
+    };
   }
 
   async disconnect(_accountConfig: Record<string, any>): Promise<SyncResult> {
