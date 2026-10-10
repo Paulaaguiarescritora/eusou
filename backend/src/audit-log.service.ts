@@ -23,8 +23,22 @@ export class AuditLogService {
 
     for (const [key, value] of Object.entries(data)) {
       if (!sensitivePattern.test(key)) {
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-          sanitized[key] = this.sanitizeMetadata(value);
+        if (value && typeof value === 'object') {
+          if (
+            value.constructor?.name === 'Decimal' ||
+            ('s' in value && 'e' in value && 'd' in value) ||
+            (typeof value.toFixed === 'function' && typeof value.toNumber === 'function')
+          ) {
+            sanitized[key] = value.toString();
+          } else if (Array.isArray(value)) {
+            sanitized[key] = value.map((item) =>
+              item && typeof item === 'object' && ('d' in item || typeof item.toFixed === 'function')
+                ? item.toString()
+                : item,
+            );
+          } else {
+            sanitized[key] = this.sanitizeMetadata(value);
+          }
         } else {
           sanitized[key] = value;
         }

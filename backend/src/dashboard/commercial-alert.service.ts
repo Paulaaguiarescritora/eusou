@@ -109,17 +109,17 @@ export class CommercialAlertService {
     // 3. ALERTAS CRÍTICOS & ATENÇÃO: Pedidos de Marketplace com inconsistência ou erro
     const problematicOrders = await this.prisma.channelOrder.findMany({
       where: {
-        orderId: null as any, // ChannelOrder sem vínculo de Order
+        externalStatus: { in: ['failed', 'error', 'cancelled_by_marketplace'] },
       },
       take: 10,
     });
     for (const co of problematicOrders) {
       alerts.push({
         id: `co-incon-${co.id}`,
-        type: 'CHANNEL_ORDER_UNLINKED',
+        type: 'CHANNEL_ORDER_PROBLEM',
         severity: 'CRITICAL',
-        title: `Pedido Externo ${co.externalOrderId} sem Pedido Interno`,
-        description: `O pedido foi recebido pelo marketplace mas não gerou Order interna. Verifique o estoque e faturamento.`,
+        title: `Pedido Externo ${co.externalOrderId} com Falha no Canal`,
+        description: `Status externo: ${co.externalStatus}. Verifique o faturamento ou estoque no canal.`,
         entityRelated: 'ChannelOrder',
         entityId: co.id,
         createdAt: co.createdAt,

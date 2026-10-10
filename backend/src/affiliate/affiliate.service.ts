@@ -533,7 +533,7 @@ export class AffiliateService {
       metadata: {
         orderId,
         affiliateId: affiliate.id,
-        commissionAmount: conversion.commissionAmount,
+        commissionAmount: conversion.commissionAmount.toString(),
       },
     });
 
