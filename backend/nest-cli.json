@@ -3,6 +3,6 @@
   "sourceRoot": "src",
   "entryFile": "main",
   "compilerOptions": {
-    "tsConfigPath": "tsconfig.json"
+    "tsConfigPath": "tsconfig.build.json"
   }
 }
