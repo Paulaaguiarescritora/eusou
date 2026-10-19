@@ -313,7 +313,7 @@ export function App() {
     }
 
     // Check if route is admin and requires auth
-    if (canonical.startsWith('/admin/')) {
+    if (canonical === '/admin' || canonical.startsWith('/admin/')) {
       const isAdmin = currentUser?.roles?.includes('admin');
       if (!isAdmin) {
         setPendingRoute(canonical);
@@ -420,7 +420,7 @@ export function App() {
   }
 
   // 2. ADMIN BACKOFFICE ROUTE
-  if (route.startsWith('/admin/')) {
+  if (route === '/admin' || route.startsWith('/admin/')) {
     if (authChecking) {
       return (
         <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-400 text-xs">

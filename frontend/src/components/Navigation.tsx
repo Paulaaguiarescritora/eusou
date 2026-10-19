@@ -194,6 +194,15 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, brandTitle }) => {
                 Catálogos Temáticos
               </button>
             </li>
+            <li>
+              <button
+                type='button'
+                onClick={() => onNavigate && onNavigate('/admin')}
+                className='hover:text-white transition cursor-pointer text-left text-xs opacity-75 hover:opacity-100'
+              >
+                Área Administrativa
+              </button>
+            </li>
           </ul>
         </div>
         <div>
