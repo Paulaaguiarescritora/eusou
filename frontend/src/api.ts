@@ -1,16 +1,18 @@
+const PRODUCTION_API_URL = 'https://eusou.onrender.com';
+
 const API_BASE =
   import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined'
-    ? `http://${window.location.hostname}:3000`
-    : 'http://localhost:3000');
+  (typeof window !== 'undefined' &&
+  !window.location.hostname.includes('localhost') &&
+  !window.location.hostname.includes('127.0.0.1')
+    ? PRODUCTION_API_URL
+    : typeof window !== 'undefined'
+      ? `http://${window.location.hostname}:3000`
+      : 'http://localhost:3000');
 
 export function resolveMediaUrl(url?: string | null): string {
   if (!url) return '';
-  const base =
-    import.meta.env.VITE_API_URL ||
-    (typeof window !== 'undefined'
-      ? `http://${window.location.hostname}:3000`
-      : 'http://localhost:3000');
+  const base = API_BASE;
   if (url.startsWith('http://localhost:3000/')) {
     return url.replace('http://localhost:3000', base);
   }
