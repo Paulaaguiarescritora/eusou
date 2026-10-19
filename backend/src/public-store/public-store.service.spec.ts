@@ -25,6 +25,9 @@ describe('PublicStoreService', () => {
         findMany: jest.fn(),
         findFirst: jest.fn(),
       },
+      channel: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'chan-own', type: 'OWN_STORE' }),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({

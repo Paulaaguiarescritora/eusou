@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsBoolean, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, MaxLength, IsNumber, Min } from 'class-validator';
 
 export class UpdateVariantDto {
   @IsString()
@@ -11,7 +11,21 @@ export class UpdateVariantDto {
   @MaxLength(100)
   sku?: string;
 
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  price?: number;
+
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  stock?: number;
+
+  @IsString()
+  @IsOptional()
+  materialId?: string | null;
 }

@@ -21,6 +21,7 @@ import {
   Menu,
   X,
   DollarSign,
+  ExternalLink,
 } from 'lucide-react';
 
 interface AdminLayoutProps {
@@ -116,13 +117,17 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           <span className="font-extrabold text-sm tracking-tight">EuSou Admin</span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => onNavigate('/')}
-            title="Voltar à loja"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white"
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Abrir a Loja Pública em nova aba"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 text-xs font-bold transition border border-slate-700"
           >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
+            <Store className="w-3.5 h-3.5" />
+            <span>Ver Loja</span>
+            <ExternalLink className="w-3 h-3" />
+          </a>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="p-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-700"
@@ -160,21 +165,29 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => onNavigate('/')}
-              title="Voltar para a Loja"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-xs flex items-center gap-1"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setMobileMenuOpen(false)}
-              className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Quick Action: Ver Loja ↗ */}
+        <div className="p-3 border-b border-slate-800 bg-slate-950/40">
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Abrir a Loja Pública em nova aba"
+            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/30 hover:border-amber-500 text-xs font-bold transition shadow-2xs group cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <Store className="w-4 h-4 text-amber-400 group-hover:text-slate-950 transition-colors" />
+              <span>Ver Loja</span>
+            </div>
+            <ExternalLink className="w-3.5 h-3.5 text-amber-400/80 group-hover:text-slate-950 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition" />
+          </a>
         </div>
 
         {/* Navigation Sections */}
@@ -238,6 +251,32 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
       {/* Main Content Pane */}
       <main className="flex-1 min-w-0 overflow-y-auto">
+        {/* Desktop Top Header Bar */}
+        <header className="hidden md:flex items-center justify-between px-6 sm:px-10 py-3 bg-white border-b border-slate-200/80 sticky top-0 z-30 shadow-2xs">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+            <span className="text-slate-400">Painel Admin</span>
+            <span className="text-slate-300">/</span>
+            <span className="text-slate-800 font-bold capitalize">
+              {currentRoute === '/admin' || currentRoute === '/admin/dashboard'
+                ? 'Central Comercial (Dashboard)'
+                : currentRoute.replace('/admin/', '').replace(/-/g, ' ')}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <a
+              href="/"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Abrir a Loja Própria em nova aba"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 hover:border-amber-300 text-xs font-bold transition shadow-2xs group cursor-pointer"
+            >
+              <Store className="w-3.5 h-3.5 text-amber-600" />
+              <span>Ver Loja</span>
+              <ExternalLink className="w-3 h-3 text-amber-600 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </a>
+          </div>
+        </header>
+
         {children}
       </main>
     </div>

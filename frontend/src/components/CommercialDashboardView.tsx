@@ -188,6 +188,17 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
 
       {/* AÇÕES RÁPIDAS DA OPERAÇÃO */}
       <div className="flex flex-wrap items-center gap-2">
+        <a
+          href="/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition text-xs shadow-2xs group cursor-pointer"
+          title="Abrir a Loja Própria em nova aba"
+        >
+          <Store className="w-3.5 h-3.5" />
+          <span>Ver Loja</span>
+          <ExternalLink className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+        </a>
         <button
           onClick={() => onNavigate('/admin/products/new')}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition text-xs font-bold text-slate-800 shadow-2xs"
@@ -484,7 +495,7 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
             {data?.inventory.criticalItems && data.inventory.criticalItems.length > 0 ? (
               data.inventory.criticalItems.map((item) => (
                 <div
-                  key={item.productId}
+                  key={item.variantId ? `${item.productId}-${item.variantId}` : `${item.productId}-${item.sku || 'base'}`}
                   className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3 text-xs"
                 >
                   <div>

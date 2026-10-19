@@ -34,3 +34,10 @@ lerna-debug.log*
 *.sw?
 .DS_Store
 Thumbs.db
+
+# Database backups and dumps
+backups/
+*.sql
+*.dump
+*.backup
+*.tar.gz

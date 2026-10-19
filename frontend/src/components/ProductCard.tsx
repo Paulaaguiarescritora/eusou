@@ -1,6 +1,7 @@
 import React from 'react';
 import { Product } from '../types';
 import { Package, Plus } from 'lucide-react';
+import { resolveMediaUrl } from '../api';
 
 interface ProductCardProps {
   product: Product;
@@ -27,7 +28,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <div className="relative aspect-square w-full bg-slate-50 flex items-center justify-center overflow-hidden">
           {imageUrl ? (
             <img
-              src={imageUrl}
+              src={resolveMediaUrl(imageUrl)}
               alt={product.name}
               className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
             />
@@ -69,10 +70,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onQuickAdd(product);
+              const hasActiveVariants = Boolean(
+                product.variants && product.variants.filter((v) => v.isActive !== false).length > 0,
+              );
+              if (hasActiveVariants || (product.availableStock !== undefined && product.availableStock <= 0)) {
+                // Força o usuário a abrir a tela de produto e selecionar sua variante explicitamente ou ver status de estoque
+                onSelect(product);
+              } else {
+                onQuickAdd(product);
+              }
             }}
-            className="p-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition"
-            title="Adicionar ao carrinho"
+            className="p-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition cursor-pointer"
+            title={
+              product.variants && product.variants.length > 0
+                ? 'Escolher opções do produto'
+                : (product.availableStock ?? 0) <= 0
+                ? 'Produto esgotado'
+                : 'Adicionar ao carrinho'
+            }
           >
             <Plus className="w-4 h-4" />
           </button>

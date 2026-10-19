@@ -33,11 +33,15 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
 
+  // Archive Confirmation Modal State
+  const [productToArchive, setProductToArchive] = useState<Product | null>(null);
+  const [archiving, setArchiving] = useState(false);
+
   const loadData = async () => {
     setLoading(true);
     try {
       const [prodsRes, nichesRes, catsRes] = await Promise.all([
-        fetchApi<{ data: Product[] }>('/products').catch(() => ({ data: [] })),
+        fetchApi<{ data: Product[] }>('/products?limit=100').catch(() => ({ data: [] })),
         fetchApi<{ data: Niche[] }>('/niches').catch(() => ({ data: [] })),
         fetchApi<{ data: Category[] }>('/categories').catch(() => ({ data: [] })),
       ]);
@@ -55,15 +59,19 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
     loadData();
   }, []);
 
-  const handleStatusChange = async (productId: string, newStatus: string) => {
+  const handleConfirmArchive = async () => {
+    if (!productToArchive) return;
+    setArchiving(true);
     try {
-      await fetchApi(`/products/${productId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: newStatus }),
+      await fetchApi(`/products/${productToArchive.id}`, {
+        method: 'DELETE',
       });
-      loadData();
+      setProductToArchive(null);
+      await loadData();
     } catch (err: any) {
-      alert(err.message || 'Erro ao alterar status do produto');
+      alert(err.message || 'Erro ao arquivar produto');
+    } finally {
+      setArchiving(false);
     }
   };
 
@@ -168,8 +176,9 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
                 <tr>
                   <th className="py-3 px-4">Produto</th>
                   <th className="py-3 px-4">SKU</th>
-                  <th className="py-3 px-4">Preço Base</th>
+                  <th className="py-3 px-4">Preço Varejo (Loja)</th>
                   <th className="py-3 px-4">Categorias / Nichos</th>
+                  <th className="py-3 px-4">Canais Comerciais</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Ações</th>
                 </tr>
@@ -205,9 +214,90 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
                         {p.sku || <span className="text-slate-400 italic">Sem SKU</span>}
                       </td>
 
-                      {/* Price */}
-                      <td className="py-3 px-4 font-bold text-slate-900">
-                        {p.basePrice ? `R$ ${Number(p.basePrice).toFixed(2).replace('.', ',')}` : 'R$ 0,00'}
+                      {/* Preço de Varejo (Loja Própria via F12) */}
+                      <td className="py-3 px-4">
+                        {(() => {
+                          const ownPrice = (p as any).productChannelPrices?.find(
+                            (pcp: any) => pcp.channel?.type === 'OWN_STORE'
+                          )?.effectivePrice;
+
+                          // Validação de custo de produção (MANUAL vs F7)
+                          const isManual = p.costSource === 'MANUAL';
+                          const hasManualCost =
+                            isManual &&
+                            p.manualCost !== null &&
+                            p.manualCost !== undefined &&
+                            Number(p.manualCost) > 0;
+                          const hasF7Cost =
+                            !isManual &&
+                            Boolean(
+                              p.productionProfiles &&
+                                p.productionProfiles.length > 0
+                            );
+                          const hasValidCost =
+                            p.hasValidCost !== undefined
+                              ? p.hasValidCost
+                              : isManual
+                              ? hasManualCost
+                              : hasF7Cost;
+
+                          // Validação de preço de atacado
+                          const hasWholesale =
+                            p.wholesalePrice !== null &&
+                            p.wholesalePrice !== undefined &&
+                            Number(p.wholesalePrice) > 0;
+
+                          // 1. Preço de varejo calculado pela Loja Própria
+                          if (ownPrice && Number(ownPrice) > 0) {
+                            return (
+                              <div>
+                                <span className="font-bold text-slate-900 block">
+                                  R$ {Number(ownPrice).toFixed(2).replace('.', ',')}
+                                </span>
+                                {hasWholesale && (
+                                  <span className="text-[10px] text-slate-400 block">
+                                    Atacado: R$ {Number(p.wholesalePrice).toFixed(2).replace('.', ',')}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          // 2. Sem custo de produção definido
+                          if (!hasValidCost) {
+                            return (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                Aguardando custo
+                              </span>
+                            );
+                          }
+
+                          // 3. Custo definido, aguardando definição de atacado
+                          if (!hasWholesale) {
+                            return (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                  Aguardando atacado
+                                </span>
+                                <span className="text-[10px] text-slate-500 block font-medium">
+                                  Custo: R$ {Number(isManual ? p.manualCost : 0).toFixed(2).replace('.', ',')} {isManual ? '(Manual)' : ''}
+                                </span>
+                              </div>
+                            );
+                          }
+
+                          // 4. Custo e atacado presentes, mas canal da loja ainda não sincronizado
+                          return (
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                                Não calculado
+                              </span>
+                              <span className="text-[10px] text-slate-400 block">
+                                Atacado: R$ {Number(p.wholesalePrice).toFixed(2).replace('.', ',')}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Categories / Niches */}
@@ -221,6 +311,30 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
                             ))
                           ) : (
                             <span className="text-slate-400 text-[10px] italic">Sem categoria</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Canais Comerciais */}
+                      <td className="py-3 px-4">
+                        <div className="flex flex-wrap gap-1 max-w-[220px]">
+                          {p.status === 'ARCHIVED' ? (
+                            <span className="text-slate-400 text-[10px] italic">Revogados (Arquivado)</span>
+                          ) : p.productChannels && p.productChannels.length > 0 ? (
+                            p.productChannels.map((pc) => (
+                              <span
+                                key={pc.id}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
+                                  pc.isEnabled
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                                }`}
+                              >
+                                {pc.channel.name} {pc.isEnabled ? '' : '(Pausado)'}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-slate-400 text-[10px] italic">Nenhum canal ativo</span>
                           )}
                         </div>
                       </td>
@@ -255,17 +369,26 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
                           <button
                             onClick={() => onNavigate(`/admin/products/${p.id}`)}
                             title="Visualizar / Editar"
-                            className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
+                            className="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition cursor-pointer"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => onNavigate(`/produtos/${p.slug}`)}
                             title="Ver na loja"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                           </button>
+                          {p.status !== 'ARCHIVED' && (
+                            <button
+                              onClick={() => setProductToArchive(p)}
+                              title="Arquivar produto (remove de todos os canais)"
+                              className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition cursor-pointer"
+                            >
+                              <Archive className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -276,6 +399,46 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
           </div>
         )}
       </div>
+
+      {/* Modal de Confirmação Explícita de Arquivamento */}
+      {productToArchive && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
+                <Archive className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Arquivar produto?</h3>
+                <p className="text-xs text-slate-500 font-semibold">{productToArchive.name}</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed">
+              Este produto será removido de todos os canais comerciais em que estiver disponível. O histórico de pedidos, estoque, movimentações e demais registros será preservado.
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={archiving}
+                onClick={() => setProductToArchive(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={archiving}
+                onClick={handleConfirmArchive}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                {archiving ? 'Arquivando...' : 'Confirmar arquivamento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

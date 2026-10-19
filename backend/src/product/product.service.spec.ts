@@ -96,6 +96,12 @@ describe('ProductService', () => {
           return results.length;
         }),
       },
+      productChannel: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      channelProduct: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
     };
 
     auditLog = {

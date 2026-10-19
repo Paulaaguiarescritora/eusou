@@ -198,12 +198,21 @@ export class DashboardService {
 
     // 4. Estoque & Produção (F7)
     const [
-      inventories,
+      productsWithStock,
       activeJobs,
       completedJobs,
     ] = await Promise.all([
-      this.prisma.inventory.findMany({
-        include: { product: true },
+      this.prisma.product.findMany({
+        where: { status: { not: 'ARCHIVED' } },
+        include: {
+          variants: {
+            where: { isActive: true },
+            include: { inventories: true },
+          },
+          inventories: {
+            where: { variantId: null },
+          },
+        },
       }),
       this.prisma.productionJob.findMany({
         where: { status: { in: ['QUEUED', 'PRINTING'] } },
@@ -222,32 +231,84 @@ export class DashboardService {
     let lowStockCount = 0;
 
     const criticalItems: any[] = [];
-    for (const inv of inventories) {
-      if (!inv.product) continue;
-      const avail = inv.quantity - inv.reservedQuantity;
-      totalStockAvailable += Math.max(0, avail);
-      totalStockReserved += inv.reservedQuantity;
 
-      if (avail <= 0) {
-        criticalStockCount++;
-        criticalItems.push({
-          productId: inv.productId,
-          productName: inv.product.name,
-          sku: inv.product.sku,
-          available: avail,
-          minimum: inv.minimumQuantity,
-          status: 'ESGOTADO',
-        });
-      } else if (avail <= inv.minimumQuantity) {
-        lowStockCount++;
-        criticalItems.push({
-          productId: inv.productId,
-          productName: inv.product.name,
-          sku: inv.product.sku,
-          available: avail,
-          minimum: inv.minimumQuantity,
-          status: 'BAIXO',
-        });
+    for (const prod of productsWithStock) {
+      const activeVariants = prod.variants || [];
+      const hasVariants = activeVariants.length > 0;
+
+      if (hasVariants) {
+        // Produto com variantes:
+        // O estoque do produto-pai NÃO deve ser considerado nem gerar alerta.
+        // O Dashboard deve somar o estoque disponível das variantes para apresentar o estoque total do produto
+        // e identificar individualmente quais variantes estão zeradas ou abaixo do mínimo.
+        for (const variant of activeVariants) {
+          const varInv = variant.inventories?.[0];
+          const qty = varInv?.quantity || 0;
+          const res = varInv?.reservedQuantity || 0;
+          const min = varInv?.minimumQuantity || 0;
+          const avail = qty - res;
+
+          totalStockAvailable += Math.max(0, avail);
+          totalStockReserved += res;
+
+          const variantLabel = variant.name || variant.sku || 'Variante';
+          const displayName = `${prod.name} (${variantLabel})`;
+
+          if (avail <= 0) {
+            criticalStockCount++;
+            criticalItems.push({
+              productId: prod.id,
+              variantId: variant.id,
+              productName: displayName,
+              sku: variant.sku || prod.sku,
+              available: avail,
+              minimum: min,
+              status: 'ESGOTADO',
+            });
+          } else if (avail <= min) {
+            lowStockCount++;
+            criticalItems.push({
+              productId: prod.id,
+              variantId: variant.id,
+              productName: displayName,
+              sku: variant.sku || prod.sku,
+              available: avail,
+              minimum: min,
+              status: 'BAIXO',
+            });
+          }
+        }
+      } else {
+        // Produto sem variantes:
+        // Usar estoque do produto-pai (variantId == null)
+        const parentInv = prod.inventories?.[0];
+        if (parentInv) {
+          const avail = parentInv.quantity - parentInv.reservedQuantity;
+          totalStockAvailable += Math.max(0, avail);
+          totalStockReserved += parentInv.reservedQuantity;
+
+          if (avail <= 0) {
+            criticalStockCount++;
+            criticalItems.push({
+              productId: prod.id,
+              productName: prod.name,
+              sku: prod.sku,
+              available: avail,
+              minimum: parentInv.minimumQuantity,
+              status: 'ESGOTADO',
+            });
+          } else if (avail <= parentInv.minimumQuantity) {
+            lowStockCount++;
+            criticalItems.push({
+              productId: prod.id,
+              productName: prod.name,
+              sku: prod.sku,
+              available: avail,
+              minimum: parentInv.minimumQuantity,
+              status: 'BAIXO',
+            });
+          }
+        }
       }
     }
 

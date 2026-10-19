@@ -27,6 +27,7 @@ export const InventoryView: React.FC = () => {
   // Manual Adjust Modal
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState('');
+  const [selectedVariantId, setSelectedVariantId] = useState('');
   const [adjustQuantity, setAdjustQuantity] = useState(0);
   const [adjustMode, setAdjustMode] = useState<'DELTA' | 'SET'>('DELTA');
   const [adjustReason, setAdjustReason] = useState('');
@@ -37,7 +38,7 @@ export const InventoryView: React.FC = () => {
       const [invRes, movRes, prodRes] = await Promise.all([
         fetchApi<{ data: InventoryItem[] }>(`/admin/inventory?lowStockOnly=${lowStockOnly}`),
         fetchApi<{ data: StockMovement[] }>('/admin/inventory/movements'),
-        fetchApi<{ data: Product[] }>('/products'),
+        fetchApi<{ data: Product[] }>('/products?limit=100'),
       ]);
       setItems(invRes.data || []);
       setMovements(movRes.data || []);
@@ -60,6 +61,7 @@ export const InventoryView: React.FC = () => {
         method: 'POST',
         body: JSON.stringify({
           productId: selectedProductId,
+          variantId: selectedVariantId || undefined,
           quantity: Number(adjustQuantity),
           mode: adjustMode,
           reason: adjustReason,
@@ -68,6 +70,7 @@ export const InventoryView: React.FC = () => {
       setShowAdjustModal(false);
       setAdjustReason('');
       setAdjustQuantity(0);
+      setSelectedVariantId('');
       loadData();
     } catch (err: any) {
       alert(err.message || 'Erro ao realizar ajuste de estoque');
@@ -289,7 +292,10 @@ export const InventoryView: React.FC = () => {
                 <select
                   required
                   value={selectedProductId}
-                  onChange={(e) => setSelectedProductId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedProductId(e.target.value);
+                    setSelectedVariantId('');
+                  }}
                   className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                 >
                   <option value="">Selecione o produto...</option>
@@ -300,6 +306,28 @@ export const InventoryView: React.FC = () => {
                   ))}
                 </select>
               </div>
+
+              {selectedProductId && products.find((p) => p.id === selectedProductId)?.variants && (products.find((p) => p.id === selectedProductId)!.variants || []).length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">
+                    Variante / Cor Específica
+                  </label>
+                  <select
+                    value={selectedVariantId}
+                    onChange={(e) => setSelectedVariantId(e.target.value)}
+                    className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                  >
+                    <option value="">Estoque Geral do Produto (sem variante)</option>
+                    {products
+                      .find((p) => p.id === selectedProductId)!
+                      .variants!.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name || 'Variante'} ({v.sku || v.id.slice(0, 8)})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

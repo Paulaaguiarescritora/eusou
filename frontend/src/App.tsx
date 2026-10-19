@@ -30,13 +30,56 @@ import { CommercialDashboardView } from './components/CommercialDashboardView';
 import { LoginModal } from './components/LoginModal';
 import { useCart } from './useCart';
 import { fetchApi } from './api';
-import { Product, Catalog, Category, Collection, Order } from './types';
+import { Product, Catalog, Category, Collection, Order, CartItem } from './types';
 import { Sparkles, ArrowRight, Filter, X } from 'lucide-react';
+
+function extractProductNiche(prod: Product | null | undefined): string | null {
+  if (!prod) return null;
+  if (prod.niches && prod.niches.length > 0 && prod.niches[0].niche?.name) {
+    return prod.niches[0].niche.name;
+  }
+  if (prod.categories && prod.categories.length > 0 && prod.categories[0].category?.niche?.name) {
+    return prod.categories[0].category.niche.name;
+  }
+  return null;
+}
+
+function extractCatalogNiche(cat: Catalog | null | undefined): string | null {
+  if (!cat) return null;
+  if (cat.niche?.name) return cat.niche.name;
+  if (cat.resolvedProducts && cat.resolvedProducts.length > 0) {
+    const prodNiche = extractProductNiche(cat.resolvedProducts[0]);
+    if (prodNiche) return prodNiche;
+  }
+  if (cat.rules && cat.rules.some((r) => r.type === 'NICHE')) {
+    return 'Pet Shop';
+  }
+  if (cat.slug?.includes('pet') || cat.name?.toLowerCase().includes('pet')) {
+    return 'Pet Shop';
+  }
+  return null;
+}
+
+function normalizeCanonicalRoute(path: string): string {
+  if (path.startsWith('/produto/')) {
+    return path.replace('/produto/', '/produtos/');
+  }
+  if (path.startsWith('/catalogo/')) {
+    return path.replace('/catalogo/', '/catalogos/');
+  }
+  return path;
+}
 
 export function App() {
   const [route, setRoute] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return window.location.pathname || '/';
+      const pathname = window.location.pathname || '/';
+      const canonical = normalizeCanonicalRoute(pathname);
+      if (canonical !== pathname) {
+        window.history.replaceState({}, '', canonical + window.location.search);
+        return canonical;
+      }
+      return pathname;
     }
     return '/';
   });
@@ -44,6 +87,35 @@ export function App() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCatalog, setSelectedCatalog] = useState<Catalog | null>(null);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
+
+  // Niche identity & store context state
+  const [storeContext, setStoreContext] = useState<{
+    nicheId: string | null;
+    nicheSlug: string | null;
+    nicheName: string | null;
+    brandName: string | null;
+    logoUrl: string | null;
+    faviconUrl: string | null;
+  } | null>(null);
+
+  const [activeNicheName, setActiveNicheName] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const currentPath = window.location.pathname || '/';
+      if (currentPath === '/') return null;
+      const saved = localStorage.getItem('eusou_active_niche');
+      if (saved) return saved;
+      try {
+        const storedCart = localStorage.getItem('eusou_cart_items');
+        if (storedCart) {
+          const parsed = JSON.parse(storedCart);
+          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].nicheName) {
+            return parsed[0].nicheName;
+          }
+        }
+      } catch {}
+    }
+    return null;
+  });
 
   // Auth state
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; roles: string[] } | null>(null);
@@ -63,6 +135,7 @@ export function App() {
   } | null>(null);
 
   const [productsList, setProductsList] = useState<Product[]>([]);
+  const [productsMeta, setProductsMeta] = useState<{ total: number; page: number; limit: number; totalPages: number } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const {
@@ -96,7 +169,12 @@ export function App() {
   // Listen to browser navigation (back/forward)
   useEffect(() => {
     const handlePopState = () => {
-      setRoute(window.location.pathname || '/');
+      const pathname = window.location.pathname || '/';
+      const canonical = normalizeCanonicalRoute(pathname);
+      if (canonical !== pathname) {
+        window.history.replaceState({}, '', canonical + window.location.search);
+      }
+      setRoute(canonical);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -109,11 +187,10 @@ export function App() {
     const refCode = urlParams.get('ref');
     if (refCode) {
       localStorage.setItem('eusou_ref_code', refCode);
-      fetchApi('/affiliates/track-click', {
+      fetchApi('/public/affiliate/click', {
         method: 'POST',
         body: JSON.stringify({
-          code: refCode,
-          sourceUrl: window.location.href,
+          refCode,
         }),
       }).catch((e) => console.debug('Click tracking notice:', e));
     }
@@ -121,56 +198,142 @@ export function App() {
     fetchApi<any>('/public/home')
       .then((data) => setHomeData(data))
       .catch((e) => console.error('Failed to load public home data', e));
+
+    fetchApi<any>('/public/context')
+      .then((ctx) => {
+        if (ctx) {
+          setStoreContext(ctx);
+          if (ctx.nicheId) {
+            localStorage.setItem('eusou_active_niche_id', ctx.nicheId);
+          }
+        }
+      })
+      .catch((e) => console.debug('Context resolution notice:', e));
   }, []);
 
-  // CORREÇÃO: Disparar fetch de /produtos quando a rota atual for /produtos
+  // Sincronizar contexto de nicho com a rota
   useEffect(() => {
-    if (route === '/produtos' || route.startsWith('/produtos?')) {
+    const canonical = normalizeCanonicalRoute(route);
+    if (canonical !== route) {
+      if (typeof window !== 'undefined') {
+        window.history.replaceState({}, '', canonical + window.location.search);
+      }
+      setRoute(canonical);
+      return;
+    }
+
+    if (route === '/') {
+      setActiveNicheName(null);
+      try { localStorage.removeItem('eusou_active_niche'); } catch {}
+    } else if (route === '/produtos' || route.startsWith('/produtos?')) {
       setSelectedProduct(null);
       setLoading(true);
       const queryStr = route.includes('?') ? route.substring(route.indexOf('?')) : '';
-      fetchApi<{ data: Product[] }>(`/public/products${queryStr}`)
-        .then((res) => setProductsList(res.data || []))
-        .catch(() => setProductsList([]))
+      const params = new URLSearchParams(queryStr);
+      if (!params.has('limit')) {
+        params.set('limit', '12');
+      }
+      fetchApi<{ data: Product[]; meta?: { total: number; page: number; limit: number; totalPages: number } }>(`/public/products?${params.toString()}`)
+        .then((res) => {
+          setProductsList(res.data || []);
+          setProductsMeta(res.meta || null);
+        })
+        .catch(() => {
+          setProductsList([]);
+          setProductsMeta(null);
+        })
         .finally(() => setLoading(false));
     } else if (route.startsWith('/produtos/')) {
       const slugFromRoute = route.replace('/produtos/', '').split('?')[0];
-      if (slugFromRoute && (!selectedProduct || selectedProduct.slug !== slugFromRoute)) {
+      const existingNiche =
+        selectedProduct && selectedProduct.slug === slugFromRoute
+          ? extractProductNiche(selectedProduct)
+          : null;
+
+      if (slugFromRoute && !existingNiche) {
         setLoading(true);
         fetchApi<Product>(`/public/products/${slugFromRoute}`)
-          .then((p) => setSelectedProduct(p))
+          .then((p) => {
+            setSelectedProduct(p);
+            const n = extractProductNiche(p);
+            if (n) {
+              setActiveNicheName(n);
+              try {
+                localStorage.setItem('eusou_active_niche', n);
+              } catch {}
+            }
+          })
           .catch(() => setSelectedProduct(null))
           .finally(() => setLoading(false));
+      } else if (existingNiche) {
+        setActiveNicheName(existingNiche);
+        try {
+          localStorage.setItem('eusou_active_niche', existingNiche);
+        } catch {}
       }
     } else if (route.startsWith('/catalogos/')) {
       const catSlug = route.replace('/catalogos/', '').split('?')[0];
       if (catSlug && (!selectedCatalog || selectedCatalog.slug !== catSlug)) {
         setLoading(true);
         fetchApi<Catalog>(`/public/catalogs/${catSlug}`)
-          .then((c) => setSelectedCatalog(c))
+          .then((c) => {
+            setSelectedCatalog(c);
+            const n = extractCatalogNiche(c);
+            if (n) {
+              setActiveNicheName(n);
+              try { localStorage.setItem('eusou_active_niche', n); } catch {}
+            }
+          })
           .catch(() => setSelectedCatalog(null))
           .finally(() => setLoading(false));
+      } else if (selectedCatalog) {
+        const n = extractCatalogNiche(selectedCatalog);
+        if (n) {
+          setActiveNicheName(n);
+          try { localStorage.setItem('eusou_active_niche', n); } catch {}
+        }
+      }
+    } else if (route === '/carrinho' || route === '/checkout') {
+      if (!activeNicheName && cartItems.length > 0) {
+        const cartNiche = cartItems.find((i) => Boolean(i.nicheName))?.nicheName;
+        if (cartNiche) {
+          setActiveNicheName(cartNiche);
+          try { localStorage.setItem('eusou_active_niche', cartNiche); } catch {}
+        }
       }
     }
   }, [route]);
 
   // Route change handler
   const navigateTo = (newRoute: string) => {
+    const canonical = normalizeCanonicalRoute(newRoute);
+    if (canonical === '/') {
+      setActiveNicheName(null);
+      try { localStorage.removeItem('eusou_active_niche'); } catch {}
+    }
+
     // Check if route is admin and requires auth
-    if (newRoute.startsWith('/admin/')) {
+    if (canonical.startsWith('/admin/')) {
       const isAdmin = currentUser?.roles?.includes('admin');
       if (!isAdmin) {
-        setPendingRoute(newRoute);
+        setPendingRoute(canonical);
         setShowLoginModal(true);
         return;
       }
     }
 
-    setRoute(newRoute);
-    if (typeof window !== 'undefined' && window.location.pathname !== newRoute) {
-      window.history.pushState({}, '', newRoute);
+    setRoute(canonical);
+    if (typeof window !== 'undefined' && (window.location.pathname + window.location.search) !== canonical) {
+      window.history.pushState({}, '', canonical);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageChange = (newPage: number) => {
+    const searchPart = route.includes('?') ? route.substring(route.indexOf('?')) : '';
+    const currentParams = new URLSearchParams(searchPart);
+    currentParams.set('page', String(newPage));
+    navigateTo(`/produtos?${currentParams.toString()}`);
   };
 
   const handleLoginSuccess = (user: { id: string; email: string; roles: string[] }) => {
@@ -195,6 +358,11 @@ export function App() {
 
   const handleSelectProduct = (product: Product) => {
     setSelectedProduct(product);
+    const n = extractProductNiche(product);
+    if (n) {
+      setActiveNicheName(n);
+      try { localStorage.setItem('eusou_active_niche', n); } catch {}
+    }
     navigateTo(`/produtos/${product.slug}`);
   };
 
@@ -203,11 +371,35 @@ export function App() {
     try {
       const fullCatalog = await fetchApi<Catalog>(`/public/catalogs/${catalogSlug}`);
       setSelectedCatalog(fullCatalog);
+      const n = extractCatalogNiche(fullCatalog);
+      if (n) {
+        setActiveNicheName(n);
+        try { localStorage.setItem('eusou_active_niche', n); } catch {}
+      }
       navigateTo(`/catalogos/${catalogSlug}`);
     } catch (e) {
       console.error('Failed to load catalog', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddToCart = (item: CartItem) => {
+    // Validação de segurança: se o item estiver esgotado, impede a inclusão
+    if (item.availableStock !== undefined && item.availableStock <= 0) {
+      return;
+    }
+    const itemNiche = item.nicheName
+      || activeNicheName
+      || (selectedProduct && extractProductNiche(selectedProduct))
+      || null;
+    addToCart({
+      ...item,
+      nicheName: itemNiche,
+    });
+    if (itemNiche) {
+      setActiveNicheName(itemNiche);
+      try { localStorage.setItem('eusou_active_niche', itemNiche); } catch {}
     }
   };
 
@@ -415,12 +607,15 @@ export function App() {
   }
 
   // 3. PUBLIC STORE ROUTE
+  const publicBrand = activeNicheName || storeContext?.brandName || 'Loja Especializada';
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50/50 text-slate-800 font-sans antialiased">
       <Header
         totalItems={totalItems}
         onNavigate={navigateTo}
         currentRoute={route}
+        brandTitle={publicBrand}
       />
 
       <LoginModal
@@ -437,7 +632,7 @@ export function App() {
             <div className="bg-slate-900 text-white py-20 px-4 sm:px-6 lg:px-8 text-center relative overflow-hidden">
               <div className="max-w-3xl mx-auto space-y-4">
                 <span className="inline-flex items-center px-3 py-1 rounded-full bg-white/10 text-xs font-semibold tracking-wider uppercase text-slate-300">
-                  <Sparkles className="w-3.5 h-3.5 mr-1 text-amber-400" /> Plataforma EuSou
+                  <Sparkles className="w-3.5 h-3.5 mr-1 text-amber-400" /> {publicBrand}
                 </span>
                 <h1 className="text-4xl sm:text-6xl font-black tracking-tight leading-tight">
                   Descubra Produtos Autênticos & Curadorias Exclusivas
@@ -548,12 +743,13 @@ export function App() {
                           product={p}
                           onSelect={handleSelectProduct}
                           onQuickAdd={(prod) =>
-                            addToCart({
+                            handleAddToCart({
                               productId: prod.id,
                               name: prod.name,
                               unitPrice: prod.basePrice ? Number(prod.basePrice) : 0,
                               quantity: 1,
                               imageUrl: prod.media && prod.media[0] ? prod.media[0].url : null,
+                              nicheName: extractProductNiche(prod),
                             })
                           }
                         />
@@ -645,16 +841,55 @@ export function App() {
                     product={p}
                     onSelect={handleSelectProduct}
                     onQuickAdd={(prod) =>
-                      addToCart({
+                      handleAddToCart({
                         productId: prod.id,
                         name: prod.name,
                         unitPrice: prod.basePrice ? Number(prod.basePrice) : 0,
                         quantity: 1,
                         imageUrl: prod.media && prod.media[0] ? prod.media[0].url : null,
+                        nicheName: extractProductNiche(prod),
                       })
                     }
                   />
                 ))}
+              </div>
+            )}
+
+            {/* Paginação do Catálogo Público da Loja */}
+            {productsMeta && productsMeta.totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-100">
+                <span className="text-xs text-slate-500 font-medium">
+                  Página <strong className="text-slate-800">{productsMeta.page}</strong> de <strong className="text-slate-800">{productsMeta.totalPages}</strong> ({productsMeta.total} produtos na loja)
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => handlePageChange(productsMeta.page - 1)}
+                    disabled={productsMeta.page <= 1}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                  >
+                    Anterior
+                  </button>
+                  {Array.from({ length: productsMeta.totalPages }, (_, i) => i + 1).map((pageNum) => (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      className={`w-8 h-8 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        pageNum === productsMeta.page
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'border border-gray-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => handlePageChange(productsMeta.page + 1)}
+                    disabled={productsMeta.page >= productsMeta.totalPages}
+                    className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                  >
+                    Próxima
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -668,7 +903,7 @@ export function App() {
               setSelectedProduct(null);
               navigateTo('/produtos');
             }}
-            onAddToCart={addToCart}
+            onAddToCart={handleAddToCart}
           />
         )}
 
@@ -678,12 +913,13 @@ export function App() {
             catalog={selectedCatalog}
             onSelectProduct={handleSelectProduct}
             onQuickAdd={(prod) =>
-              addToCart({
+              handleAddToCart({
                 productId: prod.id,
                 name: prod.name,
                 unitPrice: prod.basePrice ? Number(prod.basePrice) : 0,
                 quantity: 1,
                 imageUrl: prod.media && prod.media[0] ? prod.media[0].url : null,
+                nicheName: extractProductNiche(prod) || extractCatalogNiche(selectedCatalog),
               })
             }
             onBack={() => {
@@ -730,7 +966,7 @@ export function App() {
         )}
       </main>
 
-      <Footer onNavigate={navigateTo} />
+      <Footer onNavigate={navigateTo} brandTitle={publicBrand} />
     </div>
   );
 }

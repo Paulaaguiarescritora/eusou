@@ -63,12 +63,23 @@ export class CategoryService {
   }
 
   async create(dto: CreateCategoryDto, actorId?: string): Promise<Category> {
-    const slug = dto.slug?.trim() || generateSlug(dto.name);
+    const trimmedName = dto.name.trim();
+    const slug = dto.slug?.trim() || generateSlug(trimmedName);
 
     const existing = await this.prisma.category.findUnique({
       where: { slug },
     });
     if (existing) {
+      if (dto.parentId || existing.parentId) {
+        throw new ConflictException(
+          `Já existe uma subcategoria com esse nome nesta categoria.`,
+        );
+      }
+      if (dto.nicheId && existing.nicheId === dto.nicheId) {
+        throw new ConflictException(
+          `Já existe uma categoria com esse nome neste nicho.`,
+        );
+      }
       throw new ConflictException(
         `Category with slug "${slug}" already exists`,
       );
@@ -91,6 +102,37 @@ export class CategoryService {
         throw new BadRequestException(
           'Child category niche must match parent category niche',
         );
+      }
+
+      // Prevenir subcategoria duplicada dentro da mesma categoria pai (case-insensitive)
+      if (this.prisma.category.findFirst) {
+        const duplicateSubcat = await this.prisma.category.findFirst({
+          where: {
+            parentId: dto.parentId,
+            name: { equals: trimmedName, mode: 'insensitive' },
+          },
+        });
+        if (duplicateSubcat) {
+          throw new ConflictException(
+            `Já existe uma subcategoria com esse nome nesta categoria.`,
+          );
+        }
+      }
+    } else if (dto.nicheId) {
+      // Prevenir categoria duplicada dentro do mesmo nicho (case-insensitive)
+      if (this.prisma.category.findFirst) {
+        const duplicateCat = await this.prisma.category.findFirst({
+          where: {
+            parentId: null,
+            nicheId: dto.nicheId,
+            name: { equals: trimmedName, mode: 'insensitive' },
+          },
+        });
+        if (duplicateCat) {
+          throw new ConflictException(
+            `Já existe uma categoria com esse nome neste nicho.`,
+          );
+        }
       }
     }
 

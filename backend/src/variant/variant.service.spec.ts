@@ -88,6 +88,9 @@ describe('VariantService', () => {
           let list = mockVariants.filter(
             (v) => v.productId === where.productId,
           );
+          if (where.isActive !== undefined) {
+            list = list.filter((v) => v.isActive === where.isActive);
+          }
           if (where.id?.not) list = list.filter((v) => v.id !== where.id.not);
           return list.map((v) => ({
             ...v,

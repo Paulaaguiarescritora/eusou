@@ -126,18 +126,28 @@ describe('F14 — Central de Operação Comercial (Dashboard & Alertas)', () => 
         },
       ]);
       prisma.channelOrder.findMany.mockResolvedValue([]);
-      prisma.inventory.findMany.mockResolvedValue([
-        {
-          id: 'inv-1',
-          quantity: 0,
-          reservedQuantity: 0,
-          minimumQuantity: 5,
-          updatedAt: new Date(),
-          product: { name: 'Porta-Chaves Gatinho 3D' },
-        },
-      ]);
       prisma.channelProduct.findMany.mockResolvedValue([]);
-      prisma.product.findMany.mockResolvedValue([]);
+      prisma.product.findMany.mockImplementation((args: any) => {
+        if (args?.where?.status?.not === 'ARCHIVED') {
+          return Promise.resolve([
+            {
+              id: 'prod-1',
+              name: 'Porta-Chaves Gatinho 3D',
+              variants: [],
+              inventories: [
+                {
+                  id: 'inv-1',
+                  quantity: 0,
+                  reservedQuantity: 0,
+                  minimumQuantity: 5,
+                  updatedAt: new Date(),
+                },
+              ],
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
 
       const alerts = await alertService.getAlerts();
 
@@ -149,7 +159,6 @@ describe('F14 — Central de Operação Comercial (Dashboard & Alertas)', () => 
       prisma.channelAccount.findMany.mockResolvedValue([]);
       prisma.marketplaceEvent.findMany.mockResolvedValue([]);
       prisma.channelOrder.findMany.mockResolvedValue([]);
-      prisma.inventory.findMany.mockResolvedValue([]);
       prisma.channelProduct.findMany.mockResolvedValue([]);
       prisma.product.findMany.mockResolvedValue([]);
 
@@ -159,19 +168,135 @@ describe('F14 — Central de Operação Comercial (Dashboard & Alertas)', () => 
       expect(healthHealthy.label).toBe('Operação Saudável');
 
       // Com aviso = WARNING
-      prisma.inventory.findMany.mockResolvedValueOnce([
-        {
-          id: 'inv-low',
-          quantity: 3,
-          reservedQuantity: 0,
-          minimumQuantity: 5,
-          updatedAt: new Date(),
-          product: { name: 'Produto X' },
-        },
-      ]);
+      prisma.product.findMany.mockImplementationOnce((args: any) => {
+        return Promise.resolve([
+          {
+            id: 'prod-x',
+            name: 'Produto X',
+            variants: [],
+            inventories: [
+              {
+                id: 'inv-low',
+                quantity: 3,
+                reservedQuantity: 0,
+                minimumQuantity: 5,
+                updatedAt: new Date(),
+              },
+            ],
+          },
+        ]);
+      });
       const healthWarning = await alertService.getOperationHealth();
       expect(healthWarning.status).toBe('WARNING');
       expect(healthWarning.counts.warning).toBe(1);
+    });
+
+    it('deve controlar estoque exclusivamente por variantes ativas e ignorar estoque do produto-pai', async () => {
+      prisma.channelAccount.findMany.mockResolvedValue([]);
+      prisma.marketplaceEvent.findMany.mockResolvedValue([]);
+      prisma.channelOrder.findMany.mockResolvedValue([]);
+      prisma.channelProduct.findMany.mockResolvedValue([]);
+
+      // Gatinho com 5 variantes e estoque pai legado (7 un, 2 reservadas)
+      const gatinhoProduct = {
+        id: 'gat-1',
+        name: 'Porta Chaves Gatinho',
+        sku: 'FEL-GAT-001',
+        variants: [
+          {
+            id: 'var-ver',
+            name: 'Vermelho',
+            sku: 'FEL-GAT-001-VER',
+            isActive: true,
+            inventories: [{ id: 'inv-ver', quantity: 1, reservedQuantity: 0, minimumQuantity: 2, updatedAt: new Date() }],
+          },
+          {
+            id: 'var-pre',
+            name: 'Preto',
+            sku: 'FEL-GAT-001-PRE',
+            isActive: true,
+            inventories: [{ id: 'inv-pre', quantity: 0, reservedQuantity: 0, minimumQuantity: 2, updatedAt: new Date() }],
+          },
+          {
+            id: 'var-ros',
+            name: 'Rosa',
+            sku: 'FEL-GAT-001-ROS',
+            isActive: true,
+            inventories: [{ id: 'inv-ros', quantity: 1, reservedQuantity: 0, minimumQuantity: 2, updatedAt: new Date() }],
+          },
+          {
+            id: 'var-bco',
+            name: 'Branco',
+            sku: 'FEL-GAT-001-BCO',
+            isActive: true,
+            inventories: [{ id: 'inv-bco', quantity: 0, reservedQuantity: 0, minimumQuantity: 2, updatedAt: new Date() }],
+          },
+          {
+            id: 'var-azu',
+            name: 'Azul',
+            sku: 'FEL-GAT-001-AZU',
+            isActive: true,
+            inventories: [{ id: 'inv-azu', quantity: 1, reservedQuantity: 0, minimumQuantity: 0, updatedAt: new Date() }],
+          },
+        ],
+        inventories: [
+          // Estoque do produto-pai: NÃO deve ser considerado nem gerar alerta!
+          { id: 'inv-parent-gat', quantity: 7, reservedQuantity: 2, minimumQuantity: 5, updatedAt: new Date() },
+        ],
+      };
+
+      prisma.product.findMany.mockImplementation((args: any) => {
+        if (args?.where?.status?.not === 'ARCHIVED') {
+          return Promise.resolve([gatinhoProduct]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const alerts = await alertService.getAlerts();
+
+      // Alertas de variantes esgotadas (Preto, Branco) e baixas (Vermelho, Rosa)
+      const stockAlerts = alerts.filter((a) => a.type === 'STOCK_OUT' || a.type === 'STOCK_LOW');
+      expect(stockAlerts.length).toBe(4);
+
+      // NENHUM alerta com o nome genérico do produto-pai sem variante
+      expect(stockAlerts.some((a) => a.title === 'Estoque Esgotado: Porta Chaves Gatinho')).toBe(false);
+      expect(stockAlerts.some((a) => a.title === 'Estoque Baixo: Porta Chaves Gatinho')).toBe(false);
+
+      // Alertas contêm os nomes das variantes específicas
+      expect(stockAlerts.some((a) => a.title.includes('Preto') && a.severity === 'CRITICAL')).toBe(true);
+      expect(stockAlerts.some((a) => a.title.includes('Branco') && a.severity === 'CRITICAL')).toBe(true);
+      expect(stockAlerts.some((a) => a.title.includes('Vermelho') && a.severity === 'WARNING')).toBe(true);
+      expect(stockAlerts.some((a) => a.title.includes('Rosa') && a.severity === 'WARNING')).toBe(true);
+    });
+
+    it('deve usar estoque próprio do produto quando não houver variantes', async () => {
+      prisma.channelAccount.findMany.mockResolvedValue([]);
+      prisma.marketplaceEvent.findMany.mockResolvedValue([]);
+      prisma.channelOrder.findMany.mockResolvedValue([]);
+      prisma.channelProduct.findMany.mockResolvedValue([]);
+
+      const bolinhaSemVariantes = {
+        id: 'bol-1',
+        name: 'Bolinha de Purga',
+        sku: 'FEL-BOL-001',
+        variants: [], // sem variantes
+        inventories: [
+          { id: 'inv-bol', quantity: 0, reservedQuantity: 0, minimumQuantity: 5, updatedAt: new Date() },
+        ],
+      };
+
+      prisma.product.findMany.mockImplementation((args: any) => {
+        if (args?.where?.status?.not === 'ARCHIVED') {
+          return Promise.resolve([bolinhaSemVariantes]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const alerts = await alertService.getAlerts();
+      const stockAlerts = alerts.filter((a) => a.type === 'STOCK_OUT');
+
+      expect(stockAlerts.length).toBe(1);
+      expect(stockAlerts[0].title).toBe('Estoque Esgotado: Bolinha de Purga');
     });
   });
 
@@ -260,6 +385,75 @@ describe('F14 — Central de Operação Comercial (Dashboard & Alertas)', () => 
       expect(summary.sales.totalRevenue).toBe('200.00');
       expect(summary.sales.previousRevenue).toBe('100.00');
       expect(summary.sales.growthPercent).toBe(100.0);
+    });
+
+    it('deve consolidar estoque somando apenas variantes ativas quando houver variantes e usar estoque do produto quando não houver', async () => {
+      prisma.order.findMany.mockResolvedValue([]);
+      prisma.channelAccount.findMany.mockResolvedValue([]);
+      prisma.channelProduct.count.mockResolvedValue(0);
+      prisma.channelProduct.findMany.mockResolvedValue([]);
+      prisma.channel.findMany.mockResolvedValue([]);
+      prisma.channelOrder.findMany.mockResolvedValue([]);
+      prisma.marketplaceEvent.findMany.mockResolvedValue([]);
+      prisma.marketplaceEvent.count.mockResolvedValue(0);
+      prisma.product.count.mockResolvedValue(2);
+      prisma.productionJob.findMany.mockResolvedValue([]);
+      prisma.productionJob.count.mockResolvedValue(0);
+      prisma.affiliate.count.mockResolvedValue(0);
+      prisma.affiliateClick.count.mockResolvedValue(0);
+      prisma.affiliateConversion.findMany.mockResolvedValue([]);
+
+      const gatinhoComVariantes = {
+        id: 'gat-1',
+        name: 'Porta Chaves Gatinho',
+        sku: 'FEL-GAT-001',
+        variants: [
+          { id: 'v1', name: 'Vermelho', sku: 'GAT-VER', isActive: true, inventories: [{ quantity: 1, reservedQuantity: 0, minimumQuantity: 2 }] },
+          { id: 'v2', name: 'Preto', sku: 'GAT-PRE', isActive: true, inventories: [{ quantity: 0, reservedQuantity: 0, minimumQuantity: 2 }] },
+          { id: 'v3', name: 'Rosa', sku: 'GAT-ROS', isActive: true, inventories: [{ quantity: 1, reservedQuantity: 0, minimumQuantity: 2 }] },
+          { id: 'v4', name: 'Branco', sku: 'GAT-BCO', isActive: true, inventories: [{ quantity: 0, reservedQuantity: 0, minimumQuantity: 2 }] },
+          { id: 'v5', name: 'Azul', sku: 'GAT-AZU', isActive: true, inventories: [{ quantity: 1, reservedQuantity: 0, minimumQuantity: 0 }] },
+        ],
+        inventories: [
+          // Estoque legado do pai: 7 un, 2 reservadas -> DEVE SER IGNORADO
+          { quantity: 7, reservedQuantity: 2, minimumQuantity: 5 },
+        ],
+      };
+
+      const bolinhaSemVariantes = {
+        id: 'bol-1',
+        name: 'Bolinha de Purga',
+        sku: 'FEL-BOL-001',
+        variants: [], // sem variantes
+        inventories: [
+          { quantity: 10, reservedQuantity: 1, minimumQuantity: 2 },
+        ],
+      };
+
+      prisma.product.findMany.mockImplementation((args: any) => {
+        if (args?.where?.status?.not === 'ARCHIVED') {
+          return Promise.resolve([gatinhoComVariantes, bolinhaSemVariantes]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const summary = await dashboardService.getCommercialSummary({ period: '30d' });
+
+      // Gatinho: 1 + 0 + 1 + 0 + 1 = 3 disp, 0 res.
+      // Bolinha: 10 - 1 = 9 disp, 1 res.
+      // Total disp = 12, Total res = 1.
+      expect(summary.inventory.availableQuantity).toBe(12);
+      expect(summary.inventory.reservedQuantity).toBe(1);
+      expect(summary.inventory.criticalCount).toBe(2); // Preto e Branco
+      expect(summary.inventory.lowCount).toBe(2); // Vermelho e Rosa
+
+      // criticalItems identifica variantes e não inclui pai
+      expect(summary.inventory.criticalItems.length).toBe(4);
+      expect(summary.inventory.criticalItems.some((i: any) => i.productName.includes('Preto') && i.status === 'ESGOTADO')).toBe(true);
+      expect(summary.inventory.criticalItems.some((i: any) => i.productName.includes('Branco') && i.status === 'ESGOTADO')).toBe(true);
+      expect(summary.inventory.criticalItems.some((i: any) => i.productName.includes('Vermelho') && i.status === 'BAIXO')).toBe(true);
+      expect(summary.inventory.criticalItems.some((i: any) => i.productName.includes('Rosa') && i.status === 'BAIXO')).toBe(true);
+      expect(summary.inventory.criticalItems.some((i: any) => i.productName === 'Porta Chaves Gatinho')).toBe(false);
     });
   });
 

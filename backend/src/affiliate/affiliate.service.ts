@@ -68,6 +68,10 @@ export class AffiliateService {
         code: cleanCode,
         displayName: dto.displayName.trim(),
         status: dto.status || AffiliateStatus.ACTIVE,
+        defaultCommissionPercent:
+          dto.defaultCommissionPercent !== undefined
+            ? dto.defaultCommissionPercent
+            : 10.00,
       },
     });
 
@@ -195,6 +199,8 @@ export class AffiliateService {
     if (dto.displayName !== undefined)
       updateData.displayName = dto.displayName.trim();
     if (dto.status !== undefined) updateData.status = dto.status;
+    if (dto.defaultCommissionPercent !== undefined)
+      updateData.defaultCommissionPercent = dto.defaultCommissionPercent;
 
     if (dto.code !== undefined) {
       const cleanCode = dto.code
@@ -414,30 +420,50 @@ export class AffiliateService {
   async calculateCommission(
     affiliateId: string,
     orderTotalEligible: number,
-    orderProductIds: string[],
-  ) {
-    // Fetch all active rules ordered by priority descending
+    orderProductIds: string[] = [],
+  ): Promise<{ commissionAmount: number; appliedCommissionPercent: number | null }> {
+    // 1. REGRA SOBERANA: O percentual configurado diretamente no perfil do afiliado é soberano.
+    const affiliate = await this.prisma.affiliate.findUnique({
+      where: { id: affiliateId },
+      select: { defaultCommissionPercent: true },
+    });
+
+    if (
+      affiliate &&
+      affiliate.defaultCommissionPercent !== null &&
+      affiliate.defaultCommissionPercent !== undefined
+    ) {
+      const percent = Number(affiliate.defaultCommissionPercent);
+      const commissionAmount = (orderTotalEligible * percent) / 100;
+      return {
+        commissionAmount,
+        appliedCommissionPercent: percent,
+      };
+    }
+
+    // 2. FALLBACK COMPATIBILIDADE: Se o afiliado não possuir defaultCommissionPercent configurado, consulta regras legadas
     const rules = await this.prisma.commissionRule.findMany({
       where: { isActive: true },
       orderBy: { priority: 'desc' },
     });
 
-    // Check rules in order of priority:
-    // 1. Affiliate + Product
+    // 2.1. Affiliate + Product
     for (const rule of rules) {
       if (
         rule.affiliateId === affiliateId &&
         rule.productId &&
         orderProductIds.includes(rule.productId)
       ) {
-        return (
-          (orderTotalEligible * Number(rule.percentage)) / 100 +
-          (Number(rule.fixedAmount) || 0)
-        );
+        const percent = Number(rule.percentage);
+        const fixed = Number(rule.fixedAmount) || 0;
+        return {
+          commissionAmount: (orderTotalEligible * percent) / 100 + fixed,
+          appliedCommissionPercent: percent,
+        };
       }
     }
 
-    // 2. Affiliate specific rule
+    // 2.2. Affiliate specific rule
     for (const rule of rules) {
       if (
         rule.affiliateId === affiliateId &&
@@ -445,40 +471,49 @@ export class AffiliateService {
         !rule.categoryId &&
         !rule.nicheId
       ) {
-        return (
-          (orderTotalEligible * Number(rule.percentage)) / 100 +
-          (Number(rule.fixedAmount) || 0)
-        );
+        const percent = Number(rule.percentage);
+        const fixed = Number(rule.fixedAmount) || 0;
+        return {
+          commissionAmount: (orderTotalEligible * percent) / 100 + fixed,
+          appliedCommissionPercent: percent,
+        };
       }
     }
 
-    // 3. Product global rule
+    // 2.3. Product global rule
     for (const rule of rules) {
       if (
         !rule.affiliateId &&
         rule.productId &&
         orderProductIds.includes(rule.productId)
       ) {
-        return (
-          (orderTotalEligible * Number(rule.percentage)) / 100 +
-          (Number(rule.fixedAmount) || 0)
-        );
+        const percent = Number(rule.percentage);
+        const fixed = Number(rule.fixedAmount) || 0;
+        return {
+          commissionAmount: (orderTotalEligible * percent) / 100 + fixed,
+          appliedCommissionPercent: percent,
+        };
       }
     }
 
-    // 4. Global default rule
+    // 2.4. Global default rule
     const globalRule = rules.find(
       (r) => !r.affiliateId && !r.productId && !r.categoryId && !r.nicheId,
     );
     if (globalRule) {
-      return (
-        (orderTotalEligible * Number(globalRule.percentage)) / 100 +
-        (Number(globalRule.fixedAmount) || 0)
-      );
+      const percent = Number(globalRule.percentage);
+      const fixed = Number(globalRule.fixedAmount) || 0;
+      return {
+        commissionAmount: (orderTotalEligible * percent) / 100 + fixed,
+        appliedCommissionPercent: percent,
+      };
     }
 
-    // System fallback default (e.g., 10%)
-    return (orderTotalEligible * 10) / 100;
+    // 2.5. System fallback default (10%)
+    return {
+      commissionAmount: (orderTotalEligible * 10) / 100,
+      appliedCommissionPercent: 10,
+    };
   }
 
   // --- ORDER ATTRIBUTION & CONVERSION ---
@@ -526,11 +561,12 @@ export class AffiliateService {
     const eligibleAmount = Number(order.subtotal); // products subtotal
     const productIds = order.items.map((i) => i.productId);
 
-    const commissionAmount = await this.calculateCommission(
-      affiliate.id,
-      eligibleAmount,
-      productIds,
-    );
+    const { commissionAmount, appliedCommissionPercent } =
+      await this.calculateCommission(
+        affiliate.id,
+        eligibleAmount,
+        productIds,
+      );
 
     const conversion = await this.prisma.affiliateConversion.create({
       data: {
@@ -539,6 +575,10 @@ export class AffiliateService {
         orderId: order.id,
         amount: eligibleAmount.toFixed(2),
         commissionAmount: commissionAmount.toFixed(2),
+        appliedCommissionPercent:
+          appliedCommissionPercent !== null && appliedCommissionPercent !== undefined
+            ? appliedCommissionPercent.toFixed(2)
+            : null,
         status:
           order.status === 'CONFIRMED'
             ? ConversionStatus.APPROVED
@@ -554,6 +594,8 @@ export class AffiliateService {
         orderId,
         affiliateId: affiliate.id,
         commissionAmount: conversion.commissionAmount.toString(),
+        appliedCommissionPercent:
+          conversion.appliedCommissionPercent?.toString() || null,
       },
     });
 
@@ -710,6 +752,7 @@ export class AffiliateService {
       conversionStatus: c.status,
       amount: c.amount,
       commissionAmount: c.commissionAmount,
+      appliedCommissionPercent: c.appliedCommissionPercent,
     }));
   }
 }

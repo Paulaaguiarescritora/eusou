@@ -81,8 +81,10 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
             get: (key: string) => {
               if (key === 'MERCADOLIVRE_CLIENT_ID') return 'MOCK_APP_ID';
               if (key === 'MERCADOLIVRE_CLIENT_SECRET') return 'MOCK_SECRET';
-              if (key === 'MERCADOLIVRE_REDIRECT_URI') return 'http://localhost:3000/callback';
-              if (key === 'MERCADOLIVRE_ENCRYPTION_KEY') return '01234567890123456789012345678901';
+              if (key === 'MERCADOLIVRE_REDIRECT_URI')
+                return 'http://localhost:3000/callback';
+              if (key === 'MERCADOLIVRE_ENCRYPTION_KEY')
+                return '01234567890123456789012345678901';
               return null;
             },
           },
@@ -97,18 +99,19 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
     orderService = module.get<OrderService>(OrderService);
     affiliateService = module.get<AffiliateService>(AffiliateService);
     marketplaceService = module.get<MarketplaceService>(MarketplaceService);
-    webhookService = module.get<MarketplaceWebhookService>(MarketplaceWebhookService);
-    reconciliationService = module.get<MarketplaceReconciliationService>(MarketplaceReconciliationService);
+    webhookService = module.get<MarketplaceWebhookService>(
+      MarketplaceWebhookService,
+    );
+    reconciliationService = module.get<MarketplaceReconciliationService>(
+      MarketplaceReconciliationService,
+    );
     dashboardService = module.get<DashboardService>(DashboardService);
     alertService = module.get<CommercialAlertService>(CommercialAlertService);
 
     // Carrega o produto real homologado no Supabase
     testProduct = await prisma.product.findFirst({
       where: {
-        OR: [
-          { sku: 'FEL-GAT-001' },
-          { slug: 'porta-chaves-gatinho' },
-        ],
+        OR: [{ sku: 'FEL-GAT-001' }, { slug: 'porta-chaves-gatinho' }],
       },
       include: {
         categories: { include: { category: true } },
@@ -118,7 +121,36 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
     });
 
     if (!testProduct) {
-      throw new Error('Produto de homologação Porta-Chaves Gatinho 3D (FEL-GAT-001) não encontrado no Supabase.');
+      throw new Error(
+        'Produto de homologação Porta-Chaves Gatinho 3D (FEL-GAT-001) não encontrado no Supabase.',
+      );
+    }
+
+    const ownStoreChannel = await prisma.channel.findFirst({ where: { type: 'OWN_STORE' } });
+    if (ownStoreChannel) {
+      await prisma.productChannel.upsert({
+        where: { productId_channelId: { productId: testProduct.id, channelId: ownStoreChannel.id } },
+        create: { productId: testProduct.id, channelId: ownStoreChannel.id, isEnabled: true },
+        update: { isEnabled: true },
+      });
+
+      const existingPcp = await prisma.productChannelPrice.findFirst({
+        where: { productId: testProduct.id, channelId: ownStoreChannel.id },
+      });
+      if (!existingPcp) {
+        await prisma.productChannelPrice.create({
+          data: {
+            productId: testProduct.id,
+            channelId: ownStoreChannel.id,
+            costBasis: 12.0,
+            calculatedPrice: 39.9,
+            effectivePrice: 39.9,
+            netProfit: 20.0,
+            netMargin: 0.5,
+            mode: 'AUTOMATIC',
+          },
+        });
+      }
     }
 
     testChannel = await prisma.channel.findFirst({
@@ -172,6 +204,7 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
       const sim = await pricingService.simulate({
         productId: testProduct.id,
         channelId: testChannel.id,
+        costOverride: 15.0,
       });
 
       expect(sim.calculatedPrice).toBeInstanceOf(Prisma.Decimal);
@@ -183,13 +216,18 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
       const calcResult = await pricingService.calculateAndPersist({
         productId: testProduct.id,
         channelId: testChannel.id,
+        costOverride: 15.0,
       });
 
       expect(calcResult.length).toBeGreaterThan(0);
       const firstCalc = calcResult[0];
       expect(firstCalc.mode).toBe('AUTOMATIC');
-      expect(firstCalc.calculatedPrice.toString()).toBe(sim.calculatedPrice.toString());
-      expect(firstCalc.effectivePrice.toString()).toBe(sim.calculatedPrice.toString());
+      expect(firstCalc.calculatedPrice.toString()).toBe(
+        sim.calculatedPrice.toString(),
+      );
+      expect(firstCalc.effectivePrice.toString()).toBe(
+        sim.calculatedPrice.toString(),
+      );
 
       const originalCalculatedPrice = sim.calculatedPrice;
 
@@ -202,12 +240,16 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
 
       expect(manual.mode).toBe('MANUAL');
       expect(Number(manual.effectivePrice)).toBe(89.9);
-      expect(Number(manual.calculatedPrice)).toBe(Number(originalCalculatedPrice)); // Preservado!
+      expect(Number(manual.calculatedPrice)).toBe(
+        Number(originalCalculatedPrice),
+      ); // Preservado!
 
       // 4. Remove MANUAL e volta para AUTOMATIC
       const restored = await pricingService.removeManualPrice(manual.id);
       expect(restored.mode).toBe('AUTOMATIC');
-      expect(Number(restored.effectivePrice)).toBe(Number(originalCalculatedPrice));
+      expect(Number(restored.effectivePrice)).toBe(
+        Number(originalCalculatedPrice),
+      );
       expect(restored.manualPrice).toBeNull();
     });
   });
@@ -218,7 +260,7 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
   describe('3. Homologação F7: Produção 3D e Consistência de Estoque', () => {
     it('deve gerenciar saldo de estoque sem permitir valores negativos e registrar movimentações', async () => {
       const initialStock = await prisma.inventory.findFirst({
-        where: { productId: testProduct.id },
+        where: { productId: testProduct.id, variantId: null },
       });
       expect(initialStock).toBeDefined();
       const initialQty = initialStock!.quantity;
@@ -235,7 +277,7 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
       );
 
       const afterIn = await prisma.inventory.findFirst({
-        where: { productId: testProduct.id },
+        where: { productId: testProduct.id, variantId: null },
       });
       expect(afterIn!.quantity).toBe(initialQty + 5);
 
@@ -251,7 +293,7 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
       );
 
       const afterOut = await prisma.inventory.findFirst({
-        where: { productId: testProduct.id },
+        where: { productId: testProduct.id, variantId: null },
       });
       expect(afterOut!.quantity).toBe(initialQty);
 
@@ -281,7 +323,9 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
       });
       if (!affiliate) {
         // Encontra ou cria usuário para o perfil de afiliado
-        let testUser = await prisma.user.findFirst({ where: { email: 'afiliado.f14h@eusou.com' } });
+        let testUser = await prisma.user.findFirst({
+          where: { email: 'afiliado.f14h@eusou.com' },
+        });
         if (!testUser) {
           testUser = await prisma.user.create({
             data: {
@@ -301,7 +345,11 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
       }
 
       // Rastreia clique usando recordClick
-      const click = await affiliateService.recordClick('HOMOLOG-REF', testProduct.id, 'session-test-f14h');
+      const click = await affiliateService.recordClick(
+        'HOMOLOG-REF',
+        testProduct.id,
+        'session-test-f14h',
+      );
       expect(click).toBeDefined();
       expect(click!.affiliateId).toBe(affiliate.id);
     });
@@ -313,7 +361,7 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
   describe('5. Homologação F5: Ciclo Completo de Pedidos com Abate F7 e Afiliado F6', () => {
     it('deve criar Order com snapshots de preço, abater estoque no F7 e gerar comissão no F6', async () => {
       const invBefore = await prisma.inventory.findFirst({
-        where: { productId: testProduct.id },
+        where: { productId: testProduct.id, variantId: null },
       });
       const qtyBefore = invBefore!.quantity;
 
@@ -338,26 +386,38 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
       });
 
       expect(order.id).toBeDefined();
-      expect(order.status).toBe(OrderStatus.CONFIRMED);
+      expect(order.status).toBe(OrderStatus.PENDING);
+
+      // Confirmar pedido (fluxo pós-pagamento aprovado)
+      await orderService.updateStatus(
+        order.id,
+        { status: OrderStatus.CONFIRMED },
+        'system',
+      );
 
       const fullOrder = await prisma.order.findUnique({
         where: { id: order.id },
         include: { items: true },
       });
+      expect(fullOrder!.status).toBe(OrderStatus.CONFIRMED);
       expect(fullOrder!.items.length).toBe(1);
       expect(fullOrder!.items[0].productNameSnapshot).toBe(testProduct.name);
 
       // F7 deduz estoque automaticamente na confirmação do pedido
       const invAfter = await prisma.inventory.findFirst({
-        where: { productId: testProduct.id },
+        where: { productId: testProduct.id, variantId: null },
       });
       expect(invAfter!.quantity).toBe(qtyBefore - 1);
 
       // Devolução no caso de cancelamento: F7 restaura estoque automaticamente via handleOrderCancelled
-      await orderService.updateStatus(order.id, { status: OrderStatus.CANCELLED }, 'admin-test');
+      await orderService.updateStatus(
+        order.id,
+        { status: OrderStatus.CANCELLED },
+        'admin-test',
+      );
 
       const invRestored = await prisma.inventory.findFirst({
-        where: { productId: testProduct.id },
+        where: { productId: testProduct.id, variantId: null },
       });
       expect(invRestored!.quantity).toBe(qtyBefore);
     });
@@ -390,8 +450,26 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
     });
 
     it('deve reconciliar anúncio e persistir lastObservedPrice e lastObservedStock em ChannelProduct', async () => {
+      let account = await prisma.channelAccount.findUnique({
+        where: { id: testChannelAccount.id },
+      });
+      if (!account) {
+        account = await prisma.channelAccount.create({
+          data: {
+            channelId: testChannel.id,
+            name: 'Conta Teste Homologação F14H',
+            status: 'ACTIVE',
+            configuration: { clientId: 'APP_TEST', accessToken: 'TOKEN_TEST' },
+          },
+        });
+        testChannelAccount = account;
+      }
+
       let cp = await prisma.channelProduct.findFirst({
-        where: { productId: testProduct.id, channelAccountId: testChannelAccount.id },
+        where: {
+          productId: testProduct.id,
+          channelAccountId: testChannelAccount.id,
+        },
       });
 
       if (!cp) {
@@ -421,7 +499,9 @@ describe('F14-H — Homologação Operacional End-to-End do EuSou (F5 a F14)', (
   // ============================================================
   describe('7. Homologação F14: Central Comercial & Alertas em Tempo Real', () => {
     it('deve consolidar o dashboard com faturamento real e períodos comparativos', async () => {
-      const summary = await dashboardService.getCommercialSummary({ period: '30d' });
+      const summary = await dashboardService.getCommercialSummary({
+        period: '30d',
+      });
 
       expect(summary.period.filter).toBe('30d');
       expect(summary.health.status).toBeDefined();

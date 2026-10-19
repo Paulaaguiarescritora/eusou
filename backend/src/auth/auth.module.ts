@@ -21,7 +21,7 @@ import { AuditLogService } from '../audit-log.service';
           'JWT_SECRET',
           'test-jwt-secret-key-do-not-use-in-production-12345',
         ),
-        signOptions: { expiresIn: '15m' },
+        signOptions: { expiresIn: configService.get<string>('JWT_EXPIRES_IN', '7d') },
       }),
       inject: [ConfigService],
     }),

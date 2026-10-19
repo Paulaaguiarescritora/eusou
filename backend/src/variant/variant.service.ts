@@ -3,19 +3,132 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { AuditLogService } from '../audit-log.service';
+import { InventoryService } from '../inventory/inventory.service';
+import { CostResolverService } from '../pricing/services/cost-resolver.service';
+import { ProductionService } from '../production/production.service';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
-import { ProductVariant } from '@prisma/client';
+import { ProductVariant, Prisma } from '@prisma/client';
 
 @Injectable()
 export class VariantService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
+    @Optional() private readonly inventoryService?: InventoryService,
+    @Optional() private readonly costResolver?: CostResolverService,
+    @Optional() private readonly productionService?: ProductionService,
   ) {}
+
+  private async enrichVariant(variant: any, productId: string, cachedBaseProfile?: any) {
+    const inventories = variant.inventories || [];
+    const stock = inventories.reduce(
+      (sum: number, inv: any) => sum + (inv.quantity || 0),
+      0,
+    );
+    const reservedStock = inventories.reduce(
+      (sum: number, inv: any) => sum + (inv.reservedQuantity || 0),
+      0,
+    );
+    const availableStock = Math.max(0, stock - reservedStock);
+
+    let materialId: string | null = null;
+    let materialName: string | null = null;
+    let materialCostPerUnit: number | null = null;
+    let isMaterialCustom = false;
+
+    const activeVariantProfile = (variant.productionProfiles || []).find(
+      (p: any) => p.isActive,
+    );
+
+    if (activeVariantProfile && activeVariantProfile.materials?.length > 0) {
+      const customMat =
+        activeVariantProfile.materials.find(
+          (pm: any) =>
+            pm.material?.category === 'PRODUCTION' ||
+            (!pm.material?.category &&
+              ['PLA', 'PETG', 'ABS', 'RESIN'].includes(pm.material?.type)),
+        ) || activeVariantProfile.materials[0];
+
+      if (customMat?.material) {
+        materialId = customMat.material.id;
+        materialName = customMat.material.name;
+        materialCostPerUnit = Number(customMat.material.costPerUnit);
+        isMaterialCustom = true;
+      }
+    }
+
+    let baseProfile = cachedBaseProfile;
+    if (!isMaterialCustom) {
+      if (baseProfile === undefined && this.prisma.productionProfile?.findFirst) {
+        baseProfile = await this.prisma.productionProfile.findFirst({
+          where: { productId, variantId: null, isActive: true },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            materials: { include: { material: true } },
+          },
+        });
+      }
+
+      if (baseProfile && baseProfile.materials?.length > 0) {
+        const baseMat =
+          baseProfile.materials.find(
+            (pm: any) =>
+              pm.material?.category === 'PRODUCTION' ||
+              (!pm.material?.category &&
+                ['PLA', 'PETG', 'ABS', 'RESIN'].includes(pm.material?.type)),
+          ) || baseProfile.materials[0];
+
+        if (baseMat?.material) {
+          materialId = baseMat.material.id;
+          materialName = baseMat.material.name;
+          materialCostPerUnit = Number(baseMat.material.costPerUnit);
+          isMaterialCustom = false;
+        }
+      }
+    }
+
+    // F7 Production Cost (Filamento + Máquina + Materiais Adicionais + Embalagem)
+    let productionCost: number | null = null;
+    const targetProfileId = activeVariantProfile?.id || baseProfile?.id;
+    if (targetProfileId && this.productionService) {
+      try {
+        const est = await this.productionService.calculateEstimatedCost(targetProfileId);
+        if (est && est.totalCost > 0) {
+          productionCost = Number(est.totalCost.toFixed(2));
+        }
+      } catch {
+        // graceful fallback
+      }
+    }
+
+    if (productionCost === null && this.costResolver) {
+      try {
+        const costRes = await this.costResolver.resolveCost(productId, variant.id);
+        if (costRes && costRes.source !== 'NONE' && costRes.cost) {
+          productionCost = Number(costRes.cost);
+        }
+      } catch {
+        // graceful fallback
+      }
+    }
+
+    return {
+      ...variant,
+      stock,
+      reservedStock,
+      availableStock,
+      productionCost,
+      materialId,
+      materialName,
+      materialCostPerUnit,
+      isMaterialCustom,
+    };
+  }
 
   private async assertProductExists(productId: string) {
     const product = await this.prisma.product.findUnique({
@@ -26,16 +139,171 @@ export class VariantService {
     return product;
   }
 
+  async syncVariantMaterial(
+    productId: string,
+    variantId: string,
+    materialId?: string | null,
+    actorId?: string,
+  ) {
+    if (materialId === undefined) {
+      return;
+    }
+
+    if (!materialId || materialId.trim() === '') {
+      // Inactivate any variant-specific profile
+      if (this.prisma.productionProfile?.updateMany) {
+        await this.prisma.productionProfile.updateMany({
+          where: { variantId, isActive: true },
+          data: { isActive: false },
+        });
+      }
+      return;
+    }
+
+    // Verify material exists
+    if (!this.prisma.material?.findUnique) return;
+    const material = await this.prisma.material.findUnique({
+      where: { id: materialId.trim() },
+    });
+    if (!material) {
+      throw new NotFoundException(`Material "${materialId}" não encontrado.`);
+    }
+
+    // Fetch product's base profile
+    const baseProfile = this.prisma.productionProfile?.findFirst
+      ? await this.prisma.productionProfile.findFirst({
+          where: { productId, variantId: null, isActive: true },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            materials: { include: { material: true } },
+          },
+        })
+      : null;
+
+    // Check if variant profile exists
+    const existingVariantProfile = this.prisma.productionProfile?.findFirst
+      ? await this.prisma.productionProfile.findFirst({
+          where: { variantId },
+        })
+      : null;
+
+    const newMaterials: Array<{
+      materialId: string;
+      quantity: number;
+      unit: any;
+      notes?: string | null;
+    }> = [];
+
+    if (baseProfile && baseProfile.materials && baseProfile.materials.length > 0) {
+      let filamentReplaced = false;
+      for (const pm of baseProfile.materials) {
+        const isFilament =
+          pm.material?.category === 'PRODUCTION' ||
+          (!pm.material?.category &&
+            ['PLA', 'PETG', 'ABS', 'RESIN'].includes(pm.material?.type));
+
+        if (isFilament && !filamentReplaced) {
+          newMaterials.push({
+            materialId: material.id,
+            quantity: Number(pm.quantity),
+            unit: pm.unit,
+            notes: pm.notes,
+          });
+          filamentReplaced = true;
+        } else {
+          newMaterials.push({
+            materialId: pm.materialId,
+            quantity: Number(pm.quantity),
+            unit: pm.unit,
+            notes: pm.notes,
+          });
+        }
+      }
+      if (!filamentReplaced) {
+        newMaterials.unshift({
+          materialId: material.id,
+          quantity: Number(baseProfile.materialWeightGrams || 0),
+          unit: 'GRAM',
+          notes: null,
+        });
+      }
+    } else {
+      newMaterials.push({
+        materialId: material.id,
+        quantity: baseProfile ? Number(baseProfile.materialWeightGrams || 0) : 0,
+        unit: 'GRAM',
+        notes: null,
+      });
+    }
+
+    const profileData = {
+      productId,
+      variantId,
+      printerId: baseProfile?.printerId || null,
+      productionMode: baseProfile?.productionMode || 'STOCK',
+      productionTimeMinutes: baseProfile?.productionTimeMinutes || 0,
+      productionTimeSeconds: baseProfile?.productionTimeSeconds || 0,
+      materialWeightGrams: baseProfile?.materialWeightGrams || 0,
+      powerConsumptionWatts: baseProfile?.powerConsumptionWatts || 0,
+      finishingTimeMinutes: baseProfile?.finishingTimeMinutes || 0,
+      finishingCost: baseProfile?.finishingCost || 0,
+      packagingCost: baseProfile?.packagingCost || 0,
+      laborCost: baseProfile?.laborCost || 0,
+      notes: baseProfile?.notes || `Perfil específico da variante ${variantId}`,
+      isActive: true,
+    };
+
+    if (existingVariantProfile) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.productionMaterial.deleteMany({
+          where: { productionProfileId: existingVariantProfile.id },
+        });
+        await tx.productionProfile.update({
+          where: { id: existingVariantProfile.id },
+          data: {
+            ...profileData,
+            materials: {
+              create: newMaterials.map((m) => ({
+                materialId: m.materialId,
+                quantity: m.quantity,
+                unit: m.unit,
+                notes: m.notes,
+              })),
+            },
+          },
+        });
+      });
+    } else {
+      await this.prisma.productionProfile.create({
+        data: {
+          ...profileData,
+          materials: {
+            create: newMaterials.map((m) => ({
+              materialId: m.materialId,
+              quantity: m.quantity,
+              unit: m.unit,
+              notes: m.notes,
+            })),
+          },
+        },
+      });
+    }
+  }
+
   async create(
     productId: string,
     dto: CreateVariantDto,
     actorId?: string,
-  ): Promise<ProductVariant> {
+  ): Promise<any> {
     await this.assertProductExists(productId);
 
-    if (dto.sku) {
+    if (dto.sku !== undefined && dto.sku !== null) {
+      const trimmedSku = dto.sku.trim();
+      if (!trimmedSku) {
+        throw new BadRequestException('SKU da variante não pode ser vazio.');
+      }
       const existingSku = await this.prisma.productVariant.findUnique({
-        where: { sku: dto.sku.trim() },
+        where: { sku: trimmedSku },
       });
       if (existingSku)
         throw new ConflictException(
@@ -43,14 +311,39 @@ export class VariantService {
         );
     }
 
+    if (dto.price !== undefined && dto.price !== null && Number(dto.price) < 0) {
+      throw new BadRequestException('Preço da variante deve ser positivo.');
+    }
+
     const variant = await this.prisma.productVariant.create({
       data: {
         productId,
         name: dto.name?.trim() || null,
         sku: dto.sku?.trim() || null,
+        price:
+          dto.price !== undefined && dto.price !== null
+            ? new Prisma.Decimal(dto.price.toString())
+            : null,
         isActive: dto.isActive !== undefined ? dto.isActive : true,
       },
     });
+
+    if (dto.stock !== undefined && dto.stock !== null && this.inventoryService) {
+      await this.inventoryService.adjustStock(
+        {
+          productId,
+          variantId: variant.id,
+          quantity: Number(dto.stock),
+          mode: 'SET',
+          reason: `Estoque inicial da variante ${variant.sku || variant.id}`,
+        },
+        actorId,
+      );
+    }
+
+    if (dto.materialId !== undefined) {
+      await this.syncVariantMaterial(productId, variant.id, dto.materialId, actorId);
+    }
 
     await this.auditLog.log({
       action: 'VARIANT_CREATED',
@@ -60,42 +353,90 @@ export class VariantService {
       metadata: { productId, name: variant.name, sku: variant.sku },
     });
 
-    return variant;
+    return this.findById(productId, variant.id);
   }
 
-  async findAll(productId: string) {
+  async findAll(productId: string, activeOnly = false) {
     await this.assertProductExists(productId);
-    return this.prisma.productVariant.findMany({
-      where: { productId },
-      include: {
-        variantAttributeValues: {
-          include: {
-            productAttributeValue: { include: { attributeDefinition: true } },
+    const [variants, baseProfile] = await Promise.all([
+      this.prisma.productVariant.findMany({
+        where: {
+          productId,
+          ...(activeOnly ? { isActive: true } : {}),
+        },
+        include: {
+          inventories: true,
+          productionProfiles: {
+            where: { isActive: true },
+            include: {
+              materials: { include: { material: true } },
+              printer: true,
+            },
+          },
+          variantAttributeValues: {
+            include: {
+              productAttributeValue: { include: { attributeDefinition: true } },
+            },
           },
         },
-      },
-    });
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.productionProfile?.findFirst
+        ? this.prisma.productionProfile.findFirst({
+            where: { productId, variantId: null, isActive: true },
+            orderBy: { createdAt: 'desc' },
+            include: {
+              materials: { include: { material: true } },
+            },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    return Promise.all(variants.map((v) => this.enrichVariant(v, productId, baseProfile)));
+  }
+
+  async findActive(productId: string) {
+    return this.findAll(productId, true);
   }
 
   async findById(
     productId: string,
     variantId: string,
-  ): Promise<ProductVariant> {
-    const variant = await this.prisma.productVariant.findFirst({
-      where: { id: variantId, productId },
-      include: {
-        variantAttributeValues: {
-          include: {
-            productAttributeValue: { include: { attributeDefinition: true } },
+  ): Promise<any> {
+    const [variant, baseProfile] = await Promise.all([
+      this.prisma.productVariant.findFirst({
+        where: { id: variantId, productId },
+        include: {
+          inventories: true,
+          productionProfiles: {
+            where: { isActive: true },
+            include: {
+              materials: { include: { material: true } },
+              printer: true,
+            },
+          },
+          variantAttributeValues: {
+            include: {
+              productAttributeValue: { include: { attributeDefinition: true } },
+            },
           },
         },
-      },
-    });
+      }),
+      this.prisma.productionProfile?.findFirst
+        ? this.prisma.productionProfile.findFirst({
+            where: { productId, variantId: null, isActive: true },
+            orderBy: { createdAt: 'desc' },
+            include: {
+              materials: { include: { material: true } },
+            },
+          })
+        : Promise.resolve(null),
+    ]);
     if (!variant)
       throw new NotFoundException(
         `Variant "${variantId}" not found for product "${productId}"`,
       );
-    return variant;
+    return this.enrichVariant(variant, productId, baseProfile);
   }
 
   async update(
@@ -103,7 +444,7 @@ export class VariantService {
     variantId: string,
     dto: UpdateVariantDto,
     actorId?: string,
-  ): Promise<ProductVariant> {
+  ): Promise<any> {
     await this.assertProductExists(productId);
     const variant = await this.findById(productId, variantId);
 
@@ -111,13 +452,20 @@ export class VariantService {
     const updatedFields: string[] = [];
 
     if (dto.name !== undefined) {
-      updateData.name = dto.name?.trim() || null;
+      const trimmedName = dto.name !== null ? dto.name.trim() : '';
+      if (!trimmedName) {
+        throw new BadRequestException('Nome/rótulo da variante não pode ser vazio.');
+      }
+      updateData.name = trimmedName;
       updatedFields.push('name');
     }
 
     if (dto.sku !== undefined) {
-      const targetSku = dto.sku?.trim() || null;
-      if (targetSku && targetSku !== variant.sku) {
+      const targetSku = dto.sku !== null ? dto.sku.trim() : '';
+      if (!targetSku) {
+        throw new BadRequestException('SKU da variante não pode ser vazio.');
+      }
+      if (targetSku !== variant.sku) {
         const existing = await this.prisma.productVariant.findUnique({
           where: { sku: targetSku },
         });
@@ -130,6 +478,17 @@ export class VariantService {
       updatedFields.push('sku');
     }
 
+    if (dto.price !== undefined) {
+      if (dto.price !== null && Number(dto.price) < 0) {
+        throw new BadRequestException('Preço da variante deve ser positivo.');
+      }
+      updateData.price =
+        dto.price !== null && dto.price !== undefined
+          ? new Prisma.Decimal(dto.price.toString())
+          : null;
+      updatedFields.push('price');
+    }
+
     const isDeactivating =
       dto.isActive !== undefined &&
       dto.isActive === false &&
@@ -137,6 +496,25 @@ export class VariantService {
     if (dto.isActive !== undefined) {
       updateData.isActive = dto.isActive;
       updatedFields.push('isActive');
+    }
+
+    if (dto.stock !== undefined && dto.stock !== null && this.inventoryService) {
+      await this.inventoryService.adjustStock(
+        {
+          productId,
+          variantId,
+          quantity: Number(dto.stock),
+          mode: 'SET',
+          reason: `Ajuste manual de estoque da variante ${variant.sku || variantId}`,
+        },
+        actorId,
+      );
+      updatedFields.push('stock');
+    }
+
+    if (dto.materialId !== undefined) {
+      await this.syncVariantMaterial(productId, variantId, dto.materialId, actorId);
+      updatedFields.push('materialId');
     }
 
     const updated = await this.prisma.productVariant.update({
@@ -152,19 +530,19 @@ export class VariantService {
       metadata: { productId, updatedFields },
     });
 
-    return updated;
+    return this.findById(productId, variantId);
   }
 
   async delete(
     productId: string,
     variantId: string,
     actorId?: string,
-  ): Promise<{ message: string }> {
+  ): Promise<{ message: string; variant: ProductVariant }> {
     await this.assertProductExists(productId);
     await this.findById(productId, variantId);
 
     // Soft delete: set isActive = false
-    await this.prisma.productVariant.update({
+    const updated = await this.prisma.productVariant.update({
       where: { id: variantId },
       data: { isActive: false },
     });
@@ -177,7 +555,16 @@ export class VariantService {
       metadata: { productId },
     });
 
-    return { message: 'Variant deactivated successfully' };
+    return { message: 'Variant deactivated successfully', variant: updated };
+  }
+
+  async archive(
+    productId: string,
+    variantId: string,
+    actorId?: string,
+  ): Promise<ProductVariant> {
+    const res = await this.delete(productId, variantId, actorId);
+    return res.variant;
   }
 
   // ---- Variant Attribute Values ----

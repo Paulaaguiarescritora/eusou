@@ -46,17 +46,47 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
   const loadData = async () => {
     setLoading(true);
     try {
-      const statsRes = await fetchApi<AffiliateDashboardStats>('/affiliates/portal/stats');
-      setStats(statsRes);
+      let affMe: any = null;
+      try {
+        affMe = await fetchApi<any>('/affiliate/me');
+      } catch {}
 
-      const linksRes = await fetchApi<AffiliateLink[]>('/affiliates/portal/links');
-      setLinks(linksRes);
+      let dashData: any = null;
+      try {
+        dashData = await fetchApi<any>('/affiliate/dashboard');
+      } catch {}
 
-      const convRes = await fetchApi<AffiliateConversion[]>('/affiliates/portal/conversions');
-      setConversions(convRes);
+      if (affMe || dashData) {
+        setStats({
+          affiliate: affMe || { displayName: 'Afiliado', code: 'oficial' },
+          clicks: dashData?.clicks || 0,
+          conversions: dashData?.orders || 0,
+          totalSold: Number(dashData?.totalSales) || 0,
+          pendingCommission: Number(dashData?.commissions?.pending) || 0,
+          approvedCommission: Number(dashData?.commissions?.approved) || 0,
+        });
+      }
 
-      const colRes = await fetchApi<Collection[]>('/affiliates/portal/collections');
-      setCollections(colRes);
+      try {
+        const linksRes = await fetchApi<any[]>('/affiliate/links');
+        setLinks(Array.isArray(linksRes) ? linksRes : []);
+      } catch {
+        setLinks([]);
+      }
+
+      try {
+        const convRes = await fetchApi<any[]>('/affiliate/conversions');
+        setConversions(Array.isArray(convRes) ? convRes : []);
+      } catch {
+        setConversions([]);
+      }
+
+      try {
+        const colRes = await fetchApi<any[]>('/affiliate/collections');
+        setCollections(Array.isArray(colRes) ? colRes : []);
+      } catch {
+        setCollections([]);
+      }
     } catch (err) {
       console.error('Failed to load affiliate data:', err);
     } finally {
@@ -77,13 +107,19 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
   const handleCreateLink = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await fetchApi('/affiliates/portal/links', {
+      const destination = newLinkSlug
+        ? newLinkTargetType === 'PRODUCT'
+          ? `/produtos/${newLinkSlug}`
+          : newLinkTargetType === 'CATALOG'
+          ? `/catalogos/${newLinkSlug}`
+          : `/${newLinkSlug}`
+        : '/';
+
+      await fetchApi('/affiliate/links', {
         method: 'POST',
         body: JSON.stringify({
-          targetType: newLinkTargetType,
-          slug: newLinkSlug || undefined,
-          utmSource: newLinkUtmSource || undefined,
-          utmCampaign: newLinkUtmCampaign || undefined,
+          destination,
+          code: newLinkSlug ? newLinkSlug.trim().toUpperCase() : undefined,
         }),
       });
       setShowCreateLinkModal(false);
@@ -98,12 +134,11 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
   const handleCreateCollection = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await fetchApi('/affiliates/portal/collections', {
+      await fetchApi('/affiliate/collections', {
         method: 'POST',
         body: JSON.stringify({
           name: newCollectionName,
-          slug: newCollectionSlug,
-          description: newCollectionDesc,
+          description: newCollectionDesc || undefined,
         }),
       });
       setShowCreateCollectionModal(false);
@@ -270,31 +305,38 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                 </div>
               ) : (
                 <div className="divide-y divide-zinc-100">
-                  {links.slice(0, 4).map((link) => (
-                    <div key={link.id} className="py-3 flex items-center justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-zinc-900 text-sm truncate">{link.slug}</span>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-100 text-zinc-600 uppercase">
-                            {link.targetType}
-                          </span>
+                  {links.slice(0, 4).map((link: any) => {
+                    const targetUrl = link.targetUrl || `${baseOrigin}${link.destination || '/'}?ref=${link.code}`;
+                    const linkName = link.slug || link.code;
+                    const targetType = link.targetType || (link.productId ? 'PRODUCT' : link.catalogId ? 'CATALOG' : link.collectionId ? 'COLLECTION' : 'STORE');
+                    const clicksCount = link.clicksCount ?? (link._count?.clicks || 0);
+
+                    return (
+                      <div key={link.id} className="py-3 flex items-center justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-zinc-900 text-sm truncate">{linkName}</span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-zinc-100 text-zinc-600 uppercase">
+                              {targetType}
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-500 truncate mt-0.5">{targetUrl}</p>
                         </div>
-                        <p className="text-xs text-zinc-500 truncate mt-0.5">{link.targetUrl}</p>
+                        <div className="flex items-center gap-4">
+                          <span className="text-xs font-semibold text-zinc-600 whitespace-nowrap">
+                            {clicksCount} cliques
+                          </span>
+                          <button
+                            onClick={() => copyToClipboard(targetUrl, link.id)}
+                            className="p-1.5 hover:bg-zinc-100 text-zinc-600 hover:text-zinc-900 rounded-lg transition"
+                            title="Copiar link"
+                          >
+                            {copiedLink === link.id ? <CheckCircle2 size={16} className="text-green-600" /> : <Copy size={16} />}
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <span className="text-xs font-semibold text-zinc-600 whitespace-nowrap">
-                          {link.clicksCount} cliques
-                        </span>
-                        <button
-                          onClick={() => copyToClipboard(link.targetUrl, link.id)}
-                          className="p-1.5 hover:bg-zinc-100 text-zinc-600 hover:text-zinc-900 rounded-lg transition"
-                          title="Copiar link"
-                        >
-                          {copiedLink === link.id ? <CheckCircle2 size={16} className="text-green-600" /> : <Copy size={16} />}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -356,30 +398,37 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
-                  {links.map((link) => (
-                    <tr key={link.id} className="hover:bg-zinc-50/60 transition">
-                      <td className="px-6 py-4 font-semibold text-zinc-900">{link.slug}</td>
-                      <td className="px-6 py-4">
-                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-zinc-100 text-zinc-700 mr-2">
-                          {link.targetType}
-                        </span>
-                        <span className="text-xs text-zinc-500 font-mono">{link.targetUrl}</span>
-                      </td>
-                      <td className="px-6 py-4 text-xs text-zinc-600">
-                        {link.utmSource ? `${link.utmSource} / ${link.utmCampaign || 'geral'}` : '-'}
-                      </td>
-                      <td className="px-6 py-4 font-bold text-zinc-900">{link.clicksCount}</td>
-                      <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => copyToClipboard(link.targetUrl, link.id)}
-                          className="px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-100 text-xs font-semibold text-zinc-700 transition inline-flex items-center gap-1.5"
-                        >
-                          {copiedLink === link.id ? <CheckCircle2 size={14} className="text-green-600" /> : <Copy size={14} />}
-                          {copiedLink === link.id ? 'Copiado!' : 'Copiar'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {links.map((link: any) => {
+                    const targetUrl = link.targetUrl || `${baseOrigin}${link.destination || '/'}?ref=${link.code}`;
+                    const linkName = link.slug || link.code;
+                    const targetType = link.targetType || (link.productId ? 'PRODUCT' : link.catalogId ? 'CATALOG' : link.collectionId ? 'COLLECTION' : 'STORE');
+                    const clicksCount = link.clicksCount ?? (link._count?.clicks || 0);
+
+                    return (
+                      <tr key={link.id} className="hover:bg-zinc-50/60 transition">
+                        <td className="px-6 py-4 font-semibold text-zinc-900">{linkName}</td>
+                        <td className="px-6 py-4">
+                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-zinc-100 text-zinc-700 mr-2">
+                            {targetType}
+                          </span>
+                          <span className="text-xs text-zinc-500 font-mono">{targetUrl}</span>
+                        </td>
+                        <td className="px-6 py-4 text-xs text-zinc-600">
+                          {link.utmSource ? `${link.utmSource} / ${link.utmCampaign || 'geral'}` : '-'}
+                        </td>
+                        <td className="px-6 py-4 font-bold text-zinc-900">{clicksCount}</td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => copyToClipboard(targetUrl, link.id)}
+                            className="px-3 py-1.5 rounded-lg border border-zinc-200 hover:bg-zinc-100 text-xs font-semibold text-zinc-700 transition inline-flex items-center gap-1.5"
+                          >
+                            {copiedLink === link.id ? <CheckCircle2 size={14} className="text-green-600" /> : <Copy size={14} />}
+                            {copiedLink === link.id ? 'Copiado!' : 'Copiar'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {links.length === 0 && (
                     <tr>
                       <td colSpan={5} className="text-center py-10 text-zinc-500">

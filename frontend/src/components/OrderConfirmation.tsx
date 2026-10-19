@@ -18,9 +18,23 @@ export const OrderConfirmation: React.FC<OrderConfirmationProps> = ({
           <CheckCircle className="w-10 h-10" />
         </div>
 
-        <span className="text-xs font-bold text-emerald-600 tracking-wider uppercase bg-emerald-50 px-3 py-1 rounded-full">
-          Pedido Confirmado (Demonstração)
-        </span>
+        {order.status === 'PENDING' ? (
+          <div className="space-y-3">
+            <span className="inline-flex items-center text-xs font-bold text-amber-700 tracking-wider uppercase bg-amber-50 border border-amber-200 px-3 py-1 rounded-full">
+              Pedido Reservado (Aguardando Pagamento)
+            </span>
+            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-left text-xs text-amber-950 leading-relaxed max-w-lg mx-auto">
+              <strong>Prazo de Pagamento: 24 horas</strong>
+              <p className="mt-0.5 text-[11px] text-amber-900">
+                Seu pedido foi reservado e você tem 24 horas para realizar o pagamento. Após esse prazo, caso o pagamento não seja confirmado, o pedido será cancelado/expirado e os produtos voltarão a ficar disponíveis em estoque.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs font-bold text-emerald-600 tracking-wider uppercase bg-emerald-50 px-3 py-1 rounded-full">
+            Pedido Confirmado
+          </span>
+        )}
 
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-4">
           Obrigado pelo seu pedido, {order.customerName}!

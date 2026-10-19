@@ -1,10 +1,15 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { PublicStoreService } from './public-store.service';
 import { QueryProductsDto } from '../product/dto/query-products.dto';
 
 @Controller('public')
 export class PublicStoreController {
   constructor(private readonly publicStoreService: PublicStoreService) {}
+
+  @Get('context')
+  getStoreContext(@Query('niche') niche?: string) {
+    return this.publicStoreService.getStoreContext(niche);
+  }
 
   @Get('home')
   getHomeData() {
@@ -14,6 +19,11 @@ export class PublicStoreController {
   @Get('products')
   getProducts(@Query() query: QueryProductsDto) {
     return this.publicStoreService.getProducts(query);
+  }
+
+  @Post('cart/validate')
+  validateCart(@Body() body: { items: any[] }) {
+    return this.publicStoreService.validateCart(body?.items || []);
   }
 
   @Get('products/:slug')

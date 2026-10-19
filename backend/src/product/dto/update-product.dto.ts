@@ -40,4 +40,16 @@ export class UpdateProductDto {
   @IsOptional()
   @IsNumber()
   basePrice?: number;
+
+  @IsOptional()
+  @IsEnum(['COST_FROM_F7', 'MANUAL'])
+  costSource?: 'COST_FROM_F7' | 'MANUAL';
+
+  @IsOptional()
+  @IsNumber()
+  manualCost?: number;
+
+  @IsOptional()
+  @IsNumber()
+  wholesalePrice?: number;
 }

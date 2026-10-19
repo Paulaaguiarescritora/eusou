@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   Req,
 } from '@nestjs/common';
@@ -33,8 +34,12 @@ export class VariantController {
   }
 
   @Get()
-  findAll(@Param('productId') productId: string) {
-    return this.variantService.findAll(productId);
+  findAll(
+    @Param('productId') productId: string,
+    @Query('activeOnly') activeOnly?: string,
+  ) {
+    const isActiveOnly = activeOnly === 'true' || activeOnly === '1';
+    return this.variantService.findAll(productId, isActiveOnly);
   }
 
   @Get(':variantId')
@@ -53,6 +58,15 @@ export class VariantController {
     @Req() req: any,
   ) {
     return this.variantService.update(productId, variantId, dto, req.user?.sub);
+  }
+
+  @Post(':variantId/archive')
+  archive(
+    @Param('productId') productId: string,
+    @Param('variantId') variantId: string,
+    @Req() req: any,
+  ) {
+    return this.variantService.archive(productId, variantId, req.user?.sub);
   }
 
   @Delete(':variantId')

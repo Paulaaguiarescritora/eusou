@@ -56,12 +56,104 @@ export class PricingService {
       );
     }
 
-    // Resolve custo via F7 ou manual
+    // Resolve custo de produção via F7 ou manual (para análise e detalhe)
     const costRes = await this.costResolver.resolveCost(
       dto.productId,
       dto.variantId,
       dto.costOverride,
     );
+
+    // Resolve base comercial de Atacado (Preço de Atacado)
+    let wholesaleBasis: Prisma.Decimal | null = null;
+    if (dto.wholesalePriceOverride !== undefined && dto.wholesalePriceOverride !== null) {
+      const wOverride = new Prisma.Decimal(dto.wholesalePriceOverride.toString());
+      if (wOverride.greaterThan(0)) {
+        wholesaleBasis = wOverride;
+      }
+    } else if (product.wholesalePrice !== undefined && product.wholesalePrice !== null) {
+      const wProd = new Prisma.Decimal(product.wholesalePrice.toString());
+      if (wProd.greaterThan(0)) {
+        wholesaleBasis = wProd;
+      }
+    } else if (dto.costOverride !== undefined && dto.costOverride !== null) {
+      // Fallback para simulações diretas que informam o valor base comercial
+      const cOverride = new Prisma.Decimal(dto.costOverride.toString());
+      if (cOverride.greaterThan(0)) {
+        wholesaleBasis = cOverride;
+      }
+    }
+
+    // Se não houver custo de produção válido, retém precificação
+    if (costRes.cost.lessThanOrEqualTo(0)) {
+      return {
+        status: 'INVALID',
+        cost: new Prisma.Decimal(0),
+        packagingCost: new Prisma.Decimal(0),
+        taxAmount: new Prisma.Decimal(0),
+        commissionAmount: new Prisma.Decimal(0),
+        fixedCostTotal: new Prisma.Decimal(0),
+        otherCostsTotal: new Prisma.Decimal(0),
+        rawPrice: new Prisma.Decimal(0),
+        calculatedPrice: new Prisma.Decimal(0),
+        manualPrice: null,
+        effectivePrice: new Prisma.Decimal(0),
+        netProfit: new Prisma.Decimal(0),
+        netMargin: new Prisma.Decimal(0),
+        appliedTierId: null,
+        appliedTierName: null,
+        appliedTierMin: null,
+        appliedTierMax: null,
+        roundingRule: 'ENDS_90',
+        mode: 'AUTOMATIC',
+        iterations: 0,
+        warnings: [...costRes.warnings],
+        errors: [
+          'Produto sem custo de produção F7 válido. Precificação comercial retida.',
+        ],
+        calculationDetails: {
+          cost: '0.00',
+          status: 'INVALID_COST',
+          message: 'Produto sem custo de produção F7 válido.',
+        },
+      };
+    }
+
+    // Se não houver preço de atacado, a precificação comercial é retida
+    if (!wholesaleBasis || wholesaleBasis.lessThanOrEqualTo(0)) {
+      return {
+        status: 'INVALID',
+        cost: new Prisma.Decimal(0),
+        packagingCost: new Prisma.Decimal(0),
+        taxAmount: new Prisma.Decimal(0),
+        commissionAmount: new Prisma.Decimal(0),
+        fixedCostTotal: new Prisma.Decimal(0),
+        otherCostsTotal: new Prisma.Decimal(0),
+        rawPrice: new Prisma.Decimal(0),
+        calculatedPrice: new Prisma.Decimal(0),
+        manualPrice: null,
+        effectivePrice: new Prisma.Decimal(0),
+        netProfit: new Prisma.Decimal(0),
+        netMargin: new Prisma.Decimal(0),
+        appliedTierId: null,
+        appliedTierName: null,
+        appliedTierMin: null,
+        appliedTierMax: null,
+        roundingRule: 'ENDS_90',
+        mode: 'AUTOMATIC',
+        iterations: 0,
+        warnings: [...costRes.warnings, 'Aguardando preço de atacado.'],
+        errors: [
+          'Produto sem preço de atacado definido. Precificação comercial retida.',
+        ],
+        calculationDetails: {
+          cost: '0.00',
+          status: 'PENDING_WHOLESALE',
+          message: 'Aguardando definição do preço de atacado.',
+          productionCost: costRes.cost.toString(),
+          productionCostSource: costRes.source,
+        },
+      };
+    }
 
     // Resolve perfil de precificação (especificado ou padrão)
     let profile = null;
@@ -83,37 +175,175 @@ export class PricingService {
       }
     }
 
-    // Regra específica do canal
+    // Regra específica do canal cadastrada no perfil
     const channelRule = profile?.channelRules?.find(
-      (r) => r.channelId === channel.id && r.isActive,
+      (r) => (r.channelId === channel.id || r.channelType === channel.type) && r.isActive,
     );
 
-    // Target margin
-    const targetMargin =
-      dto.marginOverride !== undefined
-        ? new Prisma.Decimal(dto.marginOverride.toString())
-        : (channelRule?.targetMargin ??
-          profile?.defaultTargetMargin ??
-          new Prisma.Decimal('0.20'));
+    // Parâmetros oficiais por canal conforme especificação e planilha
+    let targetMargin: Prisma.Decimal;
+    let commissionPercent = new Prisma.Decimal(0);
+    let fixedCost = new Prisma.Decimal(0);
+    const fixedCostPercent = new Prisma.Decimal(0);
+    let tiers: any[] = [];
+
+    const chType = channel.type;
+    const chNameLower = channel.name?.toLowerCase() || '';
+
+    if (
+      chType === 'OWN_STORE' ||
+      chNameLower.includes('loja própria') ||
+      chNameLower.includes('varejo')
+    ) {
+      // VAREJO / LOJA PRÓPRIA: Margem 50%, Imposto 4%, Comissão 0%, Custos fixos 0
+      targetMargin = channelRule?.targetMargin ?? new Prisma.Decimal('0.50');
+      commissionPercent = channelRule?.commissionPercent ?? new Prisma.Decimal(0);
+      fixedCost = channelRule?.fixedCost ?? new Prisma.Decimal(0);
+      tiers = channelRule?.tiers?.length ? channelRule.tiers : [];
+    } else if (chType === 'MERCADO_LIVRE' || chNameLower.includes('mercado livre')) {
+      // MERCADO LIVRE: Margem 20%, Imposto 4%, Comissão 14%, Faixas 1 a 5
+      targetMargin = channelRule?.targetMargin ?? new Prisma.Decimal('0.20');
+      commissionPercent = channelRule?.commissionPercent ?? new Prisma.Decimal('0.14');
+      if (channelRule?.tiers && channelRule.tiers.length > 0) {
+        tiers = channelRule.tiers;
+      } else {
+        tiers = [
+          {
+            name: 'Abaixo de R$ 12,50',
+            minPrice: new Prisma.Decimal('0.00'),
+            maxPrice: new Prisma.Decimal('12.50'),
+            commissionPercent: new Prisma.Decimal('0.00'),
+            fixedCost: new Prisma.Decimal('0.00'),
+            fixedCostPercent: new Prisma.Decimal('0.50'),
+          },
+          {
+            name: 'R$ 12,50 a 28,99',
+            minPrice: new Prisma.Decimal('12.50'),
+            maxPrice: new Prisma.Decimal('29.00'),
+            commissionPercent: new Prisma.Decimal('0.00'),
+            fixedCost: new Prisma.Decimal('6.25'),
+            fixedCostPercent: new Prisma.Decimal('0.00'),
+          },
+          {
+            name: 'R$ 29,00 a 49,99',
+            minPrice: new Prisma.Decimal('29.00'),
+            maxPrice: new Prisma.Decimal('50.00'),
+            commissionPercent: new Prisma.Decimal('0.00'),
+            fixedCost: new Prisma.Decimal('6.50'),
+            fixedCostPercent: new Prisma.Decimal('0.00'),
+          },
+          {
+            name: 'R$ 50,00 a 78,99',
+            minPrice: new Prisma.Decimal('50.00'),
+            maxPrice: new Prisma.Decimal('79.00'),
+            commissionPercent: new Prisma.Decimal('0.00'),
+            fixedCost: new Prisma.Decimal('6.75'),
+            fixedCostPercent: new Prisma.Decimal('0.00'),
+          },
+          {
+            name: 'R$ 79,00 ou mais',
+            minPrice: new Prisma.Decimal('79.00'),
+            maxPrice: new Prisma.Decimal('999999.00'),
+            commissionPercent: new Prisma.Decimal('0.00'),
+            fixedCost: new Prisma.Decimal('0.00'),
+            fixedCostPercent: new Prisma.Decimal('0.00'),
+          },
+        ];
+      }
+    } else if (chType === 'SHOPEE' || chNameLower.includes('shopee')) {
+      // SHOPEE: Margem 20%, Imposto 4%, Comissão 20%, Faixas < 8 (50%) e >= 8 (4.00)
+      targetMargin = channelRule?.targetMargin ?? new Prisma.Decimal('0.20');
+      commissionPercent = channelRule?.commissionPercent ?? new Prisma.Decimal('0.20');
+      if (channelRule?.tiers && channelRule.tiers.length > 0) {
+        tiers = channelRule.tiers;
+      } else {
+        tiers = [
+          {
+            name: 'Abaixo de R$ 8,00',
+            minPrice: new Prisma.Decimal('0.00'),
+            maxPrice: new Prisma.Decimal('8.00'),
+            fixedCost: new Prisma.Decimal('0.00'),
+            fixedCostPercent: new Prisma.Decimal('0.50'),
+          },
+          {
+            name: 'R$ 8,00 ou mais',
+            minPrice: new Prisma.Decimal('8.00'),
+            maxPrice: new Prisma.Decimal('999999.00'),
+            fixedCost: new Prisma.Decimal('4.00'),
+            fixedCostPercent: new Prisma.Decimal('0.00'),
+          },
+        ];
+      }
+    } else if (chType === 'TIKTOK_SHOP' || chNameLower.includes('tiktok')) {
+      // TIKTOK SHOP: Margem 20%, Imposto 4%, Faixas < 50 (10% + 4.00) e >= 50 (6% + 6.00)
+      targetMargin = channelRule?.targetMargin ?? new Prisma.Decimal('0.20');
+      commissionPercent = new Prisma.Decimal(0);
+      if (channelRule?.tiers && channelRule.tiers.length > 0) {
+        tiers = channelRule.tiers;
+      } else {
+        tiers = [
+          {
+            name: 'Abaixo de R$ 50,00',
+            minPrice: new Prisma.Decimal('0.00'),
+            maxPrice: new Prisma.Decimal('50.00'),
+            commissionPercent: new Prisma.Decimal('0.10'),
+            fixedCost: new Prisma.Decimal('4.00'),
+          },
+          {
+            name: 'R$ 50,00 ou mais',
+            minPrice: new Prisma.Decimal('50.00'),
+            maxPrice: new Prisma.Decimal('999999.00'),
+            commissionPercent: new Prisma.Decimal('0.06'),
+            fixedCost: new Prisma.Decimal('6.00'),
+          },
+        ];
+      }
+    } else if (chNameLower.includes('facebook')) {
+      // FACEBOOK: Margem 50%, Imposto 4%, Comissão 0%, Custos fixos 0
+      targetMargin = channelRule?.targetMargin ?? new Prisma.Decimal('0.50');
+      commissionPercent = channelRule?.commissionPercent ?? new Prisma.Decimal(0);
+      fixedCost = channelRule?.fixedCost ?? new Prisma.Decimal(0);
+      tiers = channelRule?.tiers?.length ? channelRule.tiers : [];
+    } else {
+      // DEMAIS CANAIS
+      targetMargin =
+        channelRule?.targetMargin ??
+        profile?.defaultTargetMargin ??
+        new Prisma.Decimal('0.20');
+      commissionPercent = channelRule?.commissionPercent ?? new Prisma.Decimal(0);
+      fixedCost = channelRule?.fixedCost ?? new Prisma.Decimal(0);
+      tiers = channelRule?.tiers || [];
+    }
+
+    if (dto.marginOverride !== undefined) {
+      targetMargin = new Prisma.Decimal(dto.marginOverride.toString());
+    }
 
     const calculation = this.calculator.calculate({
-      cost: costRes.cost,
-      packagingCost: profile?.packagingCost ?? new Prisma.Decimal('1.00'),
+      cost: wholesaleBasis,
+      packagingCost: new Prisma.Decimal(0),
       taxRate: profile?.taxRate ?? new Prisma.Decimal('0.04'),
       targetMargin,
-      commissionPercent:
-        channelRule?.commissionPercent ?? new Prisma.Decimal(0),
-      fixedCost: channelRule?.fixedCost ?? new Prisma.Decimal(0),
-      fixedCostPercent: channelRule?.fixedCostPercent ?? new Prisma.Decimal(0),
+      commissionPercent,
+      fixedCost,
+      fixedCostPercent: channelRule?.fixedCostPercent ?? fixedCostPercent,
       otherPercent: channelRule?.otherPercent ?? new Prisma.Decimal(0),
       otherFixedCost: channelRule?.otherFixedCost ?? new Prisma.Decimal(0),
       orderFixedCost: channelRule?.orderFixedCost ?? new Prisma.Decimal(0),
-      paymentFeePercent:
-        channelRule?.paymentFeePercent ?? new Prisma.Decimal(0),
+      paymentFeePercent: channelRule?.paymentFeePercent ?? new Prisma.Decimal(0),
       roundingRule: profile?.roundingRule ?? 'ENDS_90',
-      tiers: channelRule?.tiers || [],
+      tiers,
       mode: 'AUTOMATIC',
     });
+
+    calculation.calculationDetails = {
+      ...calculation.calculationDetails,
+      wholesalePrice: wholesaleBasis.toString(),
+      productionCost: costRes.cost.toString(),
+      productionCostSource: costRes.source,
+      channelName: channel.name,
+      channelType: channel.type,
+    };
 
     calculation.warnings.push(...costRes.warnings);
     return calculation;
@@ -192,7 +422,16 @@ export class PricingService {
           variantId: dto.variantId,
           channelId: ch.id,
           pricingProfileId: profile?.id,
+          costOverride: dto.costOverride,
         });
+
+        // Se o produto não possui custo F7 válido, não persiste preço comercial fictício
+        if (simRes.status === 'INVALID' || simRes.cost.lessThanOrEqualTo(0)) {
+          this.logger.warn(
+            `Produto ${pid} no canal ${ch.name} ignorado na persistência: ${simRes.errors?.join(', ') || 'Sem custo F7'}`,
+          );
+          continue;
+        }
 
         // Verifica registro existente para preservar modo MANUAL se configurado
         const existing = await this.prisma.productChannelPrice.findFirst({
@@ -200,6 +439,7 @@ export class PricingService {
             productId: pid,
             channelId: ch.id,
             variantId: dto.variantId || null,
+            nicheId: dto.nicheId || null,
           },
         });
 
@@ -232,6 +472,7 @@ export class PricingService {
               productId: pid,
               variantId: dto.variantId || null,
               channelId: ch.id,
+              nicheId: dto.nicheId || null,
               pricingProfileId: profile?.id || null,
               mode,
               costBasis: simRes.cost,
@@ -278,6 +519,7 @@ export class PricingService {
         productId: dto.productId,
         channelId: dto.channelId,
         variantId: dto.variantId || null,
+        nicheId: dto.nicheId || null,
       },
     });
 
@@ -299,6 +541,7 @@ export class PricingService {
         productId: dto.productId,
         channelId: dto.channelId,
         variantId: dto.variantId,
+        nicheId: dto.nicheId,
       });
 
       updated = await this.prisma.productChannelPrice.create({
@@ -306,6 +549,7 @@ export class PricingService {
           productId: dto.productId,
           variantId: dto.variantId || null,
           channelId: dto.channelId,
+          nicheId: dto.nicheId || null,
           mode: 'MANUAL',
           costBasis: sim.cost,
           calculatedPrice: sim.calculatedPrice,
@@ -369,34 +613,90 @@ export class PricingService {
   }
 
   // ============================================================
-  // 4. FUNÇÃO CONSUMIDORA PARA MARKETPLACES (Reutilizável)
+  // 4. FUNÇÃO CONSUMIDORA PARA MARKETPLACES E LOJAS (Reutilizável)
+  // Regra de Resolução Hierárquica:
+  // 1. Preço específico para Product/Variant + Niche + Channel
+  // 2. Fallback para preço existente Product/Variant + Channel (sem niche)
+  // 3. Fallback para simulação dinâmica (se não persistido)
   // ============================================================
 
   async getEffectivePrice(
     productId: string,
     channelId: string,
     variantId?: string | null,
+    nicheId?: string | null,
   ): Promise<Prisma.Decimal | null> {
-    const pcp = await this.prisma.productChannelPrice.findFirst({
+    const isPcpValid = async (pcp: any): Promise<boolean> => {
+      if (!pcp) return false;
+      // Preço MANUAL explícito é sempre válido
+      if (pcp.mode === 'MANUAL' && pcp.manualPrice !== null && Number(pcp.manualPrice) > 0) {
+        return true;
+      }
+      // Preço AUTOMATIC exige custo de produção F7 válido
+      const costRes = await this.costResolver.resolveCost(productId, variantId);
+      if (costRes.source === 'NONE' || costRes.cost.lessThanOrEqualTo(0)) {
+        return false;
+      }
+      return true;
+    };
+
+    // 1. Se nicheId for informado, busca primeiro o preço específico do nicho
+    if (nicheId) {
+      const nichePcp = await this.prisma.productChannelPrice.findFirst({
+        where: {
+          productId,
+          channelId,
+          variantId: variantId || null,
+          nicheId,
+        },
+      });
+
+      if (nichePcp && (await isPcpValid(nichePcp))) {
+        return nichePcp.effectivePrice;
+      }
+    }
+
+    // 2. Fallback: Preço padrão do produto no canal (nicheId null ou global)
+    const fallbackPcp = await this.prisma.productChannelPrice.findFirst({
       where: {
         productId,
         channelId,
         variantId: variantId || null,
+        nicheId: null,
       },
     });
 
-    if (pcp) {
-      return pcp.effectivePrice;
+    if (fallbackPcp && (await isPcpValid(fallbackPcp))) {
+      return fallbackPcp.effectivePrice;
     }
 
-    // Se não houver persistido, tenta simular
+    // Se nenhum registro com nicheId: null existir, mas não havia nicheId na busca,
+    // tenta encontrar qualquer preço do canal para o produto
+    if (!nicheId) {
+      const anyPcp = await this.prisma.productChannelPrice.findFirst({
+        where: {
+          productId,
+          channelId,
+          variantId: variantId || null,
+        },
+      });
+      if (anyPcp && (await isPcpValid(anyPcp))) {
+        return anyPcp.effectivePrice;
+      }
+    }
+
+    // 3. Se não houver persistido ou não for válido, tenta simular dinamicamente
     try {
       const sim = await this.simulate({
         productId,
         channelId,
         variantId: variantId || undefined,
+        nicheId: nicheId || undefined,
       });
-      return sim.effectivePrice;
+      if (sim.status === 'OK' && sim.effectivePrice.greaterThan(0)) {
+        return sim.effectivePrice;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -429,7 +729,9 @@ export class PricingService {
     return this.prisma.productChannelPrice.findMany({
       where,
       include: {
-        product: { select: { id: true, name: true, sku: true, basePrice: true } },
+        product: {
+          select: { id: true, name: true, sku: true, basePrice: true },
+        },
         variant: { select: { id: true, sku: true, name: true, price: true } },
         channel: { select: { id: true, name: true, type: true } },
         pricingProfile: { select: { id: true, name: true } },

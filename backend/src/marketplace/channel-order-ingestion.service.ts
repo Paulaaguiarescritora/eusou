@@ -205,6 +205,7 @@ export class ChannelOrderIngestionService {
           customerEmail,
           customerPhone,
           status: orderStatus,
+          channelId: dto.channelId,
           subtotal,
           shippingAmount,
           total,

@@ -31,6 +31,8 @@ export function useCart() {
         next[index] = {
           ...next[index],
           quantity: next[index].quantity + item.quantity,
+          availableStock: item.availableStock !== undefined ? item.availableStock : next[index].availableStock,
+          nicheName: item.nicheName || next[index].nicheName,
         };
         return next;
       }
@@ -64,6 +66,10 @@ export function useCart() {
     setItems([]);
   };
 
+  const setCartItems = (newItems: CartItem[]) => {
+    setItems(newItems);
+  };
+
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = items.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
@@ -76,6 +82,7 @@ export function useCart() {
     updateQuantity,
     removeItem,
     clearCart,
+    setCartItems,
     totalItems,
     subtotal,
   };

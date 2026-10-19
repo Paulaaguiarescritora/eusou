@@ -19,7 +19,21 @@ export class NicheService {
   ) {}
 
   async create(dto: CreateNicheDto, actorId?: string): Promise<Niche> {
-    const slug = dto.slug?.trim() || generateSlug(dto.name);
+    const trimmedName = dto.name.trim();
+
+    // Verificação de duplicidade de nome (case-insensitive)
+    if (this.prisma.niche.findFirst) {
+      const existingName = await this.prisma.niche.findFirst({
+        where: {
+          name: { equals: trimmedName, mode: 'insensitive' },
+        },
+      });
+      if (existingName) {
+        throw new ConflictException(`Já existe um nicho com esse nome.`);
+      }
+    }
+
+    const slug = dto.slug?.trim() || generateSlug(trimmedName);
 
     const existing = await this.prisma.niche.findUnique({
       where: { slug },

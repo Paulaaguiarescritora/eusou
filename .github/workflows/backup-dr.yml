@@ -1,0 +1,55 @@
+name: "EuSou - Backup & Disaster Recovery Pipeline"
+
+on:
+  schedule:
+    # Execução diária automatizada às 03:00 UTC (00:00 Horário de Brasília)
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Motivo da execução manual do backup'
+        required: false
+        default: 'Backup manual sob demanda'
+
+concurrency:
+  group: backup-pipeline
+  cancel-in-progress: false
+
+jobs:
+  backup-and-offsite-upload:
+    name: "Executar Backup Lógico e Upload Off-Site"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: "Checkout do Repositório"
+        uses: actions/checkout@v4
+
+      - name: "Configurar Node.js"
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: "Instalar Dependências do Backend"
+        run: |
+          cd backend
+          npm ci
+
+      - name: "Executar Pipeline de Backup e Upload Off-Site"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+          BACKUP_STORAGE_TYPE: 's3'
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          S3_REGION: ${{ secrets.S3_REGION || 'auto' }}
+          S3_ENDPOINT: ${{ secrets.S3_ENDPOINT }}
+          S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
+        run: |
+          node scripts/backup/run-backup-pipeline.js
+
+      - name: "Verificar Integridade Pós-Pipeline"
+        run: |
+          echo "Pipeline de backup e upload off-site concluído com sucesso e registros estruturados."

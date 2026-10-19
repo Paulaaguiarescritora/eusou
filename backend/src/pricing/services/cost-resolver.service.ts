@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma.service';
 import { ProductionService } from '../../production/production.service';
 
 export interface CostResolution {
-  source: 'PRODUCTION' | 'MANUAL' | 'BASE_PRICE' | 'NONE';
+  source: 'PRODUCTION' | 'MANUAL' | 'NONE';
   cost: Prisma.Decimal;
   isPartial: boolean;
   productionProfileId?: string;
@@ -21,11 +21,11 @@ export class CostResolverService {
   ) {}
 
   /**
-   * Resolve o custo do produto/variante conforme prioridades do F12:
-   * 1. Custo calculado pelo ProductionProfile / Cost Engine do F7 quando disponível;
-   * 2. Custo manual explícito fornecido (costOverride);
-   * 3. Custo base disponível no produto (Product.basePrice) quando aplicável;
-   * 4. Fallback seguro com warning.
+   * Resolve o custo comercial do produto/variante conforme regras oficiais:
+   * 1. Custo manual explícito fornecido via parâmetro (costOverride);
+   * 2. Se product.costSource === 'MANUAL', utiliza product.manualCost;
+   * 3. Se product.costSource === 'COST_FROM_F7', consome o custo de produção F7 (ProductionProfile ativo);
+   * 4. Ausência de custo: retorna 'NONE' e custo 0 (não inventa custo nem usa basePrice).
    */
   async resolveCost(
     productId: string,
@@ -34,7 +34,7 @@ export class CostResolverService {
   ): Promise<CostResolution> {
     const warnings: string[] = [];
 
-    // Prioridade 2: Custo manual explícito via parâmetro
+    // Prioridade 1: Custo manual explícito via parâmetro
     if (costOverride !== undefined && costOverride !== null) {
       const manualCost = new Prisma.Decimal(costOverride.toString());
       if (manualCost.greaterThan(0)) {
@@ -47,7 +47,44 @@ export class CostResolverService {
       }
     }
 
-    // Prioridade 1: Custo calculado pelo F7 via ProductionProfile ativo
+    // Consulta configuração de Custo Comercial do Produto (F7 vs MANUAL)
+    let product: any = null;
+    if (this.prisma.product?.findUnique) {
+      try {
+        product = await this.prisma.product.findUnique({
+          where: { id: productId },
+          select: { costSource: true, manualCost: true },
+        });
+      } catch (err: any) {
+        this.logger.warn(`Erro ao consultar dados de custo do produto ${productId}: ${err?.message}`);
+      }
+    }
+
+    // Se o produto estiver configurado explicitamente com custo comercial MANUAL
+    if (product && product.costSource === 'MANUAL') {
+      if (product.manualCost !== null && product.manualCost !== undefined) {
+        const manualDecimal = new Prisma.Decimal(product.manualCost.toString());
+        if (manualDecimal.greaterThan(0)) {
+          return {
+            source: 'MANUAL',
+            cost: manualDecimal,
+            isPartial: false,
+            warnings,
+          };
+        }
+      }
+      warnings.push(
+        'Custo comercial manual não foi informado ou é zero. Precificação comercial retida.',
+      );
+      return {
+        source: 'NONE',
+        cost: new Prisma.Decimal(0),
+        isPartial: true,
+        warnings,
+      };
+    }
+
+    // Prioridade 2: Custo calculado pelo F7 via ProductionProfile ativo
     try {
       // Procura primeiro perfil para a variante específica (se houver)
       let profile = null;
@@ -57,6 +94,7 @@ export class CostResolverService {
             variantId,
             isActive: true,
           },
+          orderBy: { createdAt: 'desc' },
         });
       }
 
@@ -68,6 +106,7 @@ export class CostResolverService {
             variantId: null,
             isActive: true,
           },
+          orderBy: { createdAt: 'desc' },
         });
       }
 
@@ -98,51 +137,11 @@ export class CostResolverService {
       );
     }
 
-    // Prioridade 3: Fallback para basePrice do produto ou da variante
-    if (variantId) {
-      const variant = await this.prisma.productVariant.findUnique({
-        where: { id: variantId },
-      });
-      if (
-        variant &&
-        variant.price &&
-        new Prisma.Decimal(variant.price).greaterThan(0)
-      ) {
-        return {
-          source: 'BASE_PRICE',
-          cost: new Prisma.Decimal(variant.price),
-          isPartial: false,
-          warnings: [
-            ...warnings,
-            'Utilizado preço da variante como base de custo.',
-          ],
-        };
-      }
-    }
-
-    const product = await this.prisma.product.findUnique({
-      where: { id: productId },
-    });
-
-    if (
-      product &&
-      product.basePrice &&
-      new Prisma.Decimal(product.basePrice).greaterThan(0)
-    ) {
-      return {
-        source: 'BASE_PRICE',
-        cost: new Prisma.Decimal(product.basePrice),
-        isPartial: false,
-        warnings: [
-          ...warnings,
-          'Utilizado basePrice do produto como base de custo.',
-        ],
-      };
-    }
-
-    // Fallback: Nenhum custo encontrado
+    // REGRA DE NEGÓCIO OFICIAL:
+    // Não interpretar Product.basePrice ou variant.price como custo.
+    // Se não houver custo F7 válido e nem override/manual, o custo é ausente ('NONE').
     warnings.push(
-      'Nenhuma fonte de custo encontrada para o produto/variante. Custo definido como zero.',
+      'Nenhuma fonte de custo de produção F7 encontrada para o produto/variante. Precificação comercial retida.',
     );
     return {
       source: 'NONE',
@@ -150,5 +149,36 @@ export class CostResolverService {
       isPartial: true,
       warnings,
     };
+  }
+
+  /**
+   * Retorna exclusivamente o custo de produção F7 calculado (para fins de exibição/comparação)
+   */
+  async getProductionCostOnly(
+    productId: string,
+    variantId?: string | null,
+  ): Promise<number | null> {
+    try {
+      let profile = null;
+      if (variantId) {
+        profile = await this.prisma.productionProfile.findFirst({
+          where: { variantId, isActive: true },
+        });
+      }
+      if (!profile) {
+        profile = await this.prisma.productionProfile.findFirst({
+          where: { productId, variantId: null, isActive: true },
+        });
+      }
+      if (profile) {
+        const estimate = await this.productionService.calculateEstimatedCost(profile.id, 1);
+        if (estimate && estimate.totalCost > 0) {
+          return Number(estimate.totalCost.toFixed(2));
+        }
+      }
+    } catch (e) {
+      // Ignora erro auxiliar
+    }
+    return null;
   }
 }

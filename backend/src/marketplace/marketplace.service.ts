@@ -536,6 +536,21 @@ export class MarketplaceService {
         `Conta ${dto.channelAccountId} não encontrada.`,
       );
 
+    // P1: Verifica disponibilidade comercial no canal (ProductChannel)
+    const productChannel = await this.prisma.productChannel.findUnique({
+      where: {
+        productId_channelId: {
+          productId: dto.productId,
+          channelId: account.channelId,
+        },
+      },
+    });
+    if (!productChannel || !productChannel.isEnabled) {
+      throw new BadRequestException(
+        `O produto "${product.name}" não está habilitado para o canal "${account.channel.name}". Ative a disponibilidade comercial do produto antes de publicar.`,
+      );
+    }
+
     // 1. Mapeamento de Categoria
     let externalCategoryId: string | undefined;
     if (product.categories.length > 0) {

@@ -104,6 +104,24 @@ describe('Homologação Controlada F10 — Mercado Livre', () => {
       },
     });
     testAccountId = acc.id;
+
+    // Garante que o produto de teste está autorizado no canal ML
+    await prisma.productChannel.upsert({
+      where: {
+        productId_channelId: {
+          productId: testProductId,
+          channelId: testChannelId,
+        },
+      },
+      create: {
+        productId: testProductId,
+        channelId: testChannelId,
+        isEnabled: true,
+      },
+      update: {
+        isEnabled: true,
+      },
+    });
   });
 
   afterAll(async () => {

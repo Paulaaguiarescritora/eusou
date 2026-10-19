@@ -63,6 +63,9 @@ describe('MarketplaceService', () => {
       product: {
         findUnique: jest.fn(),
       },
+      productChannel: {
+        findUnique: jest.fn().mockResolvedValue({ isEnabled: true }),
+      },
     };
 
     auditLog = {

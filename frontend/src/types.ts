@@ -8,11 +8,45 @@ export interface Product {
   status: 'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
   brand?: string | null;
   basePrice?: string | number | null;
-  media?: { id: string; url: string; sortOrder?: number; isPrimary?: boolean }[];
+  costSource?: 'COST_FROM_F7' | 'MANUAL';
+  manualCost?: string | number | null;
+  wholesalePrice?: string | number | null;
+  hasValidCost?: boolean;
+  hasValidWholesalePrice?: boolean;
+  statusCostLabel?: string;
+  stock?: number;
+  reservedStock?: number;
+  availableStock?: number;
+  productionProfiles?: any[];
+  productChannelPrices?: any[];
+  media?: { id: string; url: string; sortOrder?: number; isPrimary?: boolean; altText?: string | null }[];
   variants?: ProductVariant[];
-  categories?: { category: { id: string; name: string; slug: string } }[];
+  categories?: { category: { id: string; name: string; slug: string; niche?: { id: string; name: string; slug: string } } }[];
   niches?: { niche: { id: string; name: string; slug: string } }[];
   tags?: { tag: { id: string; name: string; slug: string } }[];
+  productChannels?: {
+    id: string;
+    channelId: string;
+    isEnabled: boolean;
+    channel: { id: string; name: string; type: string };
+  }[];
+}
+
+export interface ProductChannelItem {
+  id: string;
+  name: string;
+  type: string;
+  channelIsActive: boolean;
+  isAssigned: boolean;
+  isEnabled: boolean;
+  assignedAt?: string | null;
+}
+
+export interface ProductChannelsResponse {
+  productId: string;
+  productName: string;
+  productStatus: string;
+  channels: ProductChannelItem[];
 }
 
 export interface ProductVariant {
@@ -21,6 +55,15 @@ export interface ProductVariant {
   sku?: string | null;
   price?: string | number | null;
   isActive: boolean;
+  stock?: number;
+  reservedStock?: number;
+  availableStock?: number;
+  productionCost?: number | null;
+  initialStock?: number;
+  materialId?: string | null;
+  materialName?: string | null;
+  materialCostPerUnit?: number | null;
+  isMaterialCustom?: boolean;
   variantAttributeValues?: {
     productAttributeValue: {
       value: string;
@@ -148,6 +191,8 @@ export interface CartItem {
   imageUrl?: string | null;
   unitPrice: number;
   quantity: number;
+  nicheName?: string | null;
+  availableStock?: number;
 }
 
 export interface OrderItem {
@@ -176,6 +221,8 @@ export interface Order {
   state: string;
   zipCode: string;
   createdAt: string;
+  paymentDeadline?: string | null;
+  channelId?: string | null;
   items: OrderItem[];
   affiliateCode?: string | null;
   payments?: Payment[];
@@ -219,6 +266,7 @@ export interface Affiliate {
   code: string;
   displayName: string;
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+  defaultCommissionPercent?: number | string | null;
   createdAt: string;
   user?: {
     id: string;
@@ -248,6 +296,7 @@ export interface AffiliateConversion {
   orderAmount: number | string;
   commissionRate: number | string;
   commissionAmount: number | string;
+  appliedCommissionPercent?: number | string | null;
   status: 'PENDING' | 'APPROVED' | 'CANCELLED';
   createdAt: string;
   affiliate?: {
@@ -299,12 +348,15 @@ export interface Printer {
   createdAt: string;
 }
 
+export type MaterialCategory = 'PRODUCTION' | 'COMPONENT' | 'PACKAGING';
+
 export interface Material {
   id: string;
   name: string;
   type: 'PLA' | 'PETG' | 'ABS' | 'RESIN' | 'OTHER';
+  category?: MaterialCategory;
   color?: string | null;
-  unit: 'GRAM' | 'KILOGRAM' | 'METER' | 'PIECE';
+  unit: 'GRAM' | 'KILOGRAM' | 'METER' | 'PIECE' | 'UNIT';
   costPerUnit: number | string;
   currentQuantity: number | string;
   minimumQuantity: number | string;
@@ -316,8 +368,10 @@ export interface ProductionProfile {
   id: string;
   productId?: string | null;
   variantId?: string | null;
+  printerId?: string | null;
   productionMode: 'STOCK' | 'MAKE_TO_ORDER';
   productionTimeMinutes: number;
+  productionTimeSeconds?: number | null;
   materialWeightGrams: number | string;
   powerConsumptionWatts: number;
   finishingTimeMinutes: number;
@@ -328,6 +382,7 @@ export interface ProductionProfile {
   isActive: boolean;
   product?: Product | null;
   variant?: ProductVariant | null;
+  printer?: Printer | null;
   materials?: {
     id: string;
     materialId: string;
@@ -658,6 +713,7 @@ export interface CommercialDashboardData {
     lowCount: number;
     criticalItems: {
       productId: string;
+      variantId?: string;
       productName: string;
       sku?: string;
       available: number;

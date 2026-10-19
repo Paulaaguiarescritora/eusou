@@ -74,7 +74,7 @@ describe('PricingService', () => {
   });
 
   it('simulate should return calculation output without persisting anything to DB', async () => {
-    prisma.product.findUnique.mockResolvedValue({ id: 'prod-1', name: 'Gato' });
+    prisma.product.findUnique.mockResolvedValue({ id: 'prod-1', name: 'Gato', wholesalePrice: new Prisma.Decimal('4.07') });
     prisma.channel.findUnique.mockResolvedValue({
       id: 'chan-1',
       name: 'Mercado Livre',
@@ -119,7 +119,7 @@ describe('PricingService', () => {
   });
 
   it('calculateAndPersist should persist ProductChannelPrice and log audit', async () => {
-    prisma.product.findUnique.mockResolvedValue({ id: 'prod-1', name: 'Gato' });
+    prisma.product.findUnique.mockResolvedValue({ id: 'prod-1', name: 'Gato', wholesalePrice: new Prisma.Decimal('4.07') });
     prisma.channel.findUnique.mockResolvedValue({
       id: 'chan-1',
       name: 'Mercado Livre',

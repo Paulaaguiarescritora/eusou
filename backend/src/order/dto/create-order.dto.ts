@@ -17,7 +17,7 @@ export class OrderItemDto {
 
   @IsUUID()
   @IsOptional()
-  variantId?: string;
+  variantId?: string | null;
 
   @IsInt()
   @Min(1)
@@ -73,4 +73,21 @@ export class CreateOrderDto {
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)
   items: OrderItemDto[];
+
+  // Consolidação Arquitetural: Origem comercial do pedido
+  @IsUUID()
+  @IsOptional()
+  nicheId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  channelId?: string;
+
+  @IsString()
+  @IsOptional()
+  originDomain?: string;
+
+  @IsString()
+  @IsOptional()
+  utmSource?: string;
 }

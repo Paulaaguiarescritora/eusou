@@ -129,45 +129,98 @@ export class CommercialAlertService {
     }
 
     // 4. ALERTAS DE ESTOQUE: Saldo crítico ou zerado (Inventory F7)
-    const inventories = await this.prisma.inventory.findMany({
-      where: {
-        OR: [
-          { quantity: { lte: 0 } },
-          { quantity: { lte: this.prisma.inventory.fields?.minimumQuantity || 5 } },
-        ],
+    // Regra:
+    // - Produto sem variantes → usar estoque do produto.
+    // - Produto com variantes → ignorar estoque do produto-pai e alertar somente pelas variantes ativas.
+    // - Não misturar nem duplicar alertas de estoque do produto com suas variantes.
+    const productsWithStock = await this.prisma.product.findMany({
+      where: { status: { not: 'ARCHIVED' } },
+      include: {
+        variants: {
+          where: { isActive: true },
+          include: { inventories: true },
+        },
+        inventories: {
+          where: { variantId: null },
+        },
       },
-      include: { product: true },
-      take: 15,
     });
-    for (const inv of inventories) {
-      if (!inv.product) continue;
-      const available = inv.quantity - inv.reservedQuantity;
-      if (available <= 0) {
-        alerts.push({
-          id: `inv-out-${inv.id}`,
-          type: 'STOCK_OUT',
-          severity: 'CRITICAL',
-          title: `Estoque Esgotado: ${inv.product.name}`,
-          description: `Disponível: ${available} unid. (Total: ${inv.quantity}, Reservado: ${inv.reservedQuantity}). Produtos esgotados pausam vendas.`,
-          entityRelated: 'Inventory',
-          entityId: inv.id,
-          createdAt: inv.updatedAt,
-          recommendedAction: 'CORRIGIR',
-          actionUrl: '/admin/inventory',
-        });
-      } else if (available <= inv.minimumQuantity) {
-        alerts.push({
-          id: `inv-low-${inv.id}`,
-          type: 'STOCK_LOW',
-          severity: 'WARNING',
-          title: `Estoque Baixo: ${inv.product.name}`,
-          description: `Disponível: ${available} unid., abaixo do mínimo estipulado (${inv.minimumQuantity} unid.). Inicie ordem de produção.`,
-          entityRelated: 'Inventory',
-          entityId: inv.id,
-          createdAt: inv.updatedAt,
-          recommendedAction: 'VER',
-          actionUrl: '/admin/production',
-        });
+
+    for (const prod of productsWithStock) {
+      const activeVariants = prod.variants || [];
+      const hasVariants = activeVariants.length > 0;
+
+      if (hasVariants) {
+        // Produto com variantes:
+        // Avalia individualmente as variantes ativas. O estoque do produto-pai é ignorado.
+        for (const variant of activeVariants) {
+          const varInv = variant.inventories?.[0];
+          if (!varInv) continue;
+
+          const available = varInv.quantity - varInv.reservedQuantity;
+          const variantLabel = variant.name || variant.sku || 'Variante';
+
+          if (available <= 0) {
+            alerts.push({
+              id: `inv-out-${varInv.id}`,
+              type: 'STOCK_OUT',
+              severity: 'CRITICAL',
+              title: `Estoque Esgotado: ${prod.name} (${variantLabel})`,
+              description: `Variante "${variantLabel}" disponível: ${available} unid. (Total: ${varInv.quantity}, Reservado: ${varInv.reservedQuantity}). Produtos esgotados pausam vendas.`,
+              entityRelated: 'Inventory',
+              entityId: varInv.id,
+              createdAt: varInv.updatedAt,
+              recommendedAction: 'CORRIGIR',
+              actionUrl: '/admin/inventory',
+            });
+          } else if (available <= varInv.minimumQuantity) {
+            alerts.push({
+              id: `inv-low-${varInv.id}`,
+              type: 'STOCK_LOW',
+              severity: 'WARNING',
+              title: `Estoque Baixo: ${prod.name} (${variantLabel})`,
+              description: `Variante "${variantLabel}" disponível: ${available} unid., abaixo do mínimo estipulado (${varInv.minimumQuantity} unid.). Inicie ordem de produção.`,
+              entityRelated: 'Inventory',
+              entityId: varInv.id,
+              createdAt: varInv.updatedAt,
+              recommendedAction: 'VER',
+              actionUrl: '/admin/production',
+            });
+          }
+        }
+      } else {
+        // Produto sem variantes: usa o estoque próprio do produto
+        const parentInv = prod.inventories?.[0];
+        if (!parentInv) continue;
+
+        const available = parentInv.quantity - parentInv.reservedQuantity;
+        if (available <= 0) {
+          alerts.push({
+            id: `inv-out-${parentInv.id}`,
+            type: 'STOCK_OUT',
+            severity: 'CRITICAL',
+            title: `Estoque Esgotado: ${prod.name}`,
+            description: `Disponível: ${available} unid. (Total: ${parentInv.quantity}, Reservado: ${parentInv.reservedQuantity}). Produtos esgotados pausam vendas.`,
+            entityRelated: 'Inventory',
+            entityId: parentInv.id,
+            createdAt: parentInv.updatedAt,
+            recommendedAction: 'CORRIGIR',
+            actionUrl: '/admin/inventory',
+          });
+        } else if (available <= parentInv.minimumQuantity) {
+          alerts.push({
+            id: `inv-low-${parentInv.id}`,
+            type: 'STOCK_LOW',
+            severity: 'WARNING',
+            title: `Estoque Baixo: ${prod.name}`,
+            description: `Disponível: ${available} unid., abaixo do mínimo estipulado (${parentInv.minimumQuantity} unid.). Inicie ordem de produção.`,
+            entityRelated: 'Inventory',
+            entityId: parentInv.id,
+            createdAt: parentInv.updatedAt,
+            recommendedAction: 'VER',
+            actionUrl: '/admin/production',
+          });
+        }
       }
     }
 

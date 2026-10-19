@@ -3,8 +3,11 @@ import { ProductController } from './product.controller';
 import { ProductService } from './product.service';
 import { PrismaService } from '../prisma.service';
 import { AuditLogService } from '../audit-log.service';
+import { PricingModule } from '../pricing/pricing.module';
+import { ProductionModule } from '../production/production.module';
 
 @Module({
+  imports: [PricingModule, ProductionModule],
   controllers: [ProductController],
   providers: [ProductService, PrismaService, AuditLogService],
   exports: [ProductService],

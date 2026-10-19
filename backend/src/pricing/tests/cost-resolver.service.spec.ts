@@ -76,10 +76,11 @@ describe('CostResolverService', () => {
     expect(res.cost.toString()).toBe('18.2');
     expect(prisma.productionProfile.findFirst).toHaveBeenCalledWith({
       where: { variantId: 'var-1', isActive: true },
+      orderBy: { createdAt: 'desc' },
     });
   });
 
-  it('Prioridade 3: fallback para basePrice do produto quando F7 e manual não existirem', async () => {
+  it('Regra Oficial: nunca utilizar basePrice do produto como custo quando F7 e manual não existirem', async () => {
     prisma.productionProfile.findFirst.mockResolvedValue(null);
     prisma.product.findUnique.mockResolvedValue({
       id: 'prod-1',
@@ -87,8 +88,11 @@ describe('CostResolverService', () => {
     });
 
     const res = await service.resolveCost('prod-1');
-    expect(res.source).toBe('BASE_PRICE');
-    expect(res.cost.toString()).toBe('29.9');
+    expect(res.source).toBe('NONE');
+    expect(res.cost.toString()).toBe('0');
+    expect(res.warnings).toContain(
+      'Nenhuma fonte de custo de produção F7 encontrada para o produto/variante. Precificação comercial retida.',
+    );
   });
 
   it('Fallback final: define custo como zero e adiciona warning se nenhuma fonte existir', async () => {

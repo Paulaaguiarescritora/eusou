@@ -50,7 +50,9 @@ export class MercadoPagoProvider implements PaymentProvider {
 
       if (response.status === 429) {
         const retryAfter = response.headers.get('retry-after') || '2';
-        this.logger.warn(`Mercado Pago Rate Limit 429 hit. Retry-After: ${retryAfter}s`);
+        this.logger.warn(
+          `Mercado Pago Rate Limit 429 hit. Retry-After: ${retryAfter}s`,
+        );
       }
 
       return {
@@ -59,21 +61,23 @@ export class MercadoPagoProvider implements PaymentProvider {
         headers: response.headers,
       };
     } catch (err: any) {
-      this.logger.error(`Mercado Pago HTTP request error to ${endpoint}: ${err.message}`);
+      this.logger.error(
+        `Mercado Pago HTTP request error to ${endpoint}: ${err.message}`,
+      );
       throw err;
     }
   }
 
-  async createPayment(input: CreatePaymentProviderInput): Promise<PaymentProviderResult> {
+  async createPayment(
+    input: CreatePaymentProviderInput,
+  ): Promise<PaymentProviderResult> {
     const isPix = input.method === PaymentMethod.PIX;
 
     let payload: any;
 
-    if (isPix) {
-      const nameParts = (input.customer.name || '').trim().split(' ');
-      const firstName = nameParts[0] || 'Cliente';
-      const lastName = nameParts.slice(1).join(' ') || 'EuSou';
+    const { firstName, lastName } = this.parseCustomerName(input.customer.name);
 
+    if (isPix) {
       payload = {
         transaction_amount: Number(input.amount),
         description: `Pedido ${input.orderId}`,
@@ -98,9 +102,13 @@ export class MercadoPagoProvider implements PaymentProvider {
         description: `Pedido ${input.orderId}`,
         installments: input.installments || 1,
         payment_method_id: input.paymentMethodId || 'credit_card',
-        issuer_id: input.issuerId ? Number(input.issuerId) || input.issuerId : undefined,
+        issuer_id: input.issuerId
+          ? Number(input.issuerId) || input.issuerId
+          : undefined,
         payer: {
           email: input.customer.email,
+          first_name: firstName,
+          last_name: lastName,
           identification: input.customer.documentNumber
             ? {
                 type: input.customer.documentType || 'CPF',
@@ -111,7 +119,54 @@ export class MercadoPagoProvider implements PaymentProvider {
       };
     }
 
-    const res = await this.request('/v1/payments', 'POST', payload, input.idempotencyKey);
+    let res: { status: number; data: any; headers: any };
+    try {
+      res = await this.request(
+        '/v1/payments',
+        'POST',
+        payload,
+        input.idempotencyKey,
+      );
+    } catch (err: any) {
+      const xRequestId =
+        err?.response?.headers?.get?.('x-request-id') ||
+        err?.response?.headers?.['x-request-id'] ||
+        err?.headers?.['x-request-id'] ||
+        null;
+      this.logger.error(
+        `Mercado Pago POST /v1/payments request failed with exception: ${err.message}${
+          xRequestId ? ` (x-request-id: ${xRequestId})` : ''
+        }`,
+      );
+      return {
+        success: false,
+        provider: this.providerName,
+        status: PaymentStatus.FAILED,
+        externalStatus: 'error',
+        externalStatusDetail: 'NETWORK_ERROR',
+        amount: input.amount,
+        currency: input.currency || 'BRL',
+        failureCode: '500',
+        failureMessage: err.message || 'Mercado Pago request failed',
+        rawResponse: {
+          error: err.message,
+          ...(xRequestId ? { xRequestId } : {}),
+        },
+      };
+    }
+
+    // Observability: Capture Mercado Pago x-request-id safely
+    const xRequestId =
+      res.headers?.get?.('x-request-id') ||
+      res.headers?.['x-request-id'] ||
+      res.headers?.['X-Request-Id'] ||
+      null;
+
+    if (xRequestId) {
+      this.logger.log(
+        `Mercado Pago POST /v1/payments responded with status ${res.status} (x-request-id: ${xRequestId})`,
+      );
+    }
 
     if (res.status >= 200 && res.status < 300 && res.data) {
       const data = res.data;
@@ -122,11 +177,21 @@ export class MercadoPagoProvider implements PaymentProvider {
 
       if (isPix && data.point_of_interaction?.transaction_data) {
         pixQrCode = data.point_of_interaction.transaction_data.qr_code;
-        pixQrCodeBase64 = data.point_of_interaction.transaction_data.qr_code_base64;
+        pixQrCodeBase64 =
+          data.point_of_interaction.transaction_data.qr_code_base64;
       }
 
+      // Attach x-request-id safely to rawResponse metadata (no secrets included)
+      const rawResponse = {
+        ...data,
+        ...(xRequestId ? { xRequestId } : {}),
+      };
+
       return {
-        success: mappedStatus === PaymentStatus.PAID || mappedStatus === PaymentStatus.PROCESSING || mappedStatus === PaymentStatus.AUTHORIZED,
+        success:
+          mappedStatus === PaymentStatus.PAID ||
+          mappedStatus === PaymentStatus.PROCESSING ||
+          mappedStatus === PaymentStatus.AUTHORIZED,
         provider: this.providerName,
         providerPaymentId: String(data.id),
         providerOrderId: data.order?.id ? String(data.order.id) : undefined,
@@ -136,18 +201,36 @@ export class MercadoPagoProvider implements PaymentProvider {
         amount: data.transaction_amount || input.amount,
         currency: data.currency_id || 'BRL',
         paidAt: data.date_approved ? new Date(data.date_approved) : undefined,
-        expiresAt: data.date_of_expiration ? new Date(data.date_of_expiration) : undefined,
+        expiresAt: data.date_of_expiration
+          ? new Date(data.date_of_expiration)
+          : undefined,
         pixQrCode,
         pixQrCodeBase64,
-        failureCode: data.status === 'rejected' ? data.status_detail : undefined,
-        failureMessage: data.status === 'rejected' ? this.formatStatusDetail(data.status_detail) : undefined,
-        rawResponse: data,
+        failureCode:
+          data.status === 'rejected' ? data.status_detail : undefined,
+        failureMessage:
+          data.status === 'rejected'
+            ? this.formatStatusDetail(data.status_detail)
+            : undefined,
+        rawResponse,
       };
     }
 
     // Failure / Error response
-    const errorMessage = res.data?.message || res.data?.error || `HTTP ${res.status}`;
-    const failureCode = res.data?.cause?.[0]?.code || String(res.status);
+    const errorMessage =
+      res.data?.message || res.data?.error || `HTTP ${res.status}`;
+    const failureCode =
+      res.data?.cause?.[0]?.code != null
+        ? String(res.data.cause[0].code)
+        : String(res.status);
+
+    // Attach x-request-id safely to error rawResponse metadata (no secrets included)
+    const rawResponse = {
+      ...(res.data && typeof res.data === 'object'
+        ? res.data
+        : { raw: res.data }),
+      ...(xRequestId ? { xRequestId } : {}),
+    };
 
     return {
       success: false,
@@ -159,7 +242,7 @@ export class MercadoPagoProvider implements PaymentProvider {
       currency: input.currency || 'BRL',
       failureCode,
       failureMessage: errorMessage,
-      rawResponse: res.data,
+      rawResponse,
     };
   }
 
@@ -175,7 +258,8 @@ export class MercadoPagoProvider implements PaymentProvider {
 
       if (data.point_of_interaction?.transaction_data) {
         pixQrCode = data.point_of_interaction.transaction_data.qr_code;
-        pixQrCodeBase64 = data.point_of_interaction.transaction_data.qr_code_base64;
+        pixQrCodeBase64 =
+          data.point_of_interaction.transaction_data.qr_code_base64;
       }
 
       return {
@@ -189,7 +273,9 @@ export class MercadoPagoProvider implements PaymentProvider {
         amount: data.transaction_amount,
         currency: data.currency_id || 'BRL',
         paidAt: data.date_approved ? new Date(data.date_approved) : undefined,
-        expiresAt: data.date_of_expiration ? new Date(data.date_of_expiration) : undefined,
+        expiresAt: data.date_of_expiration
+          ? new Date(data.date_of_expiration)
+          : undefined,
         pixQrCode,
         pixQrCodeBase64,
         rawResponse: data,
@@ -209,7 +295,9 @@ export class MercadoPagoProvider implements PaymentProvider {
     };
   }
 
-  async cancelPayment(providerPaymentId: string): Promise<PaymentProviderResult> {
+  async cancelPayment(
+    providerPaymentId: string,
+  ): Promise<PaymentProviderResult> {
     const res = await this.request(`/v1/payments/${providerPaymentId}`, 'PUT', {
       status: 'cancelled',
     });
@@ -240,7 +328,10 @@ export class MercadoPagoProvider implements PaymentProvider {
     };
   }
 
-  async refundPayment(providerPaymentId: string, amount?: number): Promise<PaymentProviderResult> {
+  async refundPayment(
+    providerPaymentId: string,
+    amount?: number,
+  ): Promise<PaymentProviderResult> {
     const body = amount ? { amount: Number(amount) } : {};
     const res = await this.request(
       `/v1/payments/${providerPaymentId}/refunds`,
@@ -254,7 +345,9 @@ export class MercadoPagoProvider implements PaymentProvider {
         success: true,
         provider: this.providerName,
         providerPaymentId,
-        status: amount ? PaymentStatus.PARTIALLY_REFUNDED : PaymentStatus.REFUNDED,
+        status: amount
+          ? PaymentStatus.PARTIALLY_REFUNDED
+          : PaymentStatus.REFUNDED,
         externalStatus: 'refunded',
         amount: res.data.amount || amount || 0,
         currency: 'BRL',
@@ -340,7 +433,10 @@ export class MercadoPagoProvider implements PaymentProvider {
     return hmac === v1;
   }
 
-  mapStatus(externalStatus: string, externalStatusDetail?: string): PaymentStatus {
+  mapStatus(
+    externalStatus: string,
+    externalStatusDetail?: string,
+  ): PaymentStatus {
     switch (externalStatus) {
       case 'approved':
         return externalStatusDetail === 'partially_refunded'
@@ -370,14 +466,33 @@ export class MercadoPagoProvider implements PaymentProvider {
     const map: Record<string, string> = {
       cc_rejected_bad_filled_card_number: 'Confira o número do cartão.',
       cc_rejected_bad_filled_date: 'Confira a data de validade.',
-      cc_rejected_bad_filled_security_code: 'Confira o código de segurança (CVV).',
+      cc_rejected_bad_filled_security_code:
+        'Confira o código de segurança (CVV).',
       cc_rejected_bad_filled_other: 'Confira os dados do cartão.',
-      cc_rejected_call_for_authorize: 'Você deve autorizar o pagamento junto à sua instituição financeira.',
-      cc_rejected_insufficient_amount: 'Saldo ou limite insuficiente no cartão.',
-      cc_rejected_card_disabled: 'Ligue para a instituição financeira para ativar o seu cartão.',
-      cc_rejected_duplicated_payment: 'Pagamento duplicado. Verifique os lançamentos da fatura.',
-      cc_rejected_high_risk: 'Pagamento recusado pela análise de risco de segurança.',
+      cc_rejected_call_for_authorize:
+        'Você deve autorizar o pagamento junto à sua instituição financeira.',
+      cc_rejected_insufficient_amount:
+        'Saldo ou limite insuficiente no cartão.',
+      cc_rejected_card_disabled:
+        'Ligue para a instituição financeira para ativar o seu cartão.',
+      cc_rejected_duplicated_payment:
+        'Pagamento duplicado. Verifique os lançamentos da fatura.',
+      cc_rejected_high_risk:
+        'Pagamento recusado pela análise de risco de segurança.',
     };
     return map[detail || ''] || 'Pagamento recusado pelo emissor do cartão.';
+  }
+
+  parseCustomerName(rawName?: string): { firstName: string; lastName: string } {
+    const parts = (rawName || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      return { firstName: 'Cliente', lastName: 'EuSou' };
+    }
+    if (parts.length === 1) {
+      return { firstName: parts[0], lastName: parts[0] };
+    }
+    const firstName = parts[0];
+    const lastName = parts.slice(1).join(' ');
+    return { firstName, lastName };
   }
 }

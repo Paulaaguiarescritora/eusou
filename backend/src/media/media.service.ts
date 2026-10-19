@@ -2,7 +2,11 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
+const sharp = require('sharp');
 import { PrismaService } from '../prisma.service';
 import { AuditLogService } from '../audit-log.service';
 import { CreateMediaDto } from './dto/create-media.dto';
@@ -11,6 +15,8 @@ import { Media } from '@prisma/client';
 
 @Injectable()
 export class MediaService {
+  private readonly logger = new Logger(MediaService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLog: AuditLogService,
@@ -218,31 +224,66 @@ export class MediaService {
     // Parse mime type and buffer
     const matches = fileBase64.match(/^data:([A-Za-z-+/_]+);base64,(.+)$/);
     let buffer: Buffer;
-    let ext = 'webp';
+    let originalExt = 'jpg';
 
     if (matches && matches.length === 3) {
-      const mime = matches[1];
-      if (mime.includes('png')) ext = 'png';
-      else if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
-      else if (mime.includes('gif')) ext = 'gif';
-      else if (mime.includes('webp')) ext = 'webp';
+      const mime = matches[1].toLowerCase();
+      if (mime.includes('png')) originalExt = 'png';
+      else if (mime.includes('jpeg')) originalExt = 'jpeg';
+      else if (mime.includes('jpg')) originalExt = 'jpg';
+      else if (mime.includes('gif')) originalExt = 'gif';
+      else if (mime.includes('webp')) originalExt = 'webp';
       buffer = Buffer.from(matches[2], 'base64');
     } else {
       buffer = Buffer.from(fileBase64, 'base64');
     }
 
-    const fs = require('fs');
-    const path = require('path');
+    if (originalName) {
+      const matchExt = originalName.match(/\.([a-zA-Z0-9]+)$/);
+      if (matchExt) {
+        const foundExt = matchExt[1].toLowerCase();
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(foundExt)) {
+          originalExt = foundExt;
+        }
+      }
+    }
+
     const uploadsDir = path.join(process.cwd(), 'uploads', 'products');
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    const fileName = `${productId}-${Date.now()}-${Math.floor(Math.random() * 10000)}.${ext}`;
-    const filePath = path.join(uploadsDir, fileName);
-    fs.writeFileSync(filePath, buffer);
+    const timestamp = Date.now();
+    const randomSuffix = Math.floor(Math.random() * 10000);
+    const baseName = `${productId}-${timestamp}-${randomSuffix}`;
 
-    const publicUrl = `http://localhost:3000/uploads/products/${fileName}`;
+    // 1. Salvar o arquivo original preservado no disco (sem apagar)
+    const originalFileName = `${baseName}-orig.${originalExt}`;
+    const originalFilePath = path.join(uploadsDir, originalFileName);
+    fs.writeFileSync(originalFilePath, buffer);
+
+    // 2. Converter para WebP com qualidade 85%, preservando dimensões originais e transparência
+    const webpFileName = `${baseName}.webp`;
+    const webpFilePath = path.join(uploadsDir, webpFileName);
+
+    let webpBuffer: Buffer;
+    try {
+      webpBuffer = await sharp(buffer)
+        .webp({ quality: 85 })
+        .toBuffer();
+    } catch (err: any) {
+      this.logger.warn(
+        `Erro ao converter imagem para WebP: ${err.message}. Mantendo buffer original como fallback.`,
+      );
+      webpBuffer = buffer;
+    }
+
+    fs.writeFileSync(webpFilePath, webpBuffer);
+
+    // 3. Montar URL pública da versão WebP utilizada pelo produto
+    const port = process.env.PORT || 3000;
+    const baseUrl = process.env.APP_URL || `http://localhost:${port}`;
+    const publicUrl = `${baseUrl}/uploads/products/${webpFileName}`;
 
     return this.create(
       productId,
@@ -251,6 +292,7 @@ export class MediaService {
         type: 'IMAGE',
         isPrimary,
         altText: originalName || undefined,
+        title: originalFileName,
       },
       actorId,
     );

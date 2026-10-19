@@ -33,11 +33,11 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNavi
   const loadData = async () => {
     setLoading(true);
     try {
-      const affRes = await fetchApi<Affiliate[]>('/affiliates');
-      setAffiliates(affRes);
+      const affRes = await fetchApi<any>('/admin/affiliates');
+      setAffiliates(Array.isArray(affRes) ? affRes : affRes?.data || []);
 
-      const rulesRes = await fetchApi<CommissionRule[]>('/affiliates/rules');
-      setRules(rulesRes);
+      const rulesRes = await fetchApi<any>('/admin/affiliates/commission-rules/all');
+      setRules(Array.isArray(rulesRes) ? rulesRes : rulesRes?.data || []);
     } catch (err) {
       console.error('Error fetching admin affiliate data:', err);
     } finally {
@@ -51,7 +51,7 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNavi
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     try {
-      await fetchApi(`/affiliates/${id}/status`, {
+      await fetchApi(`/admin/affiliates/${id}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus }),
       });
@@ -64,7 +64,7 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNavi
   const handleCreateRule = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await fetchApi('/affiliates/rules', {
+      await fetchApi('/admin/affiliates/commission-rules', {
         method: 'POST',
         body: JSON.stringify({
           name: ruleName,
@@ -111,7 +111,7 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNavi
       return;
     }
     try {
-      await fetchApi('/affiliates', {
+      await fetchApi('/admin/affiliates', {
         method: 'POST',
         body: JSON.stringify({
           userId: newUserId,

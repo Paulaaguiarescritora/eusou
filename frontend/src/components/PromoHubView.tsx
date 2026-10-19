@@ -46,7 +46,7 @@ export const PromoHubView: React.FC<PromoHubViewProps> = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchApi<{ data: Product[] }>('/products')
+    fetchApi<{ data: Product[] }>('/products?limit=100')
       .then((res) => {
         const prods = res.data || [];
         setProducts(prods);

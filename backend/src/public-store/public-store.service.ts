@@ -7,8 +7,80 @@ import { CatalogType } from '@prisma/client';
 export class PublicStoreService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async getOwnStoreChannel() {
+    return this.prisma.channel.findFirst({
+      where: { type: 'OWN_STORE', isActive: true },
+    });
+  }
+
+  private resolveProductPrice(product: any, ownStoreChannelId?: string | null): string | null {
+    if (ownStoreChannelId && product.productChannelPrices && product.productChannelPrices.length > 0) {
+      const pcp = product.productChannelPrices.find(
+        (p: any) => p.channelId === ownStoreChannelId && !p.variantId,
+      );
+      if (pcp) {
+        const effective =
+          pcp.mode === 'MANUAL' && pcp.manualPrice !== null
+            ? pcp.manualPrice
+            : pcp.effectivePrice || pcp.calculatedPrice;
+        if (effective !== null && effective !== undefined && Number(effective) > 0) {
+          return Number(effective).toFixed(2);
+        }
+      }
+    }
+    // Regra oficial: Não utilizar Product.basePrice como fallback comercial da Loja Própria.
+    // Se não há ProductChannelPrice válido para OWN_STORE, o produto não possui preço de venda configurado.
+    return null;
+  }
+
+  private formatProductWithStock(product: any, ownStoreChannelId?: string | null) {
+    const activeVariants = (product.variants || []).map((v: any) => {
+      const inv = v.inventories?.find((i: any) => i.variantId === v.id) || v.inventories?.[0];
+      const qty = inv?.quantity ?? 0;
+      const reserved = inv?.reservedQuantity ?? 0;
+      const availableStock = Math.max(0, qty - reserved);
+
+      // Limpa dados brutos de inventário para não vazar números do armazém ao cliente público
+      const { inventories, ...variantClean } = v;
+
+      return {
+        ...variantClean,
+        inStock: availableStock > 0,
+        isOutOfStock: availableStock <= 0,
+        availableStock,
+      };
+    });
+
+    const hasActiveVariants = activeVariants.length > 0;
+    let availableStock = 0;
+
+    if (hasActiveVariants) {
+      // Regra de negócio: Produto com variantes ativas utiliza EXCLUSIVAMENTE o estoque das variantes
+      availableStock = activeVariants.reduce((sum: number, v: any) => sum + (v.availableStock || 0), 0);
+    } else {
+      // Produto sem variantes: utiliza registro de estoque próprio (variantId: null)
+      const parentInv = product.inventories?.find((i: any) => !i.variantId);
+      const qty = parentInv?.quantity ?? 0;
+      const reserved = parentInv?.reservedQuantity ?? 0;
+      availableStock = Math.max(0, qty - reserved);
+    }
+
+    const { inventories, ...productClean } = product;
+
+    return {
+      ...productClean,
+      variants: activeVariants,
+      basePrice: this.resolveProductPrice(product, ownStoreChannelId),
+      inStock: availableStock > 0,
+      isOutOfStock: availableStock <= 0,
+      availableStock,
+    };
+  }
+
   async getHomeData() {
-    const [categories, featuredProducts, catalogs, collections] =
+    const ownStore = await this.getOwnStoreChannel();
+
+    const [categories, featuredProductsRaw, catalogs, collections] =
       await Promise.all([
         this.prisma.category.findMany({
           where: { status: 'ACTIVE', parentId: null },
@@ -16,12 +88,26 @@ export class PublicStoreService {
           take: 8,
         }),
         this.prisma.product.findMany({
-          where: { status: 'ACTIVE' },
+          where: {
+            status: 'ACTIVE',
+            ...(ownStore
+              ? {
+                  productChannels: {
+                    some: {
+                      channelId: ownStore.id,
+                      isEnabled: true,
+                    },
+                  },
+                }
+              : {}),
+          },
           orderBy: { createdAt: 'desc' },
           take: 8,
           include: {
             media: { orderBy: { sortOrder: 'asc' }, take: 1 },
-            variants: { where: { isActive: true }, take: 4 },
+            variants: { where: { isActive: true }, include: { inventories: true }, take: 4 },
+            inventories: true,
+            productChannelPrices: ownStore ? { where: { channelId: ownStore.id } } : false,
           },
         }),
         this.prisma.catalog.findMany({
@@ -52,6 +138,10 @@ export class PublicStoreService {
         }),
       ]);
 
+    const featuredProducts = featuredProductsRaw.map((p) =>
+      this.formatProductWithStock(p, ownStore?.id),
+    );
+
     return {
       categories,
       featuredProducts,
@@ -61,12 +151,23 @@ export class PublicStoreService {
   }
 
   async getProducts(query: QueryProductsDto) {
+    const ownStore = await this.getOwnStoreChannel();
     const page = query.page || 1;
     const limit = query.limit || 12;
     const skip = (page - 1) * limit;
 
     const where: any = {
       status: 'ACTIVE', // Strictly public: only ACTIVE
+      ...(ownStore
+        ? {
+            productChannels: {
+              some: {
+                channelId: ownStore.id,
+                isEnabled: true,
+              },
+            },
+          }
+        : {}),
     };
 
     if (query.search?.trim()) {
@@ -96,7 +197,7 @@ export class PublicStoreService {
     const sortBy = query.sortBy || 'createdAt';
     const sortOrder = query.sortOrder || 'desc';
 
-    const [data, total] = await Promise.all([
+    const [rawProducts, total] = await Promise.all([
       this.prisma.product.findMany({
         where,
         skip,
@@ -110,6 +211,7 @@ export class PublicStoreService {
           variants: {
             where: { isActive: true },
             include: {
+              inventories: true,
               variantAttributeValues: {
                 include: {
                   productAttributeValue: {
@@ -119,11 +221,17 @@ export class PublicStoreService {
               },
             },
           },
+          inventories: true,
           categories: { include: { category: true } },
+          productChannelPrices: ownStore ? { where: { channelId: ownStore.id } } : false,
         },
       }),
       this.prisma.product.count({ where }),
     ]);
+
+    const data = rawProducts.map((p) =>
+      this.formatProductWithStock(p, ownStore?.id),
+    );
 
     return {
       data,
@@ -137,8 +245,23 @@ export class PublicStoreService {
   }
 
   async getProductBySlug(slug: string) {
+    const ownStore = await this.getOwnStoreChannel();
+
     const product = await this.prisma.product.findFirst({
-      where: { slug, status: 'ACTIVE' },
+      where: {
+        slug,
+        status: 'ACTIVE',
+        ...(ownStore
+          ? {
+              productChannels: {
+                some: {
+                  channelId: ownStore.id,
+                  isEnabled: true,
+                },
+              },
+            }
+          : {}),
+      },
       include: {
         media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }] },
         attributeValues: {
@@ -148,6 +271,7 @@ export class PublicStoreService {
           where: { isActive: true },
           include: {
             media: true,
+            inventories: true,
             variantAttributeValues: {
               include: {
                 productAttributeValue: {
@@ -157,35 +281,46 @@ export class PublicStoreService {
             },
           },
         },
+        inventories: true,
         categories: { include: { category: true } },
         niches: { include: { niche: true } },
         tags: { include: { tag: true } },
+        productChannelPrices: ownStore ? { where: { channelId: ownStore.id } } : false,
       },
     });
 
     if (!product) {
-      throw new NotFoundException(`Product not found or not active`);
+      throw new NotFoundException(`Product not found or not available in store`);
     }
 
-    return product;
+    return this.formatProductWithStock(product, ownStore?.id);
   }
 
   async getEmbedProductById(id: string) {
+    const ownStore = await this.getOwnStoreChannel();
+
     const product = await this.prisma.product.findFirst({
-      where: { id, status: 'ACTIVE' },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        sku: true,
-        shortDescription: true,
-        description: true,
-        basePrice: true,
-        status: true,
+      where: {
+        id,
+        status: 'ACTIVE',
+        ...(ownStore
+          ? {
+              productChannels: {
+                some: {
+                  channelId: ownStore.id,
+                  isEnabled: true,
+                },
+              },
+            }
+          : {}),
+      },
+      include: {
         media: {
           orderBy: { sortOrder: 'asc' },
           select: { id: true, url: true, altText: true, isPrimary: true },
         },
+        inventories: true,
+        productChannelPrices: ownStore ? { where: { channelId: ownStore.id } } : false,
         variants: {
           where: { isActive: true },
           select: {
@@ -194,6 +329,7 @@ export class PublicStoreService {
             sku: true,
             price: true,
             isActive: true,
+            inventories: true,
             variantAttributeValues: {
               select: {
                 productAttributeValue: {
@@ -215,7 +351,163 @@ export class PublicStoreService {
       throw new NotFoundException(`Product not found or not active`);
     }
 
-    return product;
+    return this.formatProductWithStock(product, ownStore?.id);
+  }
+
+  async validateCart(items: Array<{ productId: string; variantId?: string | null; quantity: number }>) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return { isValid: true, items: [] };
+    }
+
+    let isValid = true;
+    const validatedItems = await Promise.all(
+      items.map(async (item) => {
+        const product = await this.prisma.product.findUnique({
+          where: { id: item.productId },
+          include: {
+            variants: { where: { isActive: true } },
+            inventories: true,
+          },
+        });
+
+        if (!product || product.status !== 'ACTIVE') {
+          isValid = false;
+          return {
+            productId: item.productId,
+            variantId: item.variantId || null,
+            requestedQuantity: item.quantity,
+            availableStock: 0,
+            inStock: false,
+            error: product ? 'Produto indisponível.' : 'Produto não encontrado.',
+          };
+        }
+
+        const activeVariants = product.variants || [];
+        const hasActiveVariants = activeVariants.length > 0;
+
+        if (hasActiveVariants) {
+          // Regra de negócio: Produto com variantes ativas utiliza EXCLUSIVAMENTE o estoque da variante
+          if (!item.variantId) {
+            isValid = false;
+            return {
+              productId: item.productId,
+              variantId: null,
+              requestedQuantity: item.quantity,
+              availableStock: 0,
+              inStock: false,
+              error: 'O produto possui variantes. É obrigatório selecionar uma opção válida.',
+            };
+          }
+
+          const variant = activeVariants.find((v) => v.id === item.variantId);
+          if (!variant) {
+            isValid = false;
+            return {
+              productId: item.productId,
+              variantId: item.variantId,
+              requestedQuantity: item.quantity,
+              availableStock: 0,
+              inStock: false,
+              error: 'Esta variante não está disponível.',
+            };
+          }
+
+          const inv = await this.prisma.inventory.findFirst({
+            where: {
+              productId: product.id,
+              variantId: variant.id,
+            },
+          });
+
+          const qty = inv?.quantity ?? 0;
+          const reserved = inv?.reservedQuantity ?? 0;
+          const availableStock = Math.max(0, qty - reserved);
+
+          if (availableStock <= 0) {
+            isValid = false;
+            return {
+              productId: item.productId,
+              variantId: item.variantId,
+              requestedQuantity: item.quantity,
+              availableStock: 0,
+              inStock: false,
+              error: 'Esta variante está esgotada.',
+            };
+          }
+
+          if (item.quantity > availableStock) {
+            isValid = false;
+            return {
+              productId: item.productId,
+              variantId: item.variantId,
+              requestedQuantity: item.quantity,
+              availableStock,
+              inStock: false,
+              error: 'Quantidade solicitada indisponível em estoque.',
+            };
+          }
+
+          return {
+            productId: item.productId,
+            variantId: item.variantId,
+            requestedQuantity: item.quantity,
+            availableStock,
+            inStock: true,
+            error: null,
+          };
+        } else {
+          // Produto sem variantes: usa estoque do produto-pai (variantId: null)
+          const inv = await this.prisma.inventory.findFirst({
+            where: {
+              productId: product.id,
+              variantId: null,
+            },
+          });
+
+          const qty = inv?.quantity ?? 0;
+          const reserved = inv?.reservedQuantity ?? 0;
+          const availableStock = Math.max(0, qty - reserved);
+
+          if (availableStock <= 0) {
+            isValid = false;
+            return {
+              productId: item.productId,
+              variantId: null,
+              requestedQuantity: item.quantity,
+              availableStock: 0,
+              inStock: false,
+              error: 'Este produto está esgotado.',
+            };
+          }
+
+          if (item.quantity > availableStock) {
+            isValid = false;
+            return {
+              productId: item.productId,
+              variantId: null,
+              requestedQuantity: item.quantity,
+              availableStock,
+              inStock: false,
+              error: 'Quantidade solicitada indisponível em estoque.',
+            };
+          }
+
+          return {
+            productId: item.productId,
+            variantId: null,
+            requestedQuantity: item.quantity,
+            availableStock,
+            inStock: true,
+            error: null,
+          };
+        }
+      }),
+    );
+
+    return {
+      isValid,
+      items: validatedItems,
+    };
   }
 
   async getCatalogBySlug(slug: string) {
@@ -347,5 +639,65 @@ export class PublicStoreService {
         children: { where: { status: 'ACTIVE' } },
       },
     });
+  }
+
+  // Consolidação Arquitetural: Identidade pública contextualizada pelo Nicho
+  async getStoreContext(identifier?: string) {
+    let niche = null;
+
+    if (identifier?.trim()) {
+      niche = await this.prisma.niche.findFirst({
+        where: {
+          OR: [{ id: identifier.trim() }, { slug: identifier.trim() }],
+          status: 'ACTIVE',
+        },
+        include: {
+          defaultTheme: true,
+          catalogs: {
+            where: { status: 'ACTIVE' },
+            take: 1,
+            include: { theme: true },
+          },
+        },
+      });
+    }
+
+    if (!niche) {
+      // Fallback para primeiro nicho ativo
+      niche = await this.prisma.niche.findFirst({
+        where: { status: 'ACTIVE' },
+        include: {
+          defaultTheme: true,
+          catalogs: {
+            where: { status: 'ACTIVE' },
+            take: 1,
+            include: { theme: true },
+          },
+        },
+      });
+    }
+
+    if (!niche) {
+      return {
+        brandName: null,
+        nicheId: null,
+        nicheSlug: null,
+        logoUrl: null,
+        faviconUrl: null,
+        theme: null,
+      };
+    }
+
+    const theme = niche.defaultTheme || niche.catalogs?.[0]?.theme || null;
+
+    return {
+      nicheId: niche.id,
+      nicheSlug: niche.slug,
+      nicheName: niche.name,
+      brandName: niche.brandName || niche.name,
+      logoUrl: niche.logoUrl || theme?.logo || null,
+      faviconUrl: niche.faviconUrl || null,
+      theme,
+    };
   }
 }

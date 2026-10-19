@@ -324,13 +324,50 @@ export class PaymentService {
 
   /**
    * Payment confirmed: Payment PAID -> Order CONFIRMED -> F7 stock deduct -> F6 affiliate
+   * REGRA OBRIGATÓRIA:
+   * 1. A transação Prisma abrange apenas as operações internas de banco (Order CONFIRMED + Estoque).
+   * 2. Pedido CANCELLED por expiração de 24 horas JAMAIS volta para CONFIRMED.
    */
   private async handlePaymentSuccess(payment: Payment, order: any) {
-    if (order.status !== OrderStatus.CONFIRMED) {
-      await this.prisma.order.update({
-        where: { id: order.id },
-        data: { status: OrderStatus.CONFIRMED },
+    // 1. Guard contra reativação indevida de pedido CANCELLED/EXPIRADO (Regra Obrigatória 3)
+    if (order.status === OrderStatus.CANCELLED) {
+      this.logger.warn(
+        `Pagamento ${payment.id} recebido para o pedido #${order.id}, porém o pedido já está CANCELLED por expiração de 24h. Reconfirmação bloqueada para evitar venda duplicada sem estoque.`,
+      );
+      await this.auditLog.log({
+        action: 'PAYMENT_RECEIVED_AFTER_EXPIRATION',
+        entity: 'Payment',
+        entityId: payment.id,
+        metadata: {
+          orderId: order.id,
+          orderStatus: order.status,
+          paymentId: payment.id,
+          amount: payment.amount,
+          reason: 'Pagamento recebido após expiração/cancelamento do pedido',
+        },
       });
+      return;
+    }
+
+    if (order.status !== OrderStatus.CONFIRMED) {
+      // Executa a confirmação do pedido e a baixa definitiva de estoque dentro de uma única transação atômica interna
+      if (typeof this.prisma.$transaction === 'function') {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.order.update({
+            where: { id: order.id },
+            data: { status: OrderStatus.CONFIRMED },
+          });
+
+          // Deduct stock idempotently (reduz simultaneamente quantity e reservedQuantity)
+          await this.inventoryService.handleOrderConfirmed(order.id, tx);
+        });
+      } else {
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: { status: OrderStatus.CONFIRMED },
+        });
+        await this.inventoryService.handleOrderConfirmed(order.id);
+      }
 
       await this.auditLog.log({
         action: 'PAYMENT_PAID',
@@ -338,9 +375,6 @@ export class PaymentService {
         entityId: payment.id,
         metadata: { orderId: order.id, amount: payment.amount },
       });
-
-      // Deduct stock idempotently
-      await this.inventoryService.handleOrderConfirmed(order.id);
 
       // Affiliate conversion update
       await this.affiliateService.handleOrderStatusChanged(order.id, OrderStatus.CONFIRMED);

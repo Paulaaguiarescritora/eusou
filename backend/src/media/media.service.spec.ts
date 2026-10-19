@@ -4,6 +4,9 @@ import { PrismaService } from '../prisma.service';
 import { AuditLogService } from '../audit-log.service';
 import { BadRequestException } from '@nestjs/common';
 import { MediaType } from '@prisma/client';
+import * as fs from 'fs';
+import * as path from 'path';
+const sharp = require('sharp');
 
 describe('MediaService', () => {
   let service: MediaService;
@@ -163,5 +166,224 @@ describe('MediaService', () => {
     expect(auditLog.log).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'MEDIA_DELETED' }),
     );
+  });
+
+  describe('Otimização Automática de Imagens para WebP', () => {
+    const createdFilesToClean: string[] = [];
+
+    afterAll(() => {
+      // Limpeza de arquivos criados durante os testes
+      for (const f of createdFilesToClean) {
+        if (fs.existsSync(f)) {
+          try {
+            fs.unlinkSync(f);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    });
+
+    it('1. Deve converter JPG para WebP mantendo dimensões originais e salvando original', async () => {
+      const width = 400;
+      const height = 300;
+      const jpgBuf = await sharp({
+        create: {
+          width,
+          height,
+          channels: 3,
+          background: { r: 255, g: 120, b: 50 },
+        },
+      })
+        .jpeg({ quality: 90 })
+        .toBuffer();
+
+      const base64 = `data:image/jpeg;base64,${jpgBuf.toString('base64')}`;
+
+      const media = await service.uploadBase64(
+        'prod-1',
+        base64,
+        'foto-produto.jpg',
+        true,
+        'admin-user',
+      );
+
+      // Produto deve apontar para a versão WebP
+      expect(media.url).toMatch(/\.webp$/);
+      expect(media.isPrimary).toBe(true);
+      expect(media.title).toMatch(/-orig\.jpg$/);
+
+      // Validar arquivo WebP no disco
+      const webpPath = path.join(
+        process.cwd(),
+        'uploads',
+        'products',
+        path.basename(media.url),
+      );
+      createdFilesToClean.push(webpPath);
+      expect(fs.existsSync(webpPath)).toBe(true);
+
+      const webpMeta = await sharp(webpPath).metadata();
+      expect(webpMeta.format).toBe('webp');
+      expect(webpMeta.width).toBe(width);
+      expect(webpMeta.height).toBe(height);
+
+      // Validar que o original foi preservado no disco
+      const origPath = path.join(
+        process.cwd(),
+        'uploads',
+        'products',
+        media.title!,
+      );
+      createdFilesToClean.push(origPath);
+      expect(fs.existsSync(origPath)).toBe(true);
+
+      const origMeta = await sharp(origPath).metadata();
+      expect(origMeta.format).toBe('jpeg');
+      expect(origMeta.width).toBe(width);
+      expect(origMeta.height).toBe(height);
+    });
+
+    it('2. Deve converter JPEG para WebP', async () => {
+      const width = 250;
+      const height = 150;
+      const jpegBuf = await sharp({
+        create: {
+          width,
+          height,
+          channels: 3,
+          background: { r: 50, g: 150, b: 250 },
+        },
+      })
+        .jpeg()
+        .toBuffer();
+
+      const base64 = `data:image/jpeg;base64,${jpegBuf.toString('base64')}`;
+
+      const media = await service.uploadBase64(
+        'prod-1',
+        base64,
+        'bolinha.jpeg',
+        false,
+        'admin-user',
+      );
+
+      expect(media.url).toMatch(/\.webp$/);
+      const webpPath = path.join(
+        process.cwd(),
+        'uploads',
+        'products',
+        path.basename(media.url),
+      );
+      createdFilesToClean.push(webpPath);
+      if (media.title) {
+        createdFilesToClean.push(
+          path.join(process.cwd(), 'uploads', 'products', media.title),
+        );
+      }
+
+      const webpMeta = await sharp(webpPath).metadata();
+      expect(webpMeta.format).toBe('webp');
+      expect(webpMeta.width).toBe(width);
+      expect(webpMeta.height).toBe(height);
+    });
+
+    it('3. Deve converter PNG para WebP mantendo dimensões', async () => {
+      const width = 350;
+      const height = 200;
+      const pngBuf = await sharp({
+        create: {
+          width,
+          height,
+          channels: 3,
+          background: { r: 0, g: 200, b: 100 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      const base64 = `data:image/png;base64,${pngBuf.toString('base64')}`;
+
+      const media = await service.uploadBase64(
+        'prod-1',
+        base64,
+        'logo.png',
+        false,
+        'admin-user',
+      );
+
+      expect(media.url).toMatch(/\.webp$/);
+      const webpPath = path.join(
+        process.cwd(),
+        'uploads',
+        'products',
+        path.basename(media.url),
+      );
+      createdFilesToClean.push(webpPath);
+      if (media.title) {
+        createdFilesToClean.push(
+          path.join(process.cwd(), 'uploads', 'products', media.title),
+        );
+      }
+
+      const webpMeta = await sharp(webpPath).metadata();
+      expect(webpMeta.format).toBe('webp');
+      expect(webpMeta.width).toBe(width);
+      expect(webpMeta.height).toBe(height);
+    });
+
+    it('4. Deve preservar canal alfa / transparência ao converter PNG transparente para WebP', async () => {
+      const width = 120;
+      const height = 120;
+      const transparentPngBuf = await sharp({
+        create: {
+          width,
+          height,
+          channels: 4,
+          background: { r: 255, g: 0, b: 0, alpha: 0.4 },
+        },
+      })
+        .png()
+        .toBuffer();
+
+      const base64 = `data:image/png;base64,${transparentPngBuf.toString('base64')}`;
+
+      const media = await service.uploadBase64(
+        'prod-1',
+        base64,
+        'transparente.png',
+        false,
+      );
+
+      const webpPath = path.join(
+        process.cwd(),
+        'uploads',
+        'products',
+        path.basename(media.url),
+      );
+      createdFilesToClean.push(webpPath);
+      if (media.title) {
+        createdFilesToClean.push(
+          path.join(process.cwd(), 'uploads', 'products', media.title),
+        );
+      }
+
+      const webpMeta = await sharp(webpPath).metadata();
+      expect(webpMeta.format).toBe('webp');
+      expect(webpMeta.hasAlpha).toBe(true);
+      expect(webpMeta.width).toBe(width);
+      expect(webpMeta.height).toBe(height);
+    });
+
+    it('5. Imagens antigas criadas diretamente com URL continuam funcionando normalmente', async () => {
+      const legacyMedia = await service.create('prod-1', {
+        type: MediaType.IMAGE,
+        url: 'https://cdn.exemplo.com/antiga.png',
+        isPrimary: false,
+      });
+
+      expect(legacyMedia.url).toBe('https://cdn.exemplo.com/antiga.png');
+      expect(legacyMedia.type).toBe('IMAGE');
+    });
   });
 });

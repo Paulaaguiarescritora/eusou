@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { HealthController } from './health.controller';
 import { InfoController } from './info.controller';
 import { AuthModule } from './auth/auth.module';
@@ -24,12 +25,14 @@ import { ProductionModule } from './production/production.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
 import { PricingModule } from './pricing/pricing.module';
 import { PaymentModule } from './payment/payment.module';
+import { ImportModule } from './import/import.module';
 import { PrismaService } from './prisma.service';
 import { AuditLogService } from './audit-log.service';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     AuthModule,
     UserModule,
     ProductModule,
@@ -52,6 +55,7 @@ import { AuditLogService } from './audit-log.service';
     ProductionModule,
     MarketplaceModule,
     PricingModule,
+    ImportModule,
   ],
   controllers: [HealthController, InfoController],
   providers: [PrismaService, AuditLogService],

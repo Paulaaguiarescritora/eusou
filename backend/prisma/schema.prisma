@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // User and Auth models (Fase 1)
@@ -66,18 +67,26 @@ enum ProductStatus {
   ARCHIVED
 }
 
+enum ProductCostSource {
+  COST_FROM_F7
+  MANUAL
+}
+
 model Product {
-  id               String        @id @default(uuid())
+  id               String            @id @default(uuid())
   name             String
-  slug             String        @unique
-  sku              String?       @unique
+  slug             String            @unique
+  sku              String?           @unique
   shortDescription String?
   description      String?
-  status           ProductStatus @default(DRAFT)
+  status           ProductStatus     @default(DRAFT)
   brand            String?
-  basePrice        Decimal?      @db.Decimal(10, 2)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  basePrice        Decimal?          @db.Decimal(10, 2)
+  costSource       ProductCostSource @default(COST_FROM_F7)
+  manualCost       Decimal?          @db.Decimal(10, 2)
+  wholesalePrice   Decimal?          @db.Decimal(10, 2)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   // F2B relations
   attributeValues ProductAttributeValue[]
@@ -108,6 +117,7 @@ model Product {
 
   // F9 relations
   channelProducts    ChannelProduct[]
+  productChannels    ProductChannel[]
 
   // F12 relations
   productChannelPrices ProductChannelPrice[]
@@ -234,6 +244,19 @@ model Niche {
   products        ProductNiche[]
   catalogs        Catalog[]
   commissionRules CommissionRule[]
+
+  // Consolidação Arquitetural: Identidade pública contextualizada pelo Nicho
+  brandName       String?
+  logoUrl         String?
+  faviconUrl      String?
+  defaultThemeId  String?
+  defaultTheme    Theme?   @relation("NicheDefaultTheme", fields: [defaultThemeId], references: [id], onDelete: SetNull)
+
+  // Rastreabilidade de Pedidos e Preços contextuais
+  orders          Order[]
+  channelPrices   ProductChannelPrice[]
+
+  @@index([defaultThemeId])
 }
 
 enum CategoryStatus {
@@ -343,6 +366,7 @@ model Theme {
   updatedAt       DateTime    @updatedAt
 
   catalogs        Catalog[]
+  defaultNiches   Niche[]     @relation("NicheDefaultTheme")
 }
 
 
@@ -517,9 +541,22 @@ model Order {
   channelOrder    ChannelOrder?
   payments        Payment[]
 
+  // Consolidação Arquitetural: Origem Comercial do Pedido e Prazo de Pagamento (24h)
+  paymentDeadline DateTime?
+  nicheId         String?
+  channelId       String?
+  originDomain    String?
+  utmSource       String?
+
+  niche           Niche?      @relation(fields: [nicheId], references: [id], onDelete: SetNull)
+  channel         Channel?    @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
   @@index([customerEmail])
   @@index([status])
   @@index([affiliateCode])
+  @@index([nicheId])
+  @@index([channelId])
+  @@index([paymentDeadline])
 }
 
 enum PaymentStatus {
@@ -608,6 +645,7 @@ model Affiliate {
   code        String          @unique
   displayName String
   status      AffiliateStatus @default(ACTIVE)
+  defaultCommissionPercent Decimal? @default(10.00) @db.Decimal(5, 2)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
 
@@ -676,6 +714,7 @@ model AffiliateConversion {
   orderId          String           @unique
   amount           Decimal          @db.Decimal(10, 2)
   commissionAmount Decimal          @db.Decimal(10, 2)
+  appliedCommissionPercent Decimal? @db.Decimal(5, 2)
   status           ConversionStatus @default(PENDING)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
@@ -738,6 +777,7 @@ model Printer {
   updatedAt          DateTime      @updatedAt
 
   productionJobs     ProductionJob[]
+  productionProfiles ProductionProfile[]
 
   @@index([status])
 }
@@ -750,30 +790,39 @@ enum MaterialType {
   OTHER
 }
 
+enum MaterialCategory {
+  PRODUCTION
+  COMPONENT
+  PACKAGING
+}
+
 enum MaterialUnit {
   GRAM
   KILOGRAM
   METER
   PIECE
+  UNIT
 }
 
 model Material {
-  id              String        @id @default(uuid())
+  id              String           @id @default(uuid())
   name            String
-  type            MaterialType  @default(PLA)
+  type            MaterialType     @default(PLA)
+  category        MaterialCategory @default(PRODUCTION)
   color           String?
-  unit            MaterialUnit  @default(GRAM)
-  costPerUnit     Decimal       @db.Decimal(10, 4)
-  currentQuantity Decimal       @default(0) @db.Decimal(12, 3)
-  minimumQuantity Decimal       @default(0) @db.Decimal(12, 3)
-  isActive        Boolean       @default(true)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  unit            MaterialUnit     @default(GRAM)
+  costPerUnit     Decimal          @db.Decimal(10, 4)
+  currentQuantity Decimal          @default(0) @db.Decimal(12, 3)
+  minimumQuantity Decimal          @default(0) @db.Decimal(12, 3)
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   productionMaterials ProductionMaterial[]
   materialMovements   MaterialMovement[]
 
   @@index([type])
+  @@index([category])
   @@index([isActive])
 }
 
@@ -786,8 +835,10 @@ model ProductionProfile {
   id                     String         @id @default(uuid())
   productId              String?
   variantId              String?
+  printerId              String?
   productionMode         ProductionMode @default(STOCK)
   productionTimeMinutes  Int            @default(0)
+  productionTimeSeconds  Int?           @default(0)
   materialWeightGrams    Decimal        @default(0) @db.Decimal(10, 2)
   powerConsumptionWatts  Int            @default(0)
   finishingTimeMinutes   Int            @default(0)
@@ -801,10 +852,12 @@ model ProductionProfile {
 
   product                Product?       @relation(fields: [productId], references: [id], onDelete: Cascade)
   variant                ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  printer                Printer?       @relation(fields: [printerId], references: [id], onDelete: SetNull)
   materials              ProductionMaterial[]
 
   @@index([productId])
   @@index([variantId])
+  @@index([printerId])
   @@index([isActive])
 }
 
@@ -971,10 +1024,33 @@ model Channel {
   productChannelPrices     ProductChannelPrice[]
   marketplaceEvents        MarketplaceEvent[]
   channelOrders            ChannelOrder[]
+  orders                   Order[]
+  productChannels          ProductChannel[]
   attributeMappings        ChannelAttributeMapping[]
 
   @@index([type])
   @@index([isActive])
+}
+
+// ==========================================
+// CANAIS COMERCIAIS: DISPONIBILIDADE DIRETA N:N
+// ==========================================
+
+model ProductChannel {
+  id        String   @id @default(uuid())
+  productId String
+  channelId String
+  isEnabled Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, channelId])
+  @@index([productId])
+  @@index([channelId])
+  @@index([isEnabled])
 }
 
 enum ChannelAccountStatus {
@@ -1200,6 +1276,7 @@ model ProductChannelPrice {
   productId             String
   variantId             String?
   channelId             String
+  nicheId               String?
   pricingProfileId      String?
   mode                  PriceCalculationMode  @default(AUTOMATIC)
   costBasis             Decimal               @db.Decimal(10, 2)
@@ -1218,11 +1295,13 @@ model ProductChannelPrice {
   variant               ProductVariant?       @relation(fields: [variantId], references: [id], onDelete: Cascade)
   channel               Channel               @relation(fields: [channelId], references: [id], onDelete: Cascade)
   pricingProfile        PricingProfile?       @relation(fields: [pricingProfileId], references: [id], onDelete: SetNull)
+  niche                 Niche?                @relation(fields: [nicheId], references: [id], onDelete: SetNull)
 
-  @@unique([productId, channelId, variantId])
+  @@unique([productId, channelId, variantId, nicheId])
   @@index([productId])
   @@index([variantId])
   @@index([channelId])
+  @@index([nicheId])
   @@index([pricingProfileId])
   @@index([mode])
 }

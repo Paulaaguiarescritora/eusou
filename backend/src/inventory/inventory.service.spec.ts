@@ -140,6 +140,87 @@ describe('InventoryService', () => {
       });
     });
 
+    it('should deduct ONLY variant stock (Rosa), leaving other variants untouched', async () => {
+      prisma.stockMovement.findFirst.mockResolvedValue(null);
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-gat-rosa',
+        items: [
+          {
+            productId: 'prod-gat',
+            variantId: 'var-rosa',
+            quantity: 1,
+            productNameSnapshot: 'Porta Chaves Gatinho Felinodelia - Rosa',
+          },
+        ],
+      });
+      prisma.inventory.findFirst.mockImplementation((args: any) => {
+        if (args.where.variantId === 'var-rosa') {
+          return Promise.resolve({
+            id: 'inv-var-rosa',
+            productId: 'prod-gat',
+            variantId: 'var-rosa',
+            quantity: 5,
+            reservedQuantity: 0,
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      await service.handleOrderConfirmed('order-gat-rosa');
+
+      expect(prisma.inventory.update).toHaveBeenCalledWith({
+        where: { id: 'inv-var-rosa' },
+        data: { quantity: 4 },
+      });
+      expect(prisma.stockMovement.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          productId: 'prod-gat',
+          variantId: 'var-rosa',
+          type: StockMovementType.OUT,
+          quantity: -1,
+        }),
+      });
+    });
+
+    it('should throw BadRequestException and block when variant stock is insufficient', async () => {
+      prisma.stockMovement.findFirst.mockResolvedValue(null);
+      prisma.order.findUnique.mockResolvedValue({
+        id: 'order-insufficient',
+        items: [
+          {
+            productId: 'prod-gat',
+            variantId: 'var-rosa',
+            quantity: 3,
+            productNameSnapshot: 'Porta Chaves Gatinho Felinodelia - Rosa',
+          },
+        ],
+      });
+      prisma.inventory.findFirst.mockResolvedValue({
+        id: 'inv-var-rosa',
+        productId: 'prod-gat',
+        variantId: 'var-rosa',
+        quantity: 2,
+        reservedQuantity: 0,
+      });
+
+      await expect(
+        service.handleOrderConfirmed('order-insufficient'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should be idempotent and not deduct stock twice for the same confirmed order', async () => {
+      prisma.stockMovement.findFirst.mockResolvedValue({
+        id: 'existing-out-movement',
+        referenceId: 'order-already-processed',
+        type: StockMovementType.OUT,
+      });
+
+      await service.handleOrderConfirmed('order-already-processed');
+
+      expect(prisma.inventory.update).not.toHaveBeenCalled();
+      expect(prisma.stockMovement.create).not.toHaveBeenCalled();
+    });
+
     it('should return stock on order cancellation', async () => {
       // First check: no return movement yet
       prisma.stockMovement.findMany.mockResolvedValue([
@@ -199,6 +280,121 @@ describe('InventoryService', () => {
           referenceId: 'job-1',
         }),
       });
+    });
+  });
+
+  describe('getInventory — Regra Operacional de Variantes e Produto-Pai', () => {
+    it('1. produto com variantes não deve retornar variantId: null (oculta registro do pai e lista apenas variantes)', async () => {
+      // Simula Bolinha de Purga / Gatinho com registro pai e 2 variantes
+      prisma.inventory.findMany.mockResolvedValue([
+        {
+          id: 'inv-parent',
+          productId: 'prod-bol',
+          variantId: null,
+          quantity: 0,
+          reservedQuantity: 0,
+          minimumQuantity: 5,
+          product: {
+            id: 'prod-bol',
+            name: 'Bolinha de Purga',
+            sku: 'FEL-BOL-001',
+            status: 'ACTIVE',
+            variants: [
+              { id: 'var-azul', name: 'Azul', sku: 'FEL-BOL-001-az', isActive: true },
+              { id: 'var-preta', name: 'Preta', sku: 'FEL-BOL-001-pt', isActive: true },
+            ],
+          },
+          variant: null,
+        },
+        {
+          id: 'inv-azul',
+          productId: 'prod-bol',
+          variantId: 'var-azul',
+          quantity: 3,
+          reservedQuantity: 0,
+          minimumQuantity: 0,
+          product: {
+            id: 'prod-bol',
+            name: 'Bolinha de Purga',
+            sku: 'FEL-BOL-001',
+            status: 'ACTIVE',
+            variants: [
+              { id: 'var-azul', name: 'Azul', sku: 'FEL-BOL-001-az', isActive: true },
+              { id: 'var-preta', name: 'Preta', sku: 'FEL-BOL-001-pt', isActive: true },
+            ],
+          },
+          variant: { id: 'var-azul', name: 'Azul', sku: 'FEL-BOL-001-az', isActive: true },
+        },
+        {
+          id: 'inv-preta',
+          productId: 'prod-bol',
+          variantId: 'var-preta',
+          quantity: 4,
+          reservedQuantity: 0,
+          minimumQuantity: 0,
+          product: {
+            id: 'prod-bol',
+            name: 'Bolinha de Purga',
+            sku: 'FEL-BOL-001',
+            status: 'ACTIVE',
+            variants: [
+              { id: 'var-azul', name: 'Azul', sku: 'FEL-BOL-001-az', isActive: true },
+              { id: 'var-preta', name: 'Preta', sku: 'FEL-BOL-001-pt', isActive: true },
+            ],
+          },
+          variant: { id: 'var-preta', name: 'Preta', sku: 'FEL-BOL-001-pt', isActive: true },
+        },
+      ]);
+
+      const result = await service.getInventory({});
+
+      // Deve listar apenas as 2 variantes
+      expect(result.data.length).toBe(2);
+      expect(result.data.some((i: any) => i.variantId === null)).toBe(false);
+      expect(result.data.some((i: any) => i.id === 'inv-parent')).toBe(false);
+      expect(result.data.map((i: any) => i.variantId)).toEqual(['var-azul', 'var-preta']);
+      expect(result.meta.total).toBe(2);
+    });
+
+    it('2. produto sem variantes continua retornando variantId: null (usa estoque próprio do produto)', async () => {
+      // Produto simples sem variantes
+      prisma.inventory.findMany.mockResolvedValue([
+        {
+          id: 'inv-simples',
+          productId: 'prod-simples',
+          variantId: null,
+          quantity: 10,
+          reservedQuantity: 2,
+          minimumQuantity: 3,
+          product: {
+            id: 'prod-simples',
+            name: 'Produto Simples Sem Variantes',
+            sku: 'SIMP-001',
+            status: 'ACTIVE',
+            variants: [], // sem variantes
+          },
+          variant: null,
+        },
+      ]);
+
+      const result = await service.getInventory({});
+
+      expect(result.data.length).toBe(1);
+      expect(result.data[0].id).toBe('inv-simples');
+      expect(result.data[0].variantId).toBeNull();
+      expect(result.data[0].quantity).toBe(10);
+      expect(result.data[0].availableQuantity).toBe(8);
+      expect(result.meta.total).toBe(1);
+    });
+
+    it('3. nenhuma alteração de estoque é feita durante a listagem (read-only)', async () => {
+      prisma.inventory.findMany.mockResolvedValue([]);
+
+      await service.getInventory({});
+
+      expect(prisma.inventory.update).not.toHaveBeenCalled();
+      expect(prisma.inventory.create).not.toHaveBeenCalled();
+      expect(prisma.stockMovement.create).not.toHaveBeenCalled();
     });
   });
 });

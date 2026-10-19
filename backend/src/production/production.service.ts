@@ -10,6 +10,7 @@ import {
   PrinterStatus,
   ProductionJobStatus,
   MaterialType,
+  MaterialCategory,
   MaterialUnit,
   MaterialMovementType,
   ProductionMode,
@@ -35,6 +36,7 @@ export interface UpdatePrinterDto {
 export interface CreateMaterialDto {
   name: string;
   type?: MaterialType;
+  category?: MaterialCategory;
   color?: string;
   unit?: MaterialUnit;
   costPerUnit: number;
@@ -45,6 +47,7 @@ export interface CreateMaterialDto {
 export interface UpdateMaterialDto {
   name?: string;
   type?: MaterialType;
+  category?: MaterialCategory;
   color?: string;
   unit?: MaterialUnit;
   costPerUnit?: number;
@@ -61,8 +64,10 @@ export interface AdjustMaterialDto {
 export interface CreateProductionProfileDto {
   productId?: string;
   variantId?: string;
+  printerId?: string;
   productionMode?: ProductionMode;
   productionTimeMinutes?: number;
+  productionTimeSeconds?: number;
   materialWeightGrams?: number;
   powerConsumptionWatts?: number;
   finishingTimeMinutes?: number;
@@ -70,6 +75,27 @@ export interface CreateProductionProfileDto {
   packagingCost?: number;
   laborCost?: number;
   notes?: string;
+  materials?: {
+    materialId: string;
+    quantity: number;
+    unit?: MaterialUnit;
+    notes?: string;
+  }[];
+}
+
+export interface UpdateProductionProfileDto {
+  printerId?: string;
+  productionMode?: ProductionMode;
+  productionTimeMinutes?: number;
+  productionTimeSeconds?: number;
+  materialWeightGrams?: number;
+  powerConsumptionWatts?: number;
+  finishingTimeMinutes?: number;
+  finishingCost?: number;
+  packagingCost?: number;
+  laborCost?: number;
+  notes?: string;
+  isActive?: boolean;
   materials?: {
     materialId: string;
     quantity: number;
@@ -207,8 +233,15 @@ export class ProductionService {
   // MATERIALS
   // ==========================================
 
-  async getMaterials() {
+  async getMaterials(query?: {
+    activeOnly?: boolean;
+    category?: MaterialCategory;
+  }) {
+    const where: any = {};
+    if (query?.activeOnly) where.isActive = true;
+    if (query?.category) where.category = query.category;
     return this.prisma.material.findMany({
+      where,
       orderBy: { name: 'asc' },
     });
   }
@@ -238,6 +271,7 @@ export class ProductionService {
       data: {
         name: dto.name.trim(),
         type: dto.type || MaterialType.PLA,
+        category: dto.category || MaterialCategory.PRODUCTION,
         color: dto.color?.trim() || null,
         unit: dto.unit || MaterialUnit.GRAM,
         costPerUnit: dto.costPerUnit,
@@ -265,7 +299,7 @@ export class ProductionService {
       entity: 'Material',
       entityId: material.id,
       userId: userId ?? null,
-      metadata: { name: material.name, type: material.type },
+      metadata: { name: material.name, type: material.type, category: material.category },
     });
 
     return material;
@@ -279,6 +313,7 @@ export class ProductionService {
       data: {
         name: dto.name?.trim(),
         type: dto.type,
+        category: dto.category,
         color: dto.color?.trim(),
         unit: dto.unit,
         costPerUnit: dto.costPerUnit,
@@ -293,6 +328,102 @@ export class ProductionService {
       entityId: updated.id,
       userId: userId ?? null,
       metadata: { name: updated.name },
+    });
+
+    return updated;
+  }
+
+  /**
+   * Exclusão segura de material:
+   * Se já estiver associado a fichas técnicas ou movimentações de estoque,
+   * NÃO apagar fisicamente — arquivar/desativar com segurança (isActive = false).
+   * Se nunca tiver sido utilizado, permitir exclusão definitiva.
+   */
+  async deleteMaterial(id: string, userId?: string) {
+    const material = await this.getMaterialById(id);
+
+    const [usageCount, movementCount] = await Promise.all([
+      this.prisma.productionMaterial.count({ where: { materialId: id } }),
+      this.prisma.materialMovement.count({ where: { materialId: id } }),
+    ]);
+
+    if (usageCount > 0 || movementCount > 0) {
+      const archived = await this.prisma.material.update({
+        where: { id },
+        data: { isActive: false },
+      });
+
+      await this.auditLog.log({
+        action: 'MATERIAL_ARCHIVED',
+        entity: 'Material',
+        entityId: id,
+        userId: userId ?? null,
+        metadata: {
+          name: material.name,
+          reason: 'Material em uso arquivado com segurança (histórico preservado)',
+          usageCount,
+          movementCount,
+        },
+      });
+
+      return {
+        success: true,
+        archived: true,
+        deleted: false,
+        message: 'Material possui histórico de uso e foi arquivado/desativado com segurança.',
+        material: archived,
+      };
+    }
+
+    await this.prisma.material.delete({ where: { id } });
+
+    await this.auditLog.log({
+      action: 'MATERIAL_DELETED',
+      entity: 'Material',
+      entityId: id,
+      userId: userId ?? null,
+      metadata: { name: material.name },
+    });
+
+    return {
+      success: true,
+      archived: false,
+      deleted: true,
+      message: 'Material sem histórico excluído definitivamente.',
+    };
+  }
+
+  async archiveMaterial(id: string, userId?: string) {
+    const material = await this.getMaterialById(id);
+    const updated = await this.prisma.material.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    await this.auditLog.log({
+      action: 'MATERIAL_ARCHIVED',
+      entity: 'Material',
+      entityId: id,
+      userId: userId ?? null,
+      metadata: { name: material.name },
+    });
+
+    return updated;
+  }
+
+  async reactivateMaterial(id: string, userId?: string) {
+    const material = await this.getMaterialById(id);
+    const updated = await this.prisma.material.update({
+      where: { id },
+      data: { isActive: true },
+    });
+
+    await this.auditLog.log({
+      action: 'MATERIAL_REACTIVATED',
+      entity: 'Material',
+      entityId: id,
+      userId: userId ?? null,
+      metadata: { name: material.name },
     });
 
     return updated;
@@ -372,12 +503,23 @@ export class ProductionService {
   // PRODUCTION PROFILES & COST ESTIMATION
   // ==========================================
 
-  async getProductionProfiles() {
+  async getProductionProfiles(query?: {
+    productId?: string;
+    variantId?: string;
+  }) {
+    const where: any = {};
+    if (query?.productId) where.productId = query.productId;
+    if (query?.variantId) where.variantId = query.variantId;
+
     return this.prisma.productionProfile.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         product: { select: { id: true, name: true, sku: true } },
         variant: { select: { id: true, name: true, sku: true } },
+        printer: {
+          select: { id: true, name: true, model: true, machineCostPerHour: true },
+        },
         materials: { include: { material: true } },
       },
     });
@@ -389,6 +531,7 @@ export class ProductionService {
       include: {
         product: true,
         variant: true,
+        printer: true,
         materials: { include: { material: true } },
       },
     });
@@ -426,12 +569,60 @@ export class ProductionService {
       }
     }
 
+    if (dto.printerId) {
+      const printer = await this.prisma.printer.findUnique({
+        where: { id: dto.printerId },
+      });
+      if (!printer) throw new NotFoundException('Impressora não encontrada');
+    }
+
+    // Check if profile already exists for this product / variant
+    const existing = await this.prisma.productionProfile.findFirst({
+      where: {
+        productId: dto.productId || null,
+        variantId: dto.variantId || null,
+      },
+    });
+
+    const totalSeconds =
+      dto.productionTimeSeconds !== undefined && dto.productionTimeSeconds !== null
+        ? dto.productionTimeSeconds
+        : (dto.productionTimeMinutes ?? 0) * 60;
+
+    const totalMinutes =
+      dto.productionTimeMinutes !== undefined && dto.productionTimeMinutes !== null
+        ? dto.productionTimeMinutes
+        : Math.round(totalSeconds / 60);
+
+    if (existing) {
+      return this.updateProductionProfile(
+        existing.id,
+        {
+          printerId: dto.printerId,
+          productionMode: dto.productionMode,
+          productionTimeMinutes: totalMinutes,
+          productionTimeSeconds: totalSeconds,
+          materialWeightGrams: dto.materialWeightGrams,
+          powerConsumptionWatts: dto.powerConsumptionWatts,
+          finishingTimeMinutes: dto.finishingTimeMinutes,
+          finishingCost: dto.finishingCost,
+          packagingCost: dto.packagingCost,
+          laborCost: dto.laborCost,
+          notes: dto.notes,
+          materials: dto.materials,
+        },
+        userId,
+      );
+    }
+
     const profile = await this.prisma.productionProfile.create({
       data: {
         productId: dto.productId || null,
         variantId: dto.variantId || null,
+        printerId: dto.printerId || null,
         productionMode: dto.productionMode || ProductionMode.STOCK,
-        productionTimeMinutes: dto.productionTimeMinutes ?? 0,
+        productionTimeMinutes: totalMinutes,
+        productionTimeSeconds: totalSeconds,
         materialWeightGrams: dto.materialWeightGrams ?? 0,
         powerConsumptionWatts: dto.powerConsumptionWatts ?? 0,
         finishingTimeMinutes: dto.finishingTimeMinutes ?? 0,
@@ -450,6 +641,9 @@ export class ProductionService {
         },
       },
       include: {
+        product: true,
+        variant: true,
+        printer: true,
         materials: { include: { material: true } },
       },
     });
@@ -465,83 +659,325 @@ export class ProductionService {
     return profile;
   }
 
+  async updateProductionProfile(
+    id: string,
+    dto: UpdateProductionProfileDto,
+    userId?: string,
+  ) {
+    const existing = await this.getProductionProfileById(id);
+
+    if (dto.printerId) {
+      const printer = await this.prisma.printer.findUnique({
+        where: { id: dto.printerId },
+      });
+      if (!printer) throw new NotFoundException('Impressora não encontrada');
+    }
+
+    const totalSeconds =
+      dto.productionTimeSeconds !== undefined && dto.productionTimeSeconds !== null
+        ? dto.productionTimeSeconds
+        : dto.productionTimeMinutes !== undefined && dto.productionTimeMinutes !== null
+        ? dto.productionTimeMinutes * 60
+        : existing.productionTimeSeconds || (existing.productionTimeMinutes * 60);
+
+    const totalMinutes =
+      dto.productionTimeMinutes !== undefined && dto.productionTimeMinutes !== null
+        ? dto.productionTimeMinutes
+        : Math.round(totalSeconds / 60);
+
+    return this.prisma.$transaction(async (tx) => {
+      if (dto.materials) {
+        await tx.productionMaterial.deleteMany({
+          where: { productionProfileId: id },
+        });
+
+        await tx.productionMaterial.createMany({
+          data: dto.materials.map((m) => ({
+            productionProfileId: id,
+            materialId: m.materialId,
+            quantity: m.quantity,
+            unit: m.unit || MaterialUnit.GRAM,
+            notes: m.notes?.trim() || null,
+          })),
+        });
+      }
+
+      const updated = await tx.productionProfile.update({
+        where: { id },
+        data: {
+          printerId: dto.printerId !== undefined ? dto.printerId : existing.printerId,
+          productionMode:
+            dto.productionMode !== undefined
+              ? dto.productionMode
+              : existing.productionMode,
+          productionTimeMinutes: totalMinutes,
+          productionTimeSeconds: totalSeconds,
+          materialWeightGrams:
+            dto.materialWeightGrams !== undefined
+              ? dto.materialWeightGrams
+              : existing.materialWeightGrams,
+          powerConsumptionWatts:
+            dto.powerConsumptionWatts !== undefined
+              ? dto.powerConsumptionWatts
+              : existing.powerConsumptionWatts,
+          finishingTimeMinutes:
+            dto.finishingTimeMinutes !== undefined
+              ? dto.finishingTimeMinutes
+              : existing.finishingTimeMinutes,
+          finishingCost:
+            dto.finishingCost !== undefined
+              ? dto.finishingCost
+              : existing.finishingCost,
+          packagingCost:
+            dto.packagingCost !== undefined
+              ? dto.packagingCost
+              : existing.packagingCost,
+          laborCost:
+            dto.laborCost !== undefined ? dto.laborCost : existing.laborCost,
+          notes:
+            dto.notes !== undefined
+              ? dto.notes?.trim() || null
+              : existing.notes,
+          isActive: dto.isActive !== undefined ? dto.isActive : existing.isActive,
+        },
+        include: {
+          product: true,
+          variant: true,
+          printer: true,
+          materials: { include: { material: true } },
+        },
+      });
+
+      await this.auditLog.log({
+        action: 'PRODUCTION_PROFILE_UPDATED',
+        entity: 'ProductionProfile',
+        entityId: id,
+        userId: userId ?? null,
+        metadata: { productId: updated.productId },
+      });
+
+      return updated;
+    });
+  }
+
   /**
-   * Calculate detailed estimated cost breakdown for a profile or job
+   * Cálculo Simplificado e Preciso do Custo de Produção F7:
+   * FILAMENTO + MÁQUINA + MATERIAIS ADICIONAIS + EMBALAGEM = CUSTO TOTAL DE PRODUÇÃO
    */
   async calculateEstimatedCost(
     profileId: string,
     quantity: number = 1,
     printerId?: string,
   ): Promise<{
+    filamentCost: number;
+    machineCost: number;
+    additionalMaterialsCost: number;
+    packagingCost: number;
     materialCost: number;
     energyCost: number;
-    machineCost: number;
     finishingCost: number;
-    packagingCost: number;
     laborCost: number;
     totalCost: number;
     isPartial: boolean;
+    breakdown: {
+      filament: Array<{
+        materialId: string;
+        name: string;
+        quantity: number;
+        unit: string;
+        costPerUnit: number;
+        totalCost: number;
+      }>;
+      additionalMaterials: Array<{
+        materialId: string;
+        name: string;
+        quantity: number;
+        unit: string;
+        costPerUnit: number;
+        totalCost: number;
+      }>;
+      packaging: Array<{
+        materialId: string;
+        name: string;
+        quantity: number;
+        unit: string;
+        costPerUnit: number;
+        totalCost: number;
+      }>;
+      machine: {
+        printerId?: string;
+        printerName?: string;
+        hours: number;
+        ratePerHour: number;
+        totalCost: number;
+        timeFormatted: string;
+      };
+    };
   }> {
     const profile = await this.getProductionProfileById(profileId);
 
-    // 1. Material Cost
-    let materialCost = 0;
+    // 1. Classificação e Cálculo dos Materiais
+    let filamentCost = 0;
+    let additionalMaterialsCost = 0;
+    let packagingMaterialsCost = 0;
+
+    const breakdownFilament: any[] = [];
+    const breakdownAdditional: any[] = [];
+    const breakdownPackaging: any[] = [];
+
     for (const pm of profile.materials) {
-      const matUnitCost = Number(pm.material.costPerUnit);
-      const qtyUsed = Number(pm.quantity);
-      materialCost += matUnitCost * qtyUsed * quantity;
-    }
+      const mat = pm.material;
+      let unitCost = Number(mat.costPerUnit);
+      if (
+        mat.unit === MaterialUnit.KILOGRAM &&
+        (pm.unit === MaterialUnit.GRAM || !pm.unit)
+      ) {
+        unitCost = unitCost / 1000;
+      } else if (
+        mat.unit === MaterialUnit.GRAM &&
+        pm.unit === MaterialUnit.KILOGRAM
+      ) {
+        unitCost = unitCost * 1000;
+      }
+      const qtyUsed = Number(pm.quantity) * quantity;
+      const itemCost = qtyUsed * unitCost;
 
-    // 2. Energy Cost
-    let energyCost = 0;
-    const energyConfig = await this.prisma.energyCostConfig.findFirst({
-      where: { isActive: true },
-    });
+      const itemData = {
+        materialId: mat.id,
+        name: mat.name,
+        quantity: qtyUsed,
+        unit: pm.unit || mat.unit,
+        costPerUnit: unitCost,
+        totalCost: Number(itemCost.toFixed(4)),
+      };
 
-    if (
-      energyConfig &&
-      profile.powerConsumptionWatts > 0 &&
-      profile.productionTimeMinutes > 0
-    ) {
-      const hours = (profile.productionTimeMinutes / 60) * quantity;
-      const kwh = (profile.powerConsumptionWatts / 1000) * hours;
-      energyCost = kwh * Number(energyConfig.costPerKwh);
-    }
-
-    // 3. Machine Cost
-    let machineCost = 0;
-    if (printerId) {
-      const printer = await this.prisma.printer.findUnique({
-        where: { id: printerId },
-      });
-      if (printer && Number(printer.machineCostPerHour) > 0) {
-        const hours = (profile.productionTimeMinutes / 60) * quantity;
-        machineCost = hours * Number(printer.machineCostPerHour);
+      if (
+        mat.category === MaterialCategory.PRODUCTION ||
+        (!mat.category &&
+          ['PLA', 'PETG', 'ABS', 'RESIN'].includes(mat.type))
+      ) {
+        filamentCost += itemCost;
+        breakdownFilament.push(itemData);
+      } else if (mat.category === MaterialCategory.COMPONENT) {
+        additionalMaterialsCost += itemCost;
+        breakdownAdditional.push(itemData);
+      } else if (mat.category === MaterialCategory.PACKAGING) {
+        packagingMaterialsCost += itemCost;
+        breakdownPackaging.push(itemData);
+      } else {
+        // Fallback default
+        additionalMaterialsCost += itemCost;
+        breakdownAdditional.push(itemData);
       }
     }
 
-    // 4. Finishing, Packaging & Labor
-    const finishingCost = Number(profile.finishingCost) * quantity;
-    const packagingCost = Number(profile.packagingCost) * quantity;
-    const laborCost = Number(profile.laborCost) * quantity;
+    // 2. Máquina e Tempo (Bambu Studio: minutos e segundos convertidos para horas)
+    let machineCost = 0;
+    const resolvedPrinterId = printerId || profile.printerId;
+    let resolvedPrinter: any = null;
 
-    const totalCost =
-      materialCost +
-      energyCost +
-      machineCost +
-      finishingCost +
-      packagingCost +
-      laborCost;
+    if (resolvedPrinterId) {
+      resolvedPrinter = await this.prisma.printer.findUnique({
+        where: { id: resolvedPrinterId },
+      });
+    }
+
+    if (!resolvedPrinter && typeof this.prisma.printer.findFirst === 'function') {
+      resolvedPrinter =
+        (await this.prisma.printer.findFirst({
+          where: { status: PrinterStatus.AVAILABLE },
+        })) || (await this.prisma.printer.findFirst());
+    }
+
+    const totalSeconds =
+      profile.productionTimeSeconds && profile.productionTimeSeconds > 0
+        ? profile.productionTimeSeconds
+        : (profile.productionTimeMinutes || 0) * 60;
+
+    const hours = (totalSeconds / 3600) * quantity;
+    const printerRate = resolvedPrinter ? Number(resolvedPrinter.machineCostPerHour) : 0;
+
+    if (resolvedPrinter && printerRate > 0) {
+      machineCost = hours * printerRate;
+    }
+
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    const timeFormatted = `${mins}m${secs < 10 ? '0' : ''}${secs}s`;
+
+    // 3. Embalagem (Materiais de embalagem + eventual taxa fixa no perfil)
+    const fixedPackaging = Number(profile.packagingCost || 0) * quantity;
+    const totalPackagingCost = packagingMaterialsCost + fixedPackaging;
+
+    // 4. Energia e Custos Complementares
+    // Regra: Não duplicar energia se o custo de máquina da impressora já foi apurado
+    let energyCost = 0;
+    if (machineCost === 0 && profile.powerConsumptionWatts > 0 && hours > 0) {
+      const energyConfig = await this.prisma.energyCostConfig.findFirst({
+        where: { isActive: true },
+      });
+      if (energyConfig) {
+        const kwh = (profile.powerConsumptionWatts / 1000) * hours;
+        energyCost = kwh * Number(energyConfig.costPerKwh);
+      }
+    }
+
+    const finishingCost = Number(profile.finishingCost || 0) * quantity;
+    const laborCost = Number(profile.laborCost || 0) * quantity;
+
+    // Helper para arredondamento monetário preciso a duas casas decimais
+    const roundCurrency = (val: number) => Math.round(val * 100 + 0.00001) / 100;
+
+    const filamentRounded = roundCurrency(filamentCost);
+    const machineRounded = roundCurrency(machineCost);
+    const additionalRounded = roundCurrency(additionalMaterialsCost);
+    const packagingRounded = roundCurrency(totalPackagingCost);
+    const energyRounded = roundCurrency(energyCost);
+    const finishingRounded = roundCurrency(finishingCost);
+    const laborRounded = roundCurrency(laborCost);
+
+    // 5. Custo Total de Produção F7
+    // FILAMENTO + MÁQUINA + MATERIAIS ADICIONAIS + EMBALAGEM (+ energia/acabamento residuais se houver)
+    const totalCost = roundCurrency(
+      filamentRounded +
+      machineRounded +
+      additionalRounded +
+      packagingRounded +
+      energyRounded +
+      finishingRounded +
+      laborRounded,
+    );
+
+    const totalMaterialsCost = roundCurrency(
+      filamentRounded + additionalRounded + packagingRounded,
+    );
 
     return {
-      materialCost: Number(materialCost.toFixed(2)),
-      energyCost: Number(energyCost.toFixed(2)),
-      machineCost: Number(machineCost.toFixed(2)),
-      finishingCost: Number(finishingCost.toFixed(2)),
-      packagingCost: Number(packagingCost.toFixed(2)),
-      laborCost: Number(laborCost.toFixed(2)),
-      totalCost: Number(totalCost.toFixed(2)),
-      isPartial: !energyConfig || !printerId,
+      filamentCost: filamentRounded,
+      machineCost: machineRounded,
+      additionalMaterialsCost: additionalRounded,
+      packagingCost: packagingRounded,
+      materialCost: totalMaterialsCost,
+      energyCost: energyRounded,
+      finishingCost: finishingRounded,
+      laborCost: laborRounded,
+      totalCost,
+      isPartial: !resolvedPrinter && profile.materials.length === 0,
+      breakdown: {
+        filament: breakdownFilament,
+        additionalMaterials: breakdownAdditional,
+        packaging: breakdownPackaging,
+        machine: {
+          printerId: resolvedPrinter?.id,
+          printerName: resolvedPrinter?.name
+            ? `${resolvedPrinter.name} (${resolvedPrinter.model})`
+            : undefined,
+          hours: Number(hours.toFixed(4)),
+          ratePerHour: printerRate,
+          totalCost: machineRounded,
+          timeFormatted,
+        },
+      },
     };
   }
 
@@ -907,7 +1343,19 @@ export class ProductionService {
             },
           });
 
-          calculatedActualCost += Number(pm.material.costPerUnit) * requiredQty;
+          let matUnitCost = Number(pm.material.costPerUnit);
+          if (
+            pm.material.unit === MaterialUnit.KILOGRAM &&
+            (pm.unit === MaterialUnit.GRAM || !pm.unit)
+          ) {
+            matUnitCost = matUnitCost / 1000;
+          } else if (
+            pm.material.unit === MaterialUnit.GRAM &&
+            pm.unit === MaterialUnit.KILOGRAM
+          ) {
+            matUnitCost = matUnitCost * 1000;
+          }
+          calculatedActualCost += matUnitCost * requiredQty;
         }
 
         // Add proportional labor, energy, finishing

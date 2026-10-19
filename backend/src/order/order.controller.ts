@@ -8,6 +8,7 @@ import {
   Query,
   UseGuards,
   Req,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -50,12 +51,27 @@ export class AdminOrderController {
     return this.orderService.findById(id);
   }
 
-  @Patch(':id/status')
-  updateStatus(
-    @Param('id') id: string,
-    @Body() dto: UpdateOrderStatusDto,
-    @Req() req: any,
-  ) {
-    return this.orderService.updateStatus(id, dto, req.user?.sub);
+  // Trigger para expiração de pedidos via admin
+  @Post('expire-unpaid')
+  expireUnpaid(@Req() req: any) {
+    return this.orderService.expireUnpaidOrders(req.user?.sub || 'admin-manual-trigger');
+  }
+}
+
+// Endpoint de infraestrutura para acionamento externo (Hostinger cPanel/hPanel cron curl)
+@Controller('orders/jobs')
+export class OrderJobController {
+  constructor(private readonly orderService: OrderService) {}
+
+  @Post('expire-unpaid')
+  async triggerCronJob(@Req() req: any) {
+    const secretHeader = req.headers['x-cron-secret'];
+    const configuredSecret = process.env.CRON_JOB_SECRET;
+
+    if (configuredSecret && secretHeader !== configuredSecret) {
+      throw new UnauthorizedException('Chave de autenticação do cron inválida.');
+    }
+
+    return this.orderService.expireUnpaidOrders('external-infra-cron');
   }
 }

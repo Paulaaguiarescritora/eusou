@@ -5,11 +5,15 @@ interface HeaderProps {
   totalItems: number;
   onNavigate: (route: string) => void;
   currentRoute: string;
+  brandTitle?: string | null;
 }
 
-export const Header: React.FC<HeaderProps> = ({ totalItems, onNavigate }) => {
+export const Header: React.FC<HeaderProps> = ({ totalItems, onNavigate, brandTitle }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const displayBrand = brandTitle?.trim() || 'EuSou';
+  const brandInitial = displayBrand.charAt(0).toUpperCase();
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,9 +29,9 @@ export const Header: React.FC<HeaderProps> = ({ totalItems, onNavigate }) => {
           {/* Brand Logo */}
           <div className="flex items-center space-x-3 cursor-pointer" onClick={() => onNavigate('/')}>
             <div className="w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold text-lg tracking-wider">
-              E
+              {brandInitial}
             </div>
-            <span className="font-bold text-xl tracking-tight text-slate-900">EuSou</span>
+            <span className="font-bold text-xl tracking-tight text-slate-900">{displayBrand}</span>
           </div>
 
           {/* Desktop Search */}
@@ -139,21 +143,25 @@ export const Header: React.FC<HeaderProps> = ({ totalItems, onNavigate }) => {
 
 interface FooterProps {
   onNavigate?: (route: string) => void;
+  brandTitle?: string | null;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
+export const Footer: React.FC<FooterProps> = ({ onNavigate, brandTitle }) => {
+  const displayBrand = brandTitle?.trim() || 'Loja Especializada';
+  const brandInitial = displayBrand.charAt(0).toUpperCase();
+
   return (
     <footer className="bg-slate-900 text-slate-400 py-12 border-t border-slate-800 mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 md:grid-cols-3 gap-8">
         <div>
           <div className="flex items-center space-x-2 text-white font-bold text-lg mb-3">
             <div className="w-7 h-7 rounded-full bg-white text-slate-900 flex items-center justify-center font-black text-sm">
-              E
+              {brandInitial}
             </div>
-            <span>EuSou</span>
+            <span>{displayBrand}</span>
           </div>
           <p className="text-sm text-slate-400 leading-relaxed">
-            Plataforma de produtos autênticos com catálogos curados e coleções exclusivas.
+            Curadorias exclusivas, catálogos temáticos e compras com entrega segura.
           </p>
         </div>
         <div>
@@ -189,14 +197,14 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           </ul>
         </div>
         <div>
-          <h4 className="text-white text-sm font-semibold mb-3 tracking-wider uppercase">Segurança & Modos</h4>
+          <h4 className="text-white text-sm font-semibold mb-3 tracking-wider uppercase">Segurança & Confiança</h4>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Ambiente comercial com snapshots de pedido e provedor de demonstração (MockPaymentProvider). Transações 100% protegidas e auditadas.
+            Ambiente com criptografia de ponta a ponta e processamento de pedidos auditado. Suas compras e dados são 100% protegidos.
           </p>
         </div>
       </div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pt-8 border-t border-slate-800 text-center text-xs text-slate-500">
-        &copy; {new Date().getFullYear()} EuSou. Todos os direitos reservados.
+        &copy; {new Date().getFullYear()} {displayBrand}. Todos os direitos reservados.
       </div>
     </footer>
   );

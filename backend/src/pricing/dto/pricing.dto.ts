@@ -26,11 +26,19 @@ export class SimulatePricingDto {
 
   @IsOptional()
   @IsNumber()
+  wholesalePriceOverride?: number;
+
+  @IsOptional()
+  @IsNumber()
   marginOverride?: number;
 
   @IsOptional()
   @IsUUID()
   pricingProfileId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  nicheId?: string;
 }
 
 export class CalculatePricingDto {
@@ -57,8 +65,20 @@ export class CalculatePricingDto {
   channelIds?: string[];
 
   @IsOptional()
+  @IsNumber()
+  costOverride?: number;
+
+  @IsOptional()
+  @IsNumber()
+  wholesalePriceOverride?: number;
+
+  @IsOptional()
   @IsUUID()
   pricingProfileId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  nicheId?: string;
 }
 
 export class SetManualPriceDto {
@@ -71,6 +91,10 @@ export class SetManualPriceDto {
 
   @IsUUID()
   channelId: string;
+
+  @IsOptional()
+  @IsUUID()
+  nicheId?: string;
 
   @IsNumber()
   @Min(0.01)

@@ -58,6 +58,47 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const [activePayment, setActivePayment] = useState<Payment | null>(null);
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
   const [copiedPix, setCopiedPix] = useState(false);
+  const [stockBlocked, setStockBlocked] = useState(false);
+
+  // Validação real de estoque antes do checkout
+  React.useEffect(() => {
+    setError(null);
+    setStockBlocked(false);
+
+    if (items.length > 0) {
+      fetchApi<{
+        isValid: boolean;
+        items: Array<{ inStock: boolean; availableStock: number; error?: string | null }>;
+      }>('/public/cart/validate', {
+        method: 'POST',
+        body: JSON.stringify({
+          items: items.map((i) => ({
+            productId: i.productId,
+            variantId: i.variantId || null,
+            quantity: i.quantity,
+          })),
+        }),
+      })
+        .then((res) => {
+          if (!res.isValid) {
+            setStockBlocked(true);
+            const firstErr = res.items.find((i) => !i.inStock)?.error;
+            setError(
+              firstErr ||
+                'Existem itens esgotados no seu carrinho. Retorne ao carrinho para ajustá-los antes de concluir o pedido.',
+            );
+          }
+        })
+        .catch(() => {});
+    }
+  }, [items]);
+
+  const handleSelectPaymentMethod = (method: PaymentMethod) => {
+    if (paymentMethod !== method) {
+      setPaymentMethod(method);
+      setError(null); // Limpa erro ao alternar forma de pagamento
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,10 +109,19 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       return;
     }
 
+    if (stockBlocked) {
+      setError('Existem itens esgotados no seu carrinho. Volte ao carrinho para ajustá-los.');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const affiliateCode = localStorage.getItem('eusou_ref_code') || undefined;
+      const nicheId = localStorage.getItem('eusou_active_niche_id') || undefined;
+      const originDomain = typeof window !== 'undefined' ? window.location.hostname : undefined;
+      const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const utmSource = urlParams?.get('utm_source') || undefined;
 
       const orderPayload = {
         customerName: formData.customerName,
@@ -85,6 +135,9 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         state: formData.state,
         zipCode: formData.zipCode,
         affiliateCode,
+        nicheId,
+        originDomain,
+        utmSource,
         items: items.map((i) => ({
           productId: i.productId,
           variantId: i.variantId || undefined,
@@ -100,14 +153,78 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
       setPlacedOrder(createdOrder);
 
-      // 2. Generate client-side card token or mock card token
+      // 2. Obtain real CardToken via official MercadoPago.js SDK
       let cardToken: string | undefined;
+      let paymentMethodId: string | undefined;
+      let issuerId: string | undefined;
+
       if (paymentMethod === 'CREDIT_CARD') {
-        // Secure tokenization simulation: tokens are safe references, never raw card
-        cardToken = `tok_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        const mpPublicKey =
+          (import.meta as any).env?.VITE_MERCADOPAGO_PUBLIC_KEY ||
+          (window as any).__MERCADOPAGO_PUBLIC_KEY__;
+
+        if (!mpPublicKey || !mpPublicKey.trim()) {
+          throw new Error('Chave pública do Mercado Pago (VITE_MERCADOPAGO_PUBLIC_KEY) não configurada no frontend.');
+        }
+
+        const MercadoPagoSDK = (window as any).MercadoPago;
+        if (!MercadoPagoSDK) {
+          throw new Error('SDK do Mercado Pago não carregado. Verifique sua conexão e tente novamente.');
+        }
+
+        const mp = new MercadoPagoSDK(mpPublicKey);
+
+        // Sanitize card inputs
+        const cleanCardNumber = cardData.cardNumber.replace(/\s+/g, '');
+        const [expMonthRaw, expYearRaw] = cardData.expiration.split('/');
+        const cardholderName = cardData.cardholderName.trim();
+        const securityCode = cardData.securityCode.trim();
+
+        if (!cleanCardNumber || !expMonthRaw || !expYearRaw || !cardholderName || !securityCode) {
+          throw new Error('Preencha todos os campos do cartão de crédito.');
+        }
+
+        const expMonth = expMonthRaw.trim();
+        const fullExpYear = expYearRaw.trim().length === 2 ? `20${expYearRaw.trim()}` : expYearRaw.trim();
+
+        // 2.1 Guess payment method ID (bin) if possible
+        if (cleanCardNumber.length >= 6) {
+          try {
+            const bin = cleanCardNumber.substring(0, 6);
+            const paymentMethods = await mp.getPaymentMethods({ bin });
+            if (paymentMethods?.results?.[0]?.id) {
+              paymentMethodId = paymentMethods.results[0].id;
+            }
+          } catch {
+            // Non-blocking fallback
+          }
+        }
+
+        // 2.2 Create real CardToken with MercadoPago.js
+        const tokenResponse = await mp.createCardToken({
+          cardNumber: cleanCardNumber,
+          cardholderName,
+          cardExpirationMonth: expMonth,
+          cardExpirationYear: fullExpYear,
+          securityCode,
+          identification: formData.documentNumber
+            ? {
+                type: 'CPF',
+                number: formData.documentNumber.replace(/\D/g, ''),
+              }
+            : undefined,
+        });
+
+        if (!tokenResponse?.id) {
+          const detail = tokenResponse?.cause?.[0]?.description || 'Erro ao validar dados do cartão junto ao gateway.';
+          throw new Error(detail);
+        }
+
+        cardToken = tokenResponse.id;
       }
 
       // 3. Process payment via backend PaymentService
+      // NEVER send cardNumber, securityCode or expiration to EuSou backend!
       const paymentPayload = {
         orderId: createdOrder.id,
         method: paymentMethod,
@@ -115,6 +232,8 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         documentNumber: formData.documentNumber || undefined,
         documentType: 'CPF',
         cardToken,
+        paymentMethodId,
+        issuerId,
         installments: paymentMethod === 'CREDIT_CARD' ? Number(cardData.installments) || 1 : undefined,
       };
 
@@ -131,6 +250,10 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       } else if (payment.method === 'PIX') {
         onClearCart();
         // Keep in Pix presentation state
+      } else if (payment.status === 'FAILED') {
+        setError(
+          'O pagamento não pôde ser concluído pela operadora. Verifique os dados do cartão, o limite disponível ou tente outro meio de pagamento.',
+        );
       }
     } catch (err: any) {
       setError(err.message || 'Erro ao processar o pagamento. Verifique os dados digitados.');
@@ -179,6 +302,14 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               <Clock className="w-3.5 h-3.5" />
               <span>Aguardando confirmação do pagamento...</span>
             </div>
+          </div>
+
+          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-left text-xs text-amber-950 leading-relaxed shadow-xs">
+            <div className="font-bold flex items-center gap-1.5 mb-1 text-amber-800">
+              <Clock className="w-4 h-4 shrink-0" />
+              <span>Reserva Garantida por 24 horas</span>
+            </div>
+            Seu pedido foi reservado e você tem 24 horas para realizar o pagamento. Após esse prazo, caso o pagamento não seja confirmado, o pedido será cancelado/expirado e os produtos voltarão a ficar disponíveis em estoque.
           </div>
 
           {activePayment.pixQrCode && (
@@ -385,7 +516,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
             <div className="grid grid-cols-2 gap-4">
               <button
                 type="button"
-                onClick={() => setPaymentMethod('PIX')}
+                onClick={() => handleSelectPaymentMethod('PIX')}
                 className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 font-bold text-xs transition cursor-pointer ${
                   paymentMethod === 'PIX'
                     ? 'border-emerald-600 bg-emerald-50/50 text-emerald-900 ring-2 ring-emerald-500/20'
@@ -398,7 +529,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => setPaymentMethod('CREDIT_CARD')}
+                onClick={() => handleSelectPaymentMethod('CREDIT_CARD')}
                 className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 font-bold text-xs transition cursor-pointer ${
                   paymentMethod === 'CREDIT_CARD'
                     ? 'border-emerald-600 bg-emerald-50/50 text-emerald-900 ring-2 ring-emerald-500/20'
@@ -494,18 +625,58 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         <div className="bg-slate-50 p-6 rounded-2xl border border-gray-100 h-fit space-y-6">
           <h3 className="font-bold text-slate-900 text-base">Itens do Pedido</h3>
 
-          <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-80 overflow-y-auto pr-1 divide-y divide-gray-100">
             {items.map((i) => (
-              <div key={`${i.productId}-${i.variantId}`} className="flex justify-between text-xs">
-                <div>
-                  <span className="font-semibold text-slate-800 block">{i.name}</span>
-                  <span className="text-slate-500">
-                    {i.quantity}x {i.variantLabel ? `(${i.variantLabel})` : ''}
-                  </span>
+              <div key={`${i.productId}-${i.variantId || 'base'}`} className="pt-3 first:pt-0 flex items-start justify-between gap-3 text-xs">
+                <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                  {i.imageUrl && (
+                    <img
+                      src={i.imageUrl}
+                      alt={i.name}
+                      className="w-12 h-12 rounded-lg object-cover border border-gray-100 shrink-0 bg-white"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <span className="font-bold text-slate-900 block truncate" title={i.name}>
+                      {i.name}
+                    </span>
+                    {(() => {
+                      let colorDisplay = i.variantLabel;
+                      if (!colorDisplay && i.sku) {
+                        const upperSku = i.sku.toUpperCase();
+                        if (upperSku.endsWith('-VER') || upperSku.includes('VERMELHO')) colorDisplay = 'Vermelho';
+                        else if (upperSku.endsWith('-PRE') || upperSku.includes('PRETO')) colorDisplay = 'Preto';
+                        else if (upperSku.endsWith('-ROS') || upperSku.includes('ROSA')) colorDisplay = 'Rosa';
+                        else if (upperSku.endsWith('-BCO') || upperSku.includes('BRANCO')) colorDisplay = 'Branco';
+                      }
+
+                      return colorDisplay ? (
+                        <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200/80 text-amber-900 font-semibold text-[11px]">
+                          <span className="text-amber-700 font-normal">Cor:</span>
+                          <span className="font-bold text-amber-950">{colorDisplay}</span>
+                        </div>
+                      ) : null;
+                    })()}
+                    {i.sku && (
+                      <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+                        SKU: {i.sku}
+                      </span>
+                    )}
+                    <span className="text-slate-500 block mt-0.5 text-[11px]">
+                      Quantidade: <strong className="text-slate-800">{i.quantity}x</strong>
+                    </span>
+                  </div>
                 </div>
-                <span className="font-bold text-slate-900">
-                  R$ {(i.unitPrice * i.quantity).toFixed(2).replace('.', ',')}
-                </span>
+                <div className="text-right shrink-0">
+                  <span className="font-extrabold text-slate-900 block text-xs">
+                    R$ {(i.unitPrice * i.quantity).toFixed(2).replace('.', ',')}
+                  </span>
+                  {i.quantity > 1 && (
+                    <span className="text-[10px] text-slate-400 block">
+                      R$ {i.unitPrice.toFixed(2).replace('.', ',')} cada
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -525,10 +696,34 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
             </div>
           </div>
 
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-left text-[11px] text-amber-950 leading-relaxed">
+            <div className="font-bold flex items-center gap-1.5 text-amber-800 mb-0.5">
+              <Clock className="w-3.5 h-3.5" />
+              <span>Reserva Imediata de Estoque (Prazo: 24h)</span>
+            </div>
+            Ao confirmar o pedido, os produtos saem imediatamente do estoque disponível e ficam reservados para você por 24 horas.
+          </div>
+
+          {stockBlocked && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs font-semibold flex flex-col gap-2">
+              <div className="flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>Existem itens esgotados no seu carrinho.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate('/carrinho')}
+                className="text-xs text-rose-900 underline font-bold self-start cursor-pointer hover:text-black"
+              >
+                ← Voltar ao carrinho e ajustar itens
+              </button>
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center space-x-2 transition cursor-pointer shadow-md disabled:opacity-50"
+            disabled={loading || stockBlocked}
+            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center space-x-2 transition cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <div className="flex items-center space-x-2">

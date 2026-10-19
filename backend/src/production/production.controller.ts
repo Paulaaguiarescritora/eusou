@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -17,13 +18,14 @@ import {
   UpdateMaterialDto,
   AdjustMaterialDto,
   CreateProductionProfileDto,
+  UpdateProductionProfileDto,
   CreateProductionJobDto,
   CompleteProductionJobDto,
 } from './production.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
-import { ProductionJobStatus } from '@prisma/client';
+import { MaterialCategory, ProductionJobStatus } from '@prisma/client';
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -70,8 +72,14 @@ export class ProductionController {
   // MATERIALS
   // ==========================================
   @Get('materials')
-  async getMaterials() {
-    return this.productionService.getMaterials();
+  async getMaterials(
+    @Query('activeOnly') activeOnly?: string,
+    @Query('category') category?: MaterialCategory,
+  ) {
+    return this.productionService.getMaterials({
+      activeOnly: activeOnly === 'true' ? true : undefined,
+      category,
+    });
   }
 
   @Get('materials/:id')
@@ -93,6 +101,21 @@ export class ProductionController {
     return this.productionService.updateMaterial(id, dto, req.user?.id);
   }
 
+  @Delete('materials/:id')
+  async deleteMaterial(@Param('id') id: string, @Request() req: any) {
+    return this.productionService.deleteMaterial(id, req.user?.id);
+  }
+
+  @Post('materials/:id/archive')
+  async archiveMaterial(@Param('id') id: string, @Request() req: any) {
+    return this.productionService.archiveMaterial(id, req.user?.id);
+  }
+
+  @Post('materials/:id/reactivate')
+  async reactivateMaterial(@Param('id') id: string, @Request() req: any) {
+    return this.productionService.reactivateMaterial(id, req.user?.id);
+  }
+
   @Post('materials/:id/adjust')
   async adjustMaterialStock(
     @Param('id') id: string,
@@ -106,8 +129,14 @@ export class ProductionController {
   // PRODUCTION PROFILES & ESTIMATION
   // ==========================================
   @Get('production/profiles')
-  async getProductionProfiles() {
-    return this.productionService.getProductionProfiles();
+  async getProductionProfiles(
+    @Query('productId') productId?: string,
+    @Query('variantId') variantId?: string,
+  ) {
+    return this.productionService.getProductionProfiles({
+      productId,
+      variantId,
+    });
   }
 
   @Get('production/profiles/:id')
@@ -121,6 +150,15 @@ export class ProductionController {
     @Request() req: any,
   ) {
     return this.productionService.createProductionProfile(dto, req.user?.id);
+  }
+
+  @Patch('production/profiles/:id')
+  async updateProductionProfile(
+    @Param('id') id: string,
+    @Body() dto: UpdateProductionProfileDto,
+    @Request() req: any,
+  ) {
+    return this.productionService.updateProductionProfile(id, dto, req.user?.id);
   }
 
   @Get('production/profiles/:id/estimate')
