@@ -18,7 +18,9 @@
     "db:restore:offsite": "node ../scripts/backup/offsite-restore.js",
     "db:integrity": "node ../scripts/backup/compare-integrity.js",
     "db:verify-restore": "node ../scripts/backup/test-prisma-restored.js",
-    "db:test-failures": "node ../scripts/backup/test-failures.js"
+    "db:test-failures": "node ../scripts/backup/test-failures.js",
+    "start:prod": "node dist/main.js",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
@@ -43,16 +45,16 @@
     "xlsx": "^0.18.5",
     "@nestjs/cli": "^10.0.0",
     "prisma": "^5.22.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.24",
+    "@types/express": "^4.17.17",
+    "@types/cookie-parser": "^1.4.7",
+    "@types/passport-jwt": "^4.0.1"
   },
   "devDependencies": {
     "@nestjs/schematics": "^10.0.0",
     "@nestjs/testing": "^10.0.0",
-    "@types/cookie-parser": "^1.4.7",
-    "@types/express": "^4.17.17",
     "@types/jest": "^29.5.12",
-    "@types/node": "^20.11.24",
-    "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.2",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
