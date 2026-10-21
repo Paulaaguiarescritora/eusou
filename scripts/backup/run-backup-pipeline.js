@@ -5,6 +5,7 @@
  * Ponto de entrada para automação periódica (Cron / CI/CD) e disparo manual unificado.
  */
 
+const path = require('path');
 const { ConcurrencyLock } = require('./concurrency-lock');
 const { runBackup } = require('./backup');
 const { runOffsiteUpload } = require('./offsite-upload');
@@ -34,11 +35,27 @@ async function runBackupPipeline(options = {}) {
 
     // 3. Executar Upload Off-Site com Retenção
     console.log('[MONITOR] EVENT=UPLOAD_STARTED');
-    const uploadResult = await runOffsiteUpload({
-      localBackupPath: require('path').resolve(__dirname, '../../backups', backupManifest.filename),
-      keepCount: options.keepCount || 7,
-      storageConfig: options.storageConfig || {}
-    });
+    let uploadResult = null;
+    try {
+      uploadResult = await runOffsiteUpload({
+        localBackupPath: path.resolve(__dirname, '../../backups', backupManifest.filename),
+        keepCount: options.keepCount || 7,
+        storageConfig: options.storageConfig || {}
+      });
+    } catch (uploadErr) {
+      const allowSkip = process.env.ALLOW_SKIP_OFFSITE_IF_UNCONFIGURED === 'true' || options.allowSkipOffsite;
+      if (uploadErr.message.includes('S3StorageProvider não configurado') && allowSkip) {
+        console.warn('\n[AVISO MONITOR] EVENT=UPLOAD_SKIPPED Motivo=CredenciaisS3NaoConfiguradas');
+        console.warn('[INFO] O backup lógico foi gerado com sucesso. O upload para o cofre remoto (S3/R2) foi ignorado por ausência de credenciais (S3_ACCESS_KEY_ID ou S3_BUCKET).');
+        console.warn('[INFO] Para ativar o armazenamento off-site em nuvem, adicione os secrets S3_BUCKET, S3_ACCESS_KEY_ID e S3_SECRET_ACCESS_KEY no GitHub.\n');
+        uploadResult = {
+          skipped: true,
+          reason: uploadErr.message
+        };
+      } else {
+        throw uploadErr;
+      }
+    }
 
     const totalDuration = Date.now() - startTime;
     console.log('[MONITOR] EVENT=PIPELINE_SUCCESS TotalDurationMs=' + totalDuration);

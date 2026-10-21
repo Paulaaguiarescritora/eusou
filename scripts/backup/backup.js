@@ -11,28 +11,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { PrismaClient } = require(path.resolve(__dirname, '../../backend/node_modules/@prisma/client'));
 
-function getDatabaseUrl() {
-  const envPath = path.resolve(__dirname, '../../backend/.env');
-  if (!fs.existsSync(envPath)) {
-    throw new Error('Arquivo backend/.env não encontrado');
-  }
-  const content = fs.readFileSync(envPath, 'utf8');
-  const lines = content.split(/\r?\n/);
-  
-  const directLine = lines.find(l => l.trim().startsWith('DIRECT_URL='));
-  const dbLine = lines.find(l => l.trim().startsWith('DATABASE_URL='));
-  
-  const chosenLine = directLine || dbLine;
-  if (!chosenLine) {
-    throw new Error('Nenhuma URL de banco encontrada no .env');
-  }
-  
-  let val = chosenLine.substring(chosenLine.indexOf('=') + 1).trim();
-  if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-    val = val.substring(1, val.length - 1);
-  }
-  return val;
-}
+const { getDatabaseUrl } = require('./db-url');
 
 function escapeSqlValue(val, udtName) {
   if (val === null || val === undefined) {
