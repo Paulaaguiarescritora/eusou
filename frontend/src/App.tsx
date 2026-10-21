@@ -227,20 +227,44 @@ export function App() {
       try { localStorage.removeItem('eusou_active_niche'); } catch {}
     } else if (route === '/produtos' || route.startsWith('/produtos?')) {
       setSelectedProduct(null);
-      setLoading(true);
       const queryStr = route.includes('?') ? route.substring(route.indexOf('?')) : '';
       const params = new URLSearchParams(queryStr);
       if (!params.has('limit')) {
         params.set('limit', '12');
       }
+
+      const cacheKey = `eusou_cat_${params.toString()}`;
+      let hadCached = false;
+      try {
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && Array.isArray(parsed.data) && parsed.data.length > 0) {
+            setProductsList(parsed.data);
+            setProductsMeta(parsed.meta || null);
+            setLoading(false);
+            hadCached = true;
+          }
+        }
+      } catch {}
+
+      if (!hadCached) {
+        setLoading(true);
+      }
+
       fetchApi<{ data: Product[]; meta?: { total: number; page: number; limit: number; totalPages: number } }>(`/public/products?${params.toString()}`)
         .then((res) => {
           setProductsList(res.data || []);
           setProductsMeta(res.meta || null);
+          try {
+            sessionStorage.setItem(cacheKey, JSON.stringify(res));
+          } catch {}
         })
         .catch(() => {
-          setProductsList([]);
-          setProductsMeta(null);
+          if (!hadCached) {
+            setProductsList([]);
+            setProductsMeta(null);
+          }
         })
         .finally(() => setLoading(false));
     } else if (route.startsWith('/produtos/')) {
@@ -819,8 +843,22 @@ export function App() {
               </div>
             )}
 
-            {loading ? (
-              <div className="py-20 text-center text-xs text-slate-400">Carregando catálogo...</div>
+            {loading && productsList.length === 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 animate-pulse">
+                {Array.from({ length: 8 }).map((_, idx) => (
+                  <div key={idx} className="bg-white rounded-xl border border-gray-100 p-4 space-y-4">
+                    <div className="aspect-square bg-slate-100 rounded-lg w-full" />
+                    <div className="space-y-2">
+                      <div className="h-4 bg-slate-100 rounded-md w-3/4" />
+                      <div className="h-3 bg-slate-100 rounded-md w-1/2" />
+                    </div>
+                    <div className="pt-2 border-t border-gray-50 flex items-center justify-between">
+                      <div className="h-5 bg-slate-100 rounded-md w-20" />
+                      <div className="h-8 w-8 bg-slate-100 rounded-lg" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : productsList.length === 0 ? (
               <div className="p-16 text-center text-xs text-slate-400 bg-white rounded-2xl border border-gray-100 space-y-3">
                 <p>Nenhum produto encontrado nesta seleção.</p>

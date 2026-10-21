@@ -3,8 +3,35 @@ import { PrismaService } from '../prisma.service';
 import { QueryProductsDto } from '../product/dto/query-products.dto';
 import { CatalogType } from '@prisma/client';
 
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
 @Injectable()
 export class PublicStoreService {
+  private cache = new Map<string, CacheEntry<any>>();
+  private ownStoreChannelCache: { channel: any; expiresAt: number } | null = null;
+
+  private getFromCache<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      return null;
+    }
+    return entry.data;
+  }
+
+  private setInCache<T>(key: string, data: T, ttlMs = 60000): void {
+    if (this.cache.size > 200) {
+      const now = Date.now();
+      for (const [k, v] of this.cache.entries()) {
+        if (now > v.expiresAt) this.cache.delete(k);
+      }
+    }
+    this.cache.set(key, { data, expiresAt: Date.now() + ttlMs });
+  }
   constructor(private readonly prisma: PrismaService) {}
 
   private async getOwnStoreChannel() {

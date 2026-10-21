@@ -1,0 +1,20 @@
+name: "EuSou - Keep Alive Render Backend"
+
+on:
+  schedule:
+    # Dispara a cada 14 minutos para impedir que o Render Free Tier entre em suspensão (Cold Start)
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    name: "Ping Keep-Alive"
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: "Disparar Ping no Backend"
+        run: |
+          echo "Disparando ping preventivo para https://eusou.onrender.com/public/context..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 30 "https://eusou.onrender.com/public/context" || echo "ERR")
+          echo "Status de resposta do backend: $HTTP_STATUS"

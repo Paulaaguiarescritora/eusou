@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Header } from '@nestjs/common';
 import { PublicStoreService } from './public-store.service';
 import { QueryProductsDto } from '../product/dto/query-products.dto';
 
@@ -7,16 +7,19 @@ export class PublicStoreController {
   constructor(private readonly publicStoreService: PublicStoreService) {}
 
   @Get('context')
+  @Header('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=120')
   getStoreContext(@Query('niche') niche?: string) {
     return this.publicStoreService.getStoreContext(niche);
   }
 
   @Get('home')
+  @Header('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=120')
   getHomeData() {
     return this.publicStoreService.getHomeData();
   }
 
   @Get('products')
+  @Header('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=120')
   getProducts(@Query() query: QueryProductsDto) {
     return this.publicStoreService.getProducts(query);
   }
