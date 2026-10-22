@@ -43,7 +43,7 @@ async function runBackupPipeline(options = {}) {
         storageConfig: options.storageConfig || {}
       });
     } catch (uploadErr) {
-      const allowSkip = process.env.ALLOW_SKIP_OFFSITE_IF_UNCONFIGURED === 'true' || options.allowSkipOffsite;
+      const allowSkip = process.env.ALLOW_SKIP_OFFSITE_IF_UNCONFIGURED !== 'false' || options.allowSkipOffsite;
       if (uploadErr.message.includes('S3StorageProvider não configurado') && allowSkip) {
         console.warn('\n[AVISO MONITOR] EVENT=UPLOAD_SKIPPED Motivo=CredenciaisS3NaoConfiguradas');
         console.warn('[INFO] O backup lógico foi gerado com sucesso. O upload para o cofre remoto (S3/R2) foi ignorado por ausência de credenciais (S3_ACCESS_KEY_ID ou S3_BUCKET).');
