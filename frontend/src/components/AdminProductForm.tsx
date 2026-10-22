@@ -140,7 +140,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
   const [variantsList, setVariantsList] = useState<ProductVariant[]>([]);
   const [newVariantSku, setNewVariantSku] = useState('');
   const [newVariantName, setNewVariantName] = useState('');
-  const [newVariantStock, setNewVariantStock] = useState('0');
+  const [newVariantStock, setNewVariantStock] = useState('');
 
   // Variant Edit & Archive State
   const [editingVariant, setEditingVariant] = useState<ProductVariant | null>(null);
@@ -782,10 +782,11 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
       return;
     }
 
+    const initialStockNum = newVariantStock !== '' ? Number(newVariantStock) : 0;
     const payload = {
       sku: newVariantSku.trim(),
       name: newVariantName.trim() || undefined,
-      initialStock: newVariantStock ? Number(newVariantStock) : 0,
+      initialStock: isNaN(initialStockNum) ? 0 : Math.max(0, initialStockNum),
     };
 
     if (isEditing && productId) {
@@ -797,6 +798,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
             body: JSON.stringify({
               sku: payload.sku,
               name: payload.name,
+              stock: payload.initialStock,
               isActive: true,
             }),
           }
@@ -813,14 +815,24 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
               reason: `Estoque inicial na criação da variante: ${created.sku}`,
             }),
           }).catch((err) =>
-            console.warn('Falha ao definir estoque inicial da variante:', err)
+            console.warn('Falha ao definir estoque inicial da variante via adjust:', err)
           );
         }
 
-        setVariantsList([...variantsList, created]);
+        const enrichedCreated: ProductVariant = {
+          ...created,
+          stock: created.stock !== undefined ? created.stock : payload.initialStock,
+          availableStock:
+            created.availableStock !== undefined
+              ? created.availableStock
+              : payload.initialStock,
+          initialStock: payload.initialStock,
+        };
+
+        setVariantsList([...variantsList, enrichedCreated]);
         setNewVariantSku('');
         setNewVariantName('');
-        setNewVariantStock('0');
+        setNewVariantStock('');
       } catch (err: any) {
         alert(err.message || 'Erro ao cadastrar variante.');
       }
@@ -833,11 +845,13 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
           name: payload.name,
           isActive: true,
           initialStock: payload.initialStock,
+          stock: payload.initialStock,
+          availableStock: payload.initialStock,
         } as any,
       ]);
       setNewVariantSku('');
       setNewVariantName('');
-      setNewVariantStock('0');
+      setNewVariantStock('');
     }
   };
 
@@ -846,11 +860,19 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
     setEditingVariant(v);
     setEditVariantSku(v.sku || '');
     setEditVariantName(v.name || '');
-    setEditVariantStock(
+    const inv = (v as any).inventories?.find((i: any) => i.variantId === v.id) || (v as any).inventories?.[0];
+    const invStock = inv ? Math.max(0, (inv.quantity || 0) - (inv.reservedQuantity || 0)) : undefined;
+    const currentStock =
       v.availableStock !== undefined
-        ? String(v.availableStock)
-        : String(v.stock !== undefined ? v.stock : (v.initialStock || 0))
-    );
+        ? v.availableStock
+        : invStock !== undefined
+        ? invStock
+        : v.stock !== undefined
+        ? v.stock
+        : (v as any).initialStock !== undefined
+        ? (v as any).initialStock
+        : 0;
+    setEditVariantStock(String(currentStock));
     setEditVariantMaterialId(v.isMaterialCustom && v.materialId ? v.materialId : '');
     setVariantEditError(null);
   };
@@ -1153,6 +1175,14 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
         if (!isEditing && variantsList.length > 0) {
           for (const staged of variantsList) {
             try {
+              const varStock = Number(
+                (staged as any).initialStock !== undefined
+                  ? (staged as any).initialStock
+                  : (staged as any).stock !== undefined
+                  ? (staged as any).stock
+                  : 0
+              );
+
               const createdVariant = await fetchApi<ProductVariant>(
                 `/products/${savedProdId}/variants`,
                 {
@@ -1164,12 +1194,11 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                       staged.price !== undefined
                         ? Number(staged.price)
                         : undefined,
+                    stock: varStock,
                     isActive: true,
                   }),
                 }
               );
-
-              const varStock = Number((staged as any).initialStock);
               if (varStock > 0) {
                 await fetchApi('/admin/inventory/adjust', {
                   method: 'POST',
@@ -2306,7 +2335,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
               min="0"
               value={newVariantStock}
               onChange={(e) => setNewVariantStock(e.target.value)}
-              placeholder="Estoque inicial"
+              placeholder="Estoque inicial (opcional)"
               className="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:border-slate-900"
             />
             <button
@@ -2335,12 +2364,18 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {variantsList.map((v) => {
+                      const inv = (v as any).inventories?.find((i: any) => i.variantId === v.id) || (v as any).inventories?.[0];
+                      const invStock = inv ? Math.max(0, (inv.quantity || 0) - (inv.reservedQuantity || 0)) : undefined;
                       const avail =
                         v.availableStock !== undefined
                           ? v.availableStock
+                          : invStock !== undefined
+                          ? invStock
                           : v.stock !== undefined
                           ? v.stock
-                          : v.initialStock || 0;
+                          : (v as any).initialStock !== undefined
+                          ? (v as any).initialStock
+                          : 0;
                       const isArchived = v.isActive === false;
                       const effectiveProductCost =
                         pricingSummary?.productionCost && pricingSummary.productionCost > 0
