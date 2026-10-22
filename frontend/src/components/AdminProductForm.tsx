@@ -1,3 +1,4 @@
+import { renderFormattedDescription } from '../formatDescription';
 import React, { useEffect, useState } from 'react';
 import {
   Product,
@@ -28,6 +29,11 @@ import {
   DollarSign,
   Edit2,
   X,
+  Bold,
+  Italic,
+  List,
+  Heading2,
+  Eye,
 } from 'lucide-react';
 
 interface PricingSummaryData {
@@ -87,6 +93,28 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
   >('ACTIVE');
   const [shortDescription, setShortDescription] = useState('');
   const [description, setDescription] = useState('');
+  const [showDescPreview, setShowDescPreview] = useState(false);
+
+  const insertFormatting = (prefix: string, suffix: string = '') => {
+    const textarea = document.getElementById('product-description-textarea') as HTMLTextAreaElement | null;
+    if (!textarea) {
+      setDescription((prev) => `${prev}${prefix}${suffix}`);
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = description.substring(start, end);
+    const replacement = `${prefix}${selectedText || 'texto'}${suffix}`;
+    const newText = description.substring(0, start) + replacement + description.substring(end);
+    setDescription(newText);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(
+        start + prefix.length,
+        start + prefix.length + (selectedText ? selectedText.length : 5),
+      );
+    }, 50);
+  };
   const [basePrice, setBasePrice] = useState('');
   const [costSource, setCostSource] = useState<'COST_FROM_F7' | 'MANUAL'>('MANUAL');
   const [manualCost, setManualCost] = useState('');
@@ -2069,16 +2097,93 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Descrição Completa
-            </label>
-            <textarea
-              rows={4}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Detalhes de material, processo produtivo e orientações..."
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-slate-900"
-            />
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700">
+                Descrição Completa (Suporta Formatação, Negrito, Espaçamento e HTML)
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowDescPreview(!showDescPreview)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                  showDescPreview
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                }`}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                {showDescPreview ? 'Voltar para Edição' : 'Pré-visualizar Como o Cliente Verá'}
+              </button>
+            </div>
+
+            {!showDescPreview ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-slate-50 border border-slate-200 rounded-xl">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1">Inserir:</span>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('<b>', '</b>')}
+                    className="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                    title="Adicionar Negrito (HTML)"
+                  >
+                    <Bold className="w-3 h-3" /> Negrito &lt;b&gt;
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('<i>', '</i>')}
+                    className="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                    title="Adicionar Itálico (HTML)"
+                  >
+                    <Italic className="w-3 h-3" /> Itálico &lt;i&gt;
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('<h3>', '</h3>')}
+                    className="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                    title="Adicionar Subtítulo"
+                  >
+                    <Heading2 className="w-3 h-3" /> Título &lt;h3&gt;
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('<ul>\n  <li>', '</li>\n  <li>Segundo ponto</li>\n</ul>')}
+                    className="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                    title="Adicionar Lista com Marcadores"
+                  >
+                    <List className="w-3 h-3" /> Lista &lt;ul&gt;
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('<br />\n')}
+                    className="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[11px] font-bold text-slate-700 transition cursor-pointer shadow-2xs"
+                    title="Adicionar Quebra de Linha / Espaçamento"
+                  >
+                    + Espaço &lt;br&gt;
+                  </button>
+                </div>
+
+                <textarea
+                  id="product-description-textarea"
+                  rows={6}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Cole ou digite aqui a descrição. Você pode colar textos com tags HTML (<b>, <br>, <ul>, <li>) ou negrito **assim**. O espaçamento e as quebras de linha serão preservados na loja."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-slate-900 font-mono leading-relaxed"
+                />
+                <p className="text-[11px] text-slate-400">
+                  💡 Você pode colar textos formatados do Word, Docs ou ChatGPT. Tags HTML e quebras de linha são renderizadas automaticamente. Clique em &quot;Pré-visualizar&quot; acima para conferir o resultado final.
+                </p>
+              </div>
+            ) : (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl min-h-[140px] space-y-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
+                  Visualização em tempo real (como o cliente verá na loja):
+                </div>
+                <div
+                  className="text-xs text-slate-700 leading-relaxed whitespace-pre-line formatted-description bg-white p-4 rounded-lg border border-slate-200"
+                  dangerouslySetInnerHTML={{ __html: renderFormattedDescription(description) }}
+                />
+              </div>
+            )}
           </div>
         </div>
 

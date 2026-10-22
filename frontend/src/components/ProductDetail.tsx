@@ -1,3 +1,4 @@
+import { renderFormattedDescription } from '../formatDescription';
 import React, { useState, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
 import { ShoppingBag, ArrowLeft, Check, Package, AlertCircle } from 'lucide-react';
@@ -331,9 +332,10 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
       {product.description && (
         <div className="mt-16 pt-8 border-t border-gray-100">
           <h2 className="text-lg font-bold text-slate-900 mb-4">Descrição Completa</h2>
-          <div className="prose prose-sm text-slate-600 leading-relaxed whitespace-pre-line">
-            {product.description}
-          </div>
+          <div
+            className="text-slate-600 text-sm leading-relaxed whitespace-pre-line formatted-description"
+            dangerouslySetInnerHTML={{ __html: renderFormattedDescription(product.description) }}
+          />
         </div>
       )}
     </div>
