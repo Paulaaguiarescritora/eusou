@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CartItem } from '../types';
-import { fetchApi } from '../api';
+import { fetchApi, resolveMediaUrl } from '../api';
 import { Trash2, ArrowRight, ArrowLeft, ShoppingBag, AlertCircle, AlertTriangle } from 'lucide-react';
 
 interface CartViewProps {
@@ -152,7 +152,7 @@ export const CartView: React.FC<CartViewProps> = ({
                   <div className="flex items-center space-x-4">
                     <div className="w-16 h-16 rounded-lg bg-slate-50 overflow-hidden border border-gray-100 shrink-0 flex items-center justify-center">
                       {item.imageUrl ? (
-                        <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                        <img src={resolveMediaUrl(item.imageUrl)} alt={item.name} className="w-full h-full object-cover" />
                       ) : (
                         <ShoppingBag className="w-6 h-6 text-slate-300" />
                       )}

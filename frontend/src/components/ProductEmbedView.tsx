@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Product } from '../types';
-import { fetchApi } from '../api';
+import { fetchApi, resolveMediaUrl } from '../api';
 import { ShoppingBag, CheckCircle, ExternalLink, Sparkles } from 'lucide-react';
 
 interface ProductEmbedViewProps {
@@ -81,7 +81,7 @@ export const ProductEmbedView: React.FC<ProductEmbedViewProps> = ({ productId })
         {/* Top Header / Media */}
         <div className="relative h-48 bg-zinc-900 flex items-center justify-center overflow-hidden">
           {primaryImage ? (
-            <img src={primaryImage} alt={product.name} className="w-full h-full object-cover" />
+            <img src={resolveMediaUrl(primaryImage)} alt={product.name} className="w-full h-full object-cover" />
           ) : (
             <div className="text-center text-zinc-400 p-4">
               <ShoppingBag size={44} className="mx-auto mb-1 text-amber-500 opacity-80" />

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Product, Niche, Category, Tag } from '../types';
-import { fetchApi } from '../api';
+import { fetchApi, resolveMediaUrl } from '../api';
 import {
   Package,
   Plus,
@@ -195,7 +195,7 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 shrink-0 overflow-hidden flex items-center justify-center">
                             {primaryImg ? (
-                              <img src={primaryImg} alt={p.name} className="w-full h-full object-cover" />
+                              <img src={resolveMediaUrl(primaryImg)} alt={p.name} className="w-full h-full object-cover" />
                             ) : (
                               <ImageIcon className="w-5 h-5 text-slate-300" />
                             )}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CartItem, Order, Payment, PaymentMethod } from '../types';
-import { fetchApi } from '../api';
+import { fetchApi, resolveMediaUrl } from '../api';
 import {
   ArrowLeft,
   CheckCircle,
@@ -631,7 +631,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 <div className="flex items-start gap-2.5 flex-1 min-w-0">
                   {i.imageUrl && (
                     <img
-                      src={i.imageUrl}
+                      src={resolveMediaUrl(i.imageUrl)}
                       alt={i.name}
                       className="w-12 h-12 rounded-lg object-cover border border-gray-100 shrink-0 bg-white"
                     />

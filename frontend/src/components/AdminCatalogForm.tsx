@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Catalog, Theme, Niche, Category, Tag, Product, Collection } from '../types';
-import { fetchApi } from '../api';
+import { fetchApi, resolveMediaUrl } from '../api';
 import {
   ArrowLeft,
   Save,
@@ -650,7 +650,7 @@ export const AdminCatalogForm: React.FC<AdminCatalogFormProps> = ({
                           </span>
                           <div className="w-8 h-8 rounded-lg bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
                             {thumb ? (
-                              <img src={thumb} alt={prod.name} className="w-full h-full object-cover" />
+                              <img src={resolveMediaUrl(thumb)} alt={prod.name} className="w-full h-full object-cover" />
                             ) : (
                               <Package size={14} className="text-slate-400" />
                             )}
@@ -739,7 +739,7 @@ export const AdminCatalogForm: React.FC<AdminCatalogFormProps> = ({
                             />
                             <div className="w-7 h-7 rounded-lg bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center">
                               {thumb ? (
-                                <img src={thumb} alt={p.name} className="w-full h-full object-cover" />
+                                <img src={resolveMediaUrl(thumb)} alt={p.name} className="w-full h-full object-cover" />
                               ) : (
                                 <Package size={12} className="text-slate-400" />
                               )}

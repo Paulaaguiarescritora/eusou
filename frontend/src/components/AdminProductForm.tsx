@@ -8,7 +8,7 @@ import {
   ProductVariant,
   ProductChannelItem,
 } from '../types';
-import { fetchApi } from '../api';
+import { fetchApi, resolveMediaUrl } from '../api';
 import {
   ArrowLeft,
   Save,
@@ -2123,7 +2123,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                 className="group relative aspect-square rounded-xl border border-slate-200 overflow-hidden bg-slate-50"
               >
                 <img
-                  src={m.url}
+                  src={resolveMediaUrl(m.url)}
                   alt={`Mídia ${i}`}
                   className="w-full h-full object-cover"
                   onError={(e) => {

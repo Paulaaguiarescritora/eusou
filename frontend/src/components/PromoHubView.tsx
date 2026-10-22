@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Product } from '../types';
-import { fetchApi } from '../api';
+import { fetchApi, resolveMediaUrl } from '../api';
 import {
   Share2,
   Search,
@@ -392,7 +392,7 @@ export const PromoHubView: React.FC<PromoHubViewProps> = ({ onNavigate }) => {
                       <div className="h-44 bg-zinc-100 flex items-center justify-center relative overflow-hidden">
                         {effectiveImageUrl ? (
                           <img
-                            src={effectiveImageUrl}
+                            src={resolveMediaUrl(effectiveImageUrl)}
                             alt={effectiveName}
                             className="w-full h-full object-cover"
                           />

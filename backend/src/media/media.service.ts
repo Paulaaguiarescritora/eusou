@@ -281,8 +281,7 @@ export class MediaService {
     fs.writeFileSync(webpFilePath, webpBuffer);
 
     // 3. Montar URL pública da versão WebP utilizada pelo produto
-    const port = process.env.PORT || 3000;
-    const baseUrl = process.env.APP_URL || `http://localhost:${port}`;
+    const baseUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, '') : '';
     const publicUrl = `${baseUrl}/uploads/products/${webpFileName}`;
 
     return this.create(
