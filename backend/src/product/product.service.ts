@@ -32,7 +32,7 @@ export class ProductService {
   async create(dto: CreateProductDto, actorId?: string): Promise<Product> {
     const slug =
       dto.slug && dto.slug.trim().length > 0
-        ? dto.slug.trim()
+        ? generateSlug(dto.slug.trim())
         : generateSlug(dto.name);
 
     if (!slug) {
@@ -458,7 +458,7 @@ export class ProductService {
     }
 
     if (dto.slug !== undefined) {
-      const targetSlug = dto.slug.trim();
+      const targetSlug = generateSlug(dto.slug.trim());
       if (targetSlug !== product.slug) {
         const existingSlug = await this.prisma.product.findFirst({
           where: { slug: targetSlug, id: { not: id } },

@@ -1069,7 +1069,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
 
     const payload: any = {
       name: name.trim(),
-      slug: slug || undefined,
+      slug: slug ? toSlug(slug) : toSlug(name),
       sku: sku || undefined,
       brand: brand || undefined,
       status,

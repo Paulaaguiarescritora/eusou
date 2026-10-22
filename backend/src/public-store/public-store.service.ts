@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { QueryProductsDto } from '../product/dto/query-products.dto';
 import { CatalogType } from '@prisma/client';
+import { generateSlug } from '../product/utils/slug.util';
 
 interface CacheEntry<T> {
   data: T;
@@ -273,10 +274,17 @@ export class PublicStoreService {
 
   async getProductBySlug(slug: string) {
     const ownStore = await this.getOwnStoreChannel();
+    const cleanSlug = (slug || '').trim();
+    let decodedSlug = cleanSlug;
+    try {
+      decodedSlug = decodeURIComponent(cleanSlug);
+    } catch {}
+    const normalizedSlug = generateSlug(decodedSlug);
+    const candidateSlugs = Array.from(new Set([cleanSlug, decodedSlug, normalizedSlug])).filter(Boolean);
 
     const product = await this.prisma.product.findFirst({
       where: {
-        slug,
+        OR: candidateSlugs.map((s) => ({ slug: s })),
         status: 'ACTIVE',
         ...(ownStore
           ? {

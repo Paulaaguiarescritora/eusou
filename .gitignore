@@ -29,3 +29,5 @@ backups/
 *.dump
 *.backup
 *.tar.gz
+.vercel
+.env*

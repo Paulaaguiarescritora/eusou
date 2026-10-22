@@ -268,33 +268,30 @@ export function App() {
         })
         .finally(() => setLoading(false));
     } else if (route.startsWith('/produtos/')) {
-      const slugFromRoute = route.replace('/produtos/', '').split('?')[0];
-      const existingNiche =
-        selectedProduct && selectedProduct.slug === slugFromRoute
-          ? extractProductNiche(selectedProduct)
-          : null;
+      const rawSlug = route.replace('/produtos/', '').split('?')[0];
+      let decodedSlug = rawSlug;
+      try {
+        decodedSlug = decodeURIComponent(rawSlug);
+      } catch {}
 
-      if (slugFromRoute && !existingNiche) {
-        setLoading(true);
-        fetchApi<Product>(`/public/products/${slugFromRoute}`)
-          .then((p) => {
-            setSelectedProduct(p);
-            const n = extractProductNiche(p);
-            if (n) {
-              setActiveNicheName(n);
-              try {
-                localStorage.setItem('eusou_active_niche', n);
-              } catch {}
-            }
-          })
-          .catch(() => setSelectedProduct(null))
-          .finally(() => setLoading(false));
-      } else if (existingNiche) {
-        setActiveNicheName(existingNiche);
-        try {
-          localStorage.setItem('eusou_active_niche', existingNiche);
-        } catch {}
-      }
+      // Busca sempre os dados completos e atualizados do produto (incluindo variantes e estoque em tempo real)
+      setLoading(!selectedProduct || selectedProduct.slug !== decodedSlug);
+      fetchApi<Product>(`/public/products/${encodeURIComponent(decodedSlug)}`)
+        .then((p) => {
+          setSelectedProduct(p);
+          const n = extractProductNiche(p);
+          if (n) {
+            setActiveNicheName(n);
+            try {
+              localStorage.setItem('eusou_active_niche', n);
+            } catch {}
+          }
+        })
+        .catch((err) => {
+          console.error('Falha ao sincronizar detalhes do produto:', err);
+          setSelectedProduct((prev) => (prev?.slug === decodedSlug || prev?.slug === rawSlug ? prev : null));
+        })
+        .finally(() => setLoading(false));
     } else if (route.startsWith('/catalogos/')) {
       const catSlug = route.replace('/catalogos/', '').split('?')[0];
       if (catSlug && (!selectedCatalog || selectedCatalog.slug !== catSlug)) {

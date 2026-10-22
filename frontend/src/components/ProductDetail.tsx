@@ -30,6 +30,20 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
     const inStock = product.variants.find((v) => (v.availableStock ?? 0) > 0);
     return inStock || product.variants[0];
   });
+
+  // Garante que, caso os dados das variantes sejam atualizados do servidor, a variante selecionada seja sincronizada
+  useEffect(() => {
+    const variants = product.variants;
+    if (variants && variants.length > 0) {
+      setSelectedVariant((prev) => {
+        if (prev && variants.some((v) => v.id === prev.id)) {
+          return variants.find((v) => v.id === prev.id) || prev;
+        }
+        const inStock = variants.find((v) => (v.availableStock ?? 0) > 0);
+        return inStock || variants[0];
+      });
+    }
+  }, [product.variants]);
   const [quantity, setQuantity] = useState(1);
   const [stockError, setStockError] = useState<string | null>(null);
   const primaryImg = product.media?.find((m) => m.isPrimary)?.url || (product.media && product.media.length > 0 ? product.media[0].url : null);
