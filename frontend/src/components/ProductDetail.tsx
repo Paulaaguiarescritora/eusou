@@ -156,7 +156,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
               <span className="text-xs text-slate-400 mt-1 block">SKU: {currentSku}</span>
             )}
 
-            <div className="mt-4 pb-6 border-b border-gray-100">
+            <div className="mt-2 pb-3 border-b border-gray-100">
               <span className="text-3xl font-black text-slate-900">
                 {currentPrice > 0
                   ? `R$ ${currentPrice.toFixed(2).replace('.', ',')}`
@@ -165,14 +165,14 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
             </div>
 
             {product.shortDescription && (
-              <p className="text-slate-600 text-sm mt-4 leading-relaxed">
+              <p className="text-slate-600 text-sm mt-2.5 leading-relaxed">
                 {product.shortDescription}
               </p>
             )}
 
             {/* Variant Selector */}
             {product.variants && product.variants.length > 0 && (
-              <div className="mt-6">
+              <div className="mt-3.5">
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-bold text-slate-700 tracking-wide uppercase block">
                     Selecione a Opção / Variante
@@ -247,8 +247,8 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
             )}
 
             {/* Quantity */}
-            <div className="mt-6">
-              <label className="text-xs font-bold text-slate-700 tracking-wide uppercase mb-2 block">
+            <div className="mt-3.5">
+              <label className="text-xs font-bold text-slate-700 tracking-wide uppercase mb-1.5 block">
                 Quantidade
               </label>
               <div className="flex items-center space-x-3">
@@ -298,17 +298,17 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
             ) : null}
           </div>
 
-          <div className="mt-8 pt-6 border-t border-gray-100">
+          <div className="mt-4 pt-3.5 border-t border-gray-100">
             <button
               type="button"
               disabled={isOutOfStock}
               onClick={handleAdd}
-              className={`w-full py-4 rounded-xl font-bold flex items-center justify-center space-x-2 transition ${
+              className={`w-full py-3.5 sm:py-4 rounded-xl font-extrabold flex items-center justify-center space-x-2 transition shadow-md hover:shadow-lg ${
                 isOutOfStock
                   ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300'
                   : addedNotice
-                  ? 'bg-emerald-600 text-white cursor-pointer'
-                  : 'bg-slate-900 hover:bg-slate-800 text-white shadow-md hover:shadow-lg cursor-pointer'
+                  ? 'bg-emerald-700 text-white cursor-pointer shadow-emerald-700/25'
+                  : 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-emerald-600/30 hover:shadow-emerald-600/40 cursor-pointer transform active:scale-[0.99]'
               }`}
             >
               {isOutOfStock ? (
@@ -330,8 +330,8 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
       </div>
 
       {product.description && (
-        <div className="mt-16 pt-8 border-t border-gray-100">
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Descrição Completa</h2>
+        <div className="mt-6 pt-5 border-t border-gray-100">
+          <h2 className="text-lg font-bold text-slate-900 mb-2.5">Descrição Completa</h2>
           <div
             className="text-slate-600 text-sm leading-relaxed whitespace-pre-line formatted-description"
             dangerouslySetInnerHTML={{ __html: renderFormattedDescription(product.description) }}

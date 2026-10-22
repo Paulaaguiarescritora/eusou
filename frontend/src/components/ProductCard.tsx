@@ -80,7 +80,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 onQuickAdd(product);
               }
             }}
-            className="p-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition cursor-pointer"
+            className="p-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-xs transition cursor-pointer"
             title={
               product.variants && product.variants.length > 0
                 ? 'Escolher opções do produto'
