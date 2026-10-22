@@ -280,6 +280,21 @@ export class MediaService {
 
     fs.writeFileSync(webpFilePath, webpBuffer);
 
+    // Persistência permanente no PostgreSQL para sobreviver a restarts do Render
+    try {
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO product_media_files (id, file_name, mime_type, data)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (file_name) DO UPDATE SET data = EXCLUDED.data, mime_type = EXCLUDED.mime_type`,
+        webpFileName,
+        webpFileName,
+        'image/webp',
+        webpBuffer,
+      );
+    } catch (err: any) {
+      this.logger.warn(`Falha ao persistir mídia no banco: ${err.message}`);
+    }
+
     // 3. Montar URL pública da versão WebP utilizada pelo produto
     const baseUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, '') : '';
     const publicUrl = `${baseUrl}/uploads/products/${webpFileName}`;
