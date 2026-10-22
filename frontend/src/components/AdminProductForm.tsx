@@ -515,29 +515,42 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
   const loadData = async () => {
     setLoading(true);
     try {
-      const [nichesRes, catsRes, tagsRes, attrsRes, materialsRes] = await Promise.all([
+      // 1. Carregamento e cache dos dados auxiliares (nichos, categorias, tags, atributos, materiais)
+      const auxPromise = Promise.all([
         fetchApi<{ data: Niche[] }>('/niches?limit=1000').catch(() => ({ data: [] })),
-        fetchApi<{ data: Category[] }>('/categories?limit=1000').catch(() => ({
-          data: [],
-        })),
+        fetchApi<{ data: Category[] }>('/categories?limit=1000').catch(() => ({ data: [] })),
         fetchApi<{ data: Tag[] }>('/tags').catch(() => ({ data: [] })),
-        fetchApi<{ data: AttributeDefinition[] }>('/attributes').catch(() => ({
-          data: [],
-        })),
+        fetchApi<{ data: AttributeDefinition[] }>('/attributes').catch(() => ({ data: [] })),
         fetchApi<any>('/admin/materials?activeOnly=true').catch(() => []),
       ]);
 
-      const loadedNiches = nichesRes.data || [];
-      const loadedCats = catsRes.data || [];
-      setAllNiches(loadedNiches);
-      setAllCategories(loadedCats);
-      setAllTags(tagsRes.data || []);
-      setAllAttributes(attrsRes.data || []);
-      const matList = Array.isArray(materialsRes) ? materialsRes : materialsRes?.data || [];
-      setAllMaterials(matList);
-
       if (isEditing && productId) {
-        const prod = await fetchApi<Product>(`/products/${productId}`);
+        // Dispara simultaneamente: dados auxiliares + dados do produto + resumo de preços + canais
+        const [
+          [nichesRes, catsRes, tagsRes, attrsRes, materialsRes],
+          prod,
+          pricingRes,
+          chanRes,
+        ] = await Promise.all([
+          auxPromise,
+          fetchApi<Product>(`/products/${productId}`),
+          fetchApi<PricingSummaryData>(`/products/${productId}/pricing-summary`).catch(() => null),
+          fetchApi<any>(`/products/${productId}/channels`).catch(() => null),
+        ]);
+
+        const loadedNiches = nichesRes.data || [];
+        const loadedCats = catsRes.data || [];
+        setAllNiches(loadedNiches);
+        setAllCategories(loadedCats);
+        setAllTags(tagsRes.data || []);
+        setAllAttributes(attrsRes.data || []);
+        const matList = Array.isArray(materialsRes) ? materialsRes : materialsRes?.data || [];
+        setAllMaterials(matList);
+
+        if (pricingRes) {
+          setPricingSummary(pricingRes);
+        }
+
         setName(prod.name || '');
         setSlug(prod.slug || '');
         setSku(prod.sku || '');
@@ -549,10 +562,6 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
         setCostSource(prod.costSource || 'MANUAL');
         setManualCost(prod.manualCost !== undefined && prod.manualCost !== null ? String(prod.manualCost) : '');
         setWholesalePrice(prod.wholesalePrice !== undefined && prod.wholesalePrice !== null ? String(prod.wholesalePrice) : '');
-
-        fetchApi<PricingSummaryData>(`/products/${productId}/pricing-summary`)
-          .then((summary) => setPricingSummary(summary))
-          .catch(() => setPricingSummary(null));
 
         // Relational binds com resolução de hierarquia em cascata
         let foundNicheId = '';
@@ -614,21 +623,25 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
           setInitialStock(String(currentBaseStock));
         }
 
-        // Carregar canais comerciais vinculados ao produto
-        try {
-          const chanRes = await fetchApi<any>(`/products/${productId}/channels`);
-          if (chanRes && Array.isArray(chanRes.channels)) {
-            const mapped = chanRes.channels.map((ch: any) =>
-              ch.type === 'OWN_STORE'
-                ? { ...ch, isAssigned: true, isEnabled: true }
-                : ch
-            );
-            setProductChannels(mapped);
-          }
-        } catch (e) {
-          console.warn('Erro ao carregar canais do produto:', e);
+        // Canais comerciais carregados em paralelo
+        if (chanRes && Array.isArray(chanRes.channels)) {
+          const mapped = chanRes.channels.map((ch: any) =>
+            ch.type === 'OWN_STORE'
+              ? { ...ch, isAssigned: true, isEnabled: true }
+              : ch
+          );
+          setProductChannels(mapped);
         }
       } else {
+        const [nichesRes, catsRes, tagsRes, attrsRes, materialsRes] = await auxPromise;
+        const loadedNiches = nichesRes.data || [];
+        const loadedCats = catsRes.data || [];
+        setAllNiches(loadedNiches);
+        setAllCategories(loadedCats);
+        setAllTags(tagsRes.data || []);
+        setAllAttributes(attrsRes.data || []);
+        const matList = Array.isArray(materialsRes) ? materialsRes : materialsRes?.data || [];
+        setAllMaterials(matList);
         // Modo criação: carregar lista de todos os canais cadastrados no sistema
         try {
           const allChans = await fetchApi<any>('/marketplace/channels');

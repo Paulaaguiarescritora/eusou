@@ -185,8 +185,8 @@ export class ProductService {
       this.prisma.product.count({ where }),
     ]);
 
-    // Sincronização automática para produtos com custo e atacado válidos cuja precificação da Loja Própria ainda não esteja persistida
-    for (const product of data) {
+    // Sincronização em segundo plano não-bloqueante para produtos cuja precificação precise ser atualizada
+    const needsRecalc = data.filter((product) => {
       const isManual = product.costSource === 'MANUAL';
       const hasValidCost = isManual
         ? product.manualCost !== null &&
@@ -202,26 +202,20 @@ export class ProductService {
       const ownStorePrice = product.productChannelPrices?.find(
         (pcp: any) => pcp.channel?.type === 'OWN_STORE',
       )?.effectivePrice;
-
-      if (
+      return (
         hasValidCost &&
         hasValidWholesalePrice &&
         (!ownStorePrice || Number(ownStorePrice) <= 0) &&
         product.status !== ProductStatus.ARCHIVED
-      ) {
-        try {
-          await this.recalculateEnabledChannelPrices(product.id);
-          const freshPrices = await this.prisma.productChannelPrice.findMany({
-            where: { productId: product.id },
-            include: { channel: true },
-          });
-          product.productChannelPrices = freshPrices;
-        } catch (err: any) {
-          this.logger.warn(
-            `Erro ao sincronizar preço da Loja Própria em findAll para produto ${product.id}: ${err?.message}`,
-          );
-        }
-      }
+      );
+    });
+
+    if (needsRecalc.length > 0) {
+      Promise.allSettled(
+        needsRecalc.map((p) =>
+          this.recalculateEnabledChannelPrices(p.id).catch(() => {}),
+        ),
+      );
     }
 
     const enrichedData = data.map((product: any) => {
@@ -796,17 +790,23 @@ export class ProductService {
    * 1. Consulta todos os canais comerciais do sistema com status de disponibilidade para o produto
    */
   async getChannels(productId: string) {
-    const product = await this.findById(productId);
+    // Executa as consultas em paralelo direto sem carregar o objeto pesado findById
+    const [product, allChannels, productChannels] = await Promise.all([
+      this.prisma.product.findUnique({
+        where: { id: productId },
+        select: { id: true, name: true, status: true },
+      }),
+      this.prisma.channel.findMany({
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.productChannel.findMany({
+        where: { productId },
+      }),
+    ]);
 
-    // Lista todos os canais comerciais ativos no sistema
-    const allChannels = await this.prisma.channel.findMany({
-      orderBy: { name: 'asc' },
-    });
-
-    // Associações diretas ProductChannel
-    const productChannels = await this.prisma.productChannel.findMany({
-      where: { productId },
-    });
+    if (!product) {
+      throw new NotFoundException(`Product with id "${productId}" not found`);
+    }
 
     const channelMap = new Map(
       productChannels.map((pc) => [pc.channelId, pc]),
@@ -1117,15 +1117,25 @@ export class ProductService {
     const hasValidCost =
       costRes.source !== 'NONE' && costRes.cost.greaterThan(0);
 
-    const product = await this.prisma.product.findUnique({
-      where: { id: productId },
-      select: { costSource: true, manualCost: true, wholesalePrice: true },
-    });
+    const [product, productionCostOnly, productChannels, channelPrices] = await Promise.all([
+      this.prisma.product.findUnique({
+        where: { id: productId },
+        select: { id: true, costSource: true, manualCost: true, wholesalePrice: true },
+      }),
+      this.costResolver?.getProductionCostOnly
+        ? this.costResolver.getProductionCostOnly(productId).catch(() => null)
+        : Promise.resolve(null),
+      this.prisma.productChannel.findMany({
+        where: { productId },
+        include: { channel: true },
+      }),
+      this.prisma.productChannelPrice.findMany({
+        where: { productId, variantId: null },
+        include: { channel: true },
+      }),
+    ]);
 
-    let productionCost: number | null = null;
-    if (this.costResolver?.getProductionCostOnly) {
-      productionCost = await this.costResolver.getProductionCostOnly(productId);
-    }
+    let productionCost: number | null = productionCostOnly;
     if (costRes.source === 'MANUAL' && product?.manualCost) {
       productionCost = Number(product.manualCost);
     } else if (hasValidCost && !productionCost) {
@@ -1137,16 +1147,6 @@ export class ProductService {
       : null;
     const hasValidWholesalePrice =
       wholesalePrice !== null && wholesalePrice > 0;
-
-    const productChannels = await this.prisma.productChannel.findMany({
-      where: { productId },
-      include: { channel: true },
-    });
-
-    const channelPrices = await this.prisma.productChannelPrice.findMany({
-      where: { productId, variantId: null },
-      include: { channel: true },
-    });
 
     const channelsInfo = productChannels.map((pc) => {
       const cp = channelPrices.find((p) => p.channelId === pc.channelId);
