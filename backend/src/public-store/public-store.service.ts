@@ -132,7 +132,7 @@ export class PublicStoreService {
           orderBy: { createdAt: 'desc' },
           take: 8,
           include: {
-            media: { orderBy: { sortOrder: 'asc' }, take: 1 },
+            media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 2 },
             variants: { where: { isActive: true }, include: { inventories: true }, take: 4 },
             inventories: true,
             productChannelPrices: ownStore ? { where: { channelId: ownStore.id } } : false,
@@ -157,7 +157,10 @@ export class PublicStoreService {
               include: {
                 product: {
                   include: {
-                    media: { orderBy: { sortOrder: 'asc' }, take: 1 },
+                    media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 2 },
+                    variants: { where: { isActive: true }, include: { inventories: true } },
+                    inventories: true,
+                    productChannelPrices: ownStore ? { where: { channelId: ownStore.id } } : false,
                   },
                 },
               },
@@ -170,11 +173,19 @@ export class PublicStoreService {
       this.formatProductWithStock(p, ownStore?.id),
     );
 
+    const formattedCollections = collections.map((col) => ({
+      ...col,
+      items: col.items.map((it) => ({
+        ...it,
+        product: it.product ? this.formatProductWithStock(it.product, ownStore?.id) : null,
+      })),
+    }));
+
     return {
       categories,
       featuredProducts,
       catalogs,
-      collections,
+      collections: formattedCollections,
     };
   }
 
@@ -546,6 +557,7 @@ export class PublicStoreService {
   }
 
   async getCatalogBySlug(slug: string) {
+    const ownStore = await this.getOwnStoreChannel();
     const catalog = await this.prisma.catalog.findFirst({
       where: { slug, status: 'ACTIVE' },
       include: {
@@ -556,8 +568,10 @@ export class PublicStoreService {
           include: {
             product: {
               include: {
-                media: { orderBy: { sortOrder: 'asc' }, take: 1 },
-                variants: { where: { isActive: true } },
+                media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 2 },
+                variants: { where: { isActive: true }, include: { inventories: true } },
+                inventories: true,
+                productChannelPrices: ownStore ? { where: { channelId: ownStore.id } } : false,
               },
             },
           },
@@ -572,7 +586,10 @@ export class PublicStoreService {
                   include: {
                     product: {
                       include: {
-                        media: { orderBy: { sortOrder: 'asc' }, take: 1 },
+                        media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 2 },
+                        variants: { where: { isActive: true }, include: { inventories: true } },
+                        inventories: true,
+                        productChannelPrices: ownStore ? { where: { channelId: ownStore.id } } : false,
                       },
                     },
                   },
@@ -612,8 +629,10 @@ export class PublicStoreService {
         products = await this.prisma.product.findMany({
           where: { status: 'ACTIVE', OR: orConditions },
           include: {
-            media: { orderBy: { sortOrder: 'asc' }, take: 1 },
-            variants: { where: { isActive: true } },
+            media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 2 },
+            variants: { where: { isActive: true }, include: { inventories: true } },
+            inventories: true,
+            productChannelPrices: ownStore ? { where: { channelId: ownStore.id } } : false,
           },
         });
       } else if (catalog.nicheId) {
@@ -623,20 +642,27 @@ export class PublicStoreService {
             niches: { some: { nicheId: catalog.nicheId } },
           },
           include: {
-            media: { orderBy: { sortOrder: 'asc' }, take: 1 },
-            variants: { where: { isActive: true } },
+            media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 2 },
+            variants: { where: { isActive: true }, include: { inventories: true } },
+            inventories: true,
+            productChannelPrices: ownStore ? { where: { channelId: ownStore.id } } : false,
           },
         });
       }
     }
 
+    const formattedProducts = products.map((p) =>
+      this.formatProductWithStock(p, ownStore?.id),
+    );
+
     return {
       ...catalog,
-      resolvedProducts: products,
+      resolvedProducts: formattedProducts,
     };
   }
 
   async getCollectionBySlug(slug: string) {
+    const ownStore = await this.getOwnStoreChannel();
     const collection = await this.prisma.collection.findFirst({
       where: { slug, status: 'ACTIVE' },
       include: {
@@ -645,8 +671,10 @@ export class PublicStoreService {
           include: {
             product: {
               include: {
-                media: { orderBy: { sortOrder: 'asc' }, take: 1 },
-                variants: { where: { isActive: true } },
+                media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 2 },
+                variants: { where: { isActive: true }, include: { inventories: true } },
+                inventories: true,
+                productChannelPrices: ownStore ? { where: { channelId: ownStore.id } } : false,
               },
             },
           },
@@ -662,7 +690,7 @@ export class PublicStoreService {
       ...collection,
       products: collection.items
         .filter((i) => i.product.status === 'ACTIVE')
-        .map((i) => ({ ...i.product, position: i.position })),
+        .map((i) => ({ ...this.formatProductWithStock(i.product, ownStore?.id), position: i.position })),
     };
   }
 

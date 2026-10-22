@@ -769,7 +769,7 @@ export function App() {
                               name: prod.name,
                               unitPrice: prod.basePrice ? Number(prod.basePrice) : 0,
                               quantity: 1,
-                              imageUrl: prod.media && prod.media[0] ? prod.media[0].url : null,
+                              imageUrl: prod.media?.find((m) => m.isPrimary)?.url || prod.media?.[0]?.url || null,
                               nicheName: extractProductNiche(prod),
                             })
                           }
@@ -881,7 +881,7 @@ export function App() {
                         name: prod.name,
                         unitPrice: prod.basePrice ? Number(prod.basePrice) : 0,
                         quantity: 1,
-                        imageUrl: prod.media && prod.media[0] ? prod.media[0].url : null,
+                        imageUrl: prod.media?.find((m) => m.isPrimary)?.url || prod.media?.[0]?.url || null,
                         nicheName: extractProductNiche(prod),
                       })
                     }
@@ -953,7 +953,7 @@ export function App() {
                 name: prod.name,
                 unitPrice: prod.basePrice ? Number(prod.basePrice) : 0,
                 quantity: 1,
-                imageUrl: prod.media && prod.media[0] ? prod.media[0].url : null,
+                imageUrl: prod.media?.find((m) => m.isPrimary)?.url || prod.media?.[0]?.url || null,
                 nicheName: extractProductNiche(prod) || extractCatalogNiche(selectedCatalog),
               })
             }

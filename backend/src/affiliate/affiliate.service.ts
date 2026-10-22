@@ -678,7 +678,7 @@ export class AffiliateService {
                 id: true,
                 name: true,
                 basePrice: true,
-                media: { take: 1 },
+                media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 1 },
               },
             },
           },

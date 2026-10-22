@@ -163,7 +163,7 @@ export class CatalogService {
           include: {
             product: {
               include: {
-                media: { orderBy: { sortOrder: 'asc' }, take: 1 },
+                media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 1 },
                 variants: { take: 1 },
               },
             },
@@ -213,7 +213,7 @@ export class CatalogService {
             niches: { some: { nicheId: catalog.nicheId } },
           },
           include: {
-            media: { orderBy: { sortOrder: 'asc' }, take: 1 },
+            media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 1 },
           },
         });
       }
@@ -238,7 +238,7 @@ export class CatalogService {
         OR: orConditions,
       },
       include: {
-        media: { orderBy: { sortOrder: 'asc' }, take: 1 },
+        media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 1 },
       },
     });
   }

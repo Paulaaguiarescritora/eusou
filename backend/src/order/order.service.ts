@@ -338,7 +338,7 @@ export class OrderService {
           include: {
             product: {
               include: {
-                media: { orderBy: { sortOrder: 'asc' }, take: 1 },
+                media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 1 },
               },
             },
             variant: true,
