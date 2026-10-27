@@ -212,6 +212,14 @@ export class DashboardService {
           inventories: {
             where: { variantId: null },
           },
+          productChannelPrices: true,
+          productionProfiles: {
+            where: { isActive: true },
+            include: {
+              materials: { include: { material: true } },
+              printer: true,
+            },
+          },
         },
       }),
       this.prisma.productionJob.findMany({
@@ -229,8 +237,82 @@ export class DashboardService {
     let totalStockReserved = 0;
     let criticalStockCount = 0;
     let lowStockCount = 0;
+    let totalStockCostValue = new Prisma.Decimal(0);
+    let totalStockRetailValue = new Prisma.Decimal(0);
 
     const criticalItems: any[] = [];
+
+    const resolveItemUnitCost = (prod: any, variant?: any): number => {
+      // 1. Custo manual explícito do produto
+      if (prod.costSource === 'MANUAL' && prod.manualCost !== null && prod.manualCost !== undefined) {
+        const mc = Number(prod.manualCost);
+        if (mc > 0) return mc;
+      }
+
+      // 2. Base de custo oficial calculada pelo motor F12 (ProductChannelPrice)
+      if (prod.productChannelPrices && prod.productChannelPrices.length > 0) {
+        const varPcp = variant
+          ? prod.productChannelPrices.find((p: any) => p.variantId === variant.id && Number(p.costBasis) > 0)
+          : null;
+        const parentPcp = prod.productChannelPrices.find((p: any) => !p.variantId && Number(p.costBasis) > 0);
+        const pcp = varPcp || parentPcp || prod.productChannelPrices[0];
+
+        if (pcp?.calculationDetails?.productionCost && Number(pcp.calculationDetails.productionCost) > 0) {
+          return Number(pcp.calculationDetails.productionCost);
+        }
+        if (pcp?.costBasis && Number(pcp.costBasis) > 0) {
+          return Number(pcp.costBasis);
+        }
+      }
+
+      // 3. Ficha Técnica F7 (ProductionProfile ativo)
+      const profiles = prod.productionProfiles || [];
+      const profile = (variant ? profiles.find((p: any) => p.variantId === variant.id) : null) ||
+        profiles.find((p: any) => !p.variantId) || profiles[0];
+
+      if (profile) {
+        let matCost = 0;
+        if (profile.materials && profile.materials.length > 0) {
+          for (const pm of profile.materials) {
+            const cpu = pm.material?.costPerUnit ? Number(pm.material.costPerUnit) : 0;
+            const q = pm.quantity ? Number(pm.quantity) : 0;
+            matCost += cpu * q;
+          }
+        }
+        const machineCost = profile.printer?.machineCostPerHour
+          ? (Number(profile.productionTimeMinutes || 0) / 60) * Number(profile.printer.machineCostPerHour)
+          : 0;
+        const addCost = Number(profile.packagingCost || 0) + Number(profile.finishingCost || 0) + Number(profile.laborCost || 0);
+        const totalF7 = matCost + machineCost + addCost;
+        if (totalF7 > 0) return totalF7;
+      }
+
+      // 4. Fallback manualCost
+      if (prod.manualCost !== null && prod.manualCost !== undefined && Number(prod.manualCost) > 0) {
+        return Number(prod.manualCost);
+      }
+
+      // 5. Fallback wholesalePrice (preço de atacado)
+      if (prod.wholesalePrice !== null && prod.wholesalePrice !== undefined && Number(prod.wholesalePrice) > 0) {
+        return Number(prod.wholesalePrice);
+      }
+
+      return 0;
+    };
+
+    const resolveItemUnitRetailPrice = (prod: any, variant?: any): number => {
+      if (variant?.price && Number(variant.price) > 0) {
+        return Number(variant.price);
+      }
+      if (prod.productChannelPrices && prod.productChannelPrices.length > 0) {
+        const pcp = prod.productChannelPrices.find((p: any) => p.effectivePrice && Number(p.effectivePrice) > 0);
+        if (pcp) return Number(pcp.effectivePrice);
+      }
+      if (prod.basePrice && Number(prod.basePrice) > 0) {
+        return Number(prod.basePrice);
+      }
+      return 0;
+    };
 
     for (const prod of productsWithStock) {
       const activeVariants = prod.variants || [];
@@ -248,8 +330,19 @@ export class DashboardService {
           const min = varInv?.minimumQuantity || 0;
           const avail = qty - res;
 
-          totalStockAvailable += Math.max(0, avail);
+          const availQty = Math.max(0, avail);
+          totalStockAvailable += availQty;
           totalStockReserved += res;
+
+          const unitCost = resolveItemUnitCost(prod, variant);
+          const unitRetail = resolveItemUnitRetailPrice(prod, variant);
+
+          if (availQty > 0 && unitCost > 0) {
+            totalStockCostValue = totalStockCostValue.add(new Prisma.Decimal(unitCost.toFixed(2)).times(availQty));
+          }
+          if (availQty > 0 && unitRetail > 0) {
+            totalStockRetailValue = totalStockRetailValue.add(new Prisma.Decimal(unitRetail.toFixed(2)).times(availQty));
+          }
 
           const variantLabel = variant.name || variant.sku || 'Variante';
           const displayName = `${prod.name} (${variantLabel})`;
@@ -284,8 +377,19 @@ export class DashboardService {
         const parentInv = prod.inventories?.[0];
         if (parentInv) {
           const avail = parentInv.quantity - parentInv.reservedQuantity;
-          totalStockAvailable += Math.max(0, avail);
+          const availQty = Math.max(0, avail);
+          totalStockAvailable += availQty;
           totalStockReserved += parentInv.reservedQuantity;
+
+          const unitCost = resolveItemUnitCost(prod);
+          const unitRetail = resolveItemUnitRetailPrice(prod);
+
+          if (availQty > 0 && unitCost > 0) {
+            totalStockCostValue = totalStockCostValue.add(new Prisma.Decimal(unitCost.toFixed(2)).times(availQty));
+          }
+          if (availQty > 0 && unitRetail > 0) {
+            totalStockRetailValue = totalStockRetailValue.add(new Prisma.Decimal(unitRetail.toFixed(2)).times(availQty));
+          }
 
           if (avail <= 0) {
             criticalStockCount++;
@@ -421,6 +525,9 @@ export class DashboardService {
       inventory: {
         availableQuantity: totalStockAvailable,
         reservedQuantity: totalStockReserved,
+        totalCostValue: totalStockCostValue.toFixed(2),
+        totalRetailValue: totalStockRetailValue.toFixed(2),
+        potentialProfit: totalStockRetailValue.minus(totalStockCostValue).toFixed(2),
         criticalCount: criticalStockCount,
         lowCount: lowStockCount,
         criticalItems: criticalItems.slice(0, 6),

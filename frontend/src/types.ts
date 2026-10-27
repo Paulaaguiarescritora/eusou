@@ -709,6 +709,9 @@ export interface CommercialDashboardData {
   inventory: {
     availableQuantity: number;
     reservedQuantity: number;
+    totalCostValue?: string;
+    totalRetailValue?: string;
+    potentialProfit?: string;
     criticalCount: number;
     lowCount: number;
     criticalItems: {

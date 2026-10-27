@@ -354,11 +354,11 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
           </div>
         </div>
 
-        {/* Estoque F7 */}
+        {/* Estoque F7 (Valor a Custo) */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-              Estoque F7
+              Valor do Estoque (Custo)
             </span>
             <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
               <Boxes className="w-4 h-4" />
@@ -366,12 +366,19 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
           </div>
           <div>
             <div className="text-2xl font-black text-slate-900 tracking-tight">
-              {data?.inventory.availableQuantity || 0}
-              <span className="text-xs text-slate-400 font-medium ml-1">unidades</span>
+              R$ {Number(data?.inventory.totalCostValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Reservado: {data?.inventory.reservedQuantity || 0} unid.
-            </p>
+            <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
+              <span>{data?.inventory.availableQuantity || 0} unidades físicas</span>
+              {data?.inventory.reservedQuantity ? (
+                <span className="text-amber-700 font-medium">({data.inventory.reservedQuantity} res.)</span>
+              ) : null}
+            </div>
+            {data?.inventory.totalRetailValue && Number(data.inventory.totalRetailValue) > 0 ? (
+              <p className="text-[11px] text-emerald-700 font-medium mt-1">
+                Potencial de Venda: R$ {Number(data.inventory.totalRetailValue).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            ) : null}
           </div>
           <div className="pt-2 border-t border-slate-100 flex justify-between text-[11px]">
             <span className="text-rose-600 font-bold">
