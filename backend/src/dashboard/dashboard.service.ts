@@ -239,6 +239,27 @@ export class DashboardService {
     let lowStockCount = 0;
     let totalStockCostValue = new Prisma.Decimal(0);
     let totalStockRetailValue = new Prisma.Decimal(0);
+    let totalMaterialsCostValue = new Prisma.Decimal(0);
+
+    // Consulta e valoração de matéria-prima e insumos (Filamentos, Componentes e Embalagens)
+    try {
+      if (this.prisma.material?.findMany) {
+        const rawMaterials = await this.prisma.material.findMany({
+          where: { isActive: true },
+        });
+        for (const m of rawMaterials) {
+          const q = Number(m.currentQuantity || 0);
+          const c = Number(m.costPerUnit || 0);
+          if (q > 0 && c > 0) {
+            totalMaterialsCostValue = totalMaterialsCostValue.add(
+              new Prisma.Decimal((q * c).toFixed(2)),
+            );
+          }
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`Erro ao calcular valoração de matérias-primas: ${err?.message}`);
+    }
 
     const criticalItems: any[] = [];
 
@@ -528,6 +549,8 @@ export class DashboardService {
         totalCostValue: totalStockCostValue.toFixed(2),
         totalRetailValue: totalStockRetailValue.toFixed(2),
         potentialProfit: totalStockRetailValue.minus(totalStockCostValue).toFixed(2),
+        materialsCostValue: totalMaterialsCostValue.toFixed(2),
+        totalValuation: totalStockCostValue.add(totalMaterialsCostValue).toFixed(2),
         criticalCount: criticalStockCount,
         lowCount: lowStockCount,
         criticalItems: criticalItems.slice(0, 6),

@@ -20,6 +20,7 @@ export const InventoryView: React.FC = () => {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [lowStockOnly, setLowStockOnly] = useState(false);
@@ -36,11 +37,12 @@ export const InventoryView: React.FC = () => {
     setLoading(true);
     try {
       const [invRes, movRes, prodRes] = await Promise.all([
-        fetchApi<{ data: InventoryItem[] }>(`/admin/inventory?lowStockOnly=${lowStockOnly}`),
+        fetchApi<{ data: InventoryItem[]; summary?: any }>(`/admin/inventory?limit=200&lowStockOnly=${lowStockOnly}`),
         fetchApi<{ data: StockMovement[] }>('/admin/inventory/movements'),
         fetchApi<{ data: Product[] }>('/products?limit=100'),
       ]);
       setItems(invRes.data || []);
+      if (invRes.summary) setSummary(invRes.summary);
       setMovements(movRes.data || []);
       setProducts(prodRes.data || []);
     } catch (err) {
@@ -108,6 +110,69 @@ export const InventoryView: React.FC = () => {
         >
           <Sliders size={16} /> Ajuste Manual de Estoque
         </button>
+      </div>
+
+      {/* KPI CARDS: VALORAÇÃO PATRIMONIAL E CUSTO REAL DO ESTOQUE */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1">
+              <span>Patrimônio Total</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px]">Total Geral</span>
+            </div>
+            <div className="text-2xl font-black text-zinc-900 mt-1">
+              R$ {Number(summary?.totalValuation || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          </div>
+          <p className="text-xs text-zinc-500 mt-2">
+            Produtos Acabados (R$ {Number(summary?.totalCostValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) + Insumos/Filamentos (R$ {Number(summary?.materialsCostValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+          </p>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1">
+              <span>Produtos a Custo</span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold text-[10px]">{summary?.totalAvailableQuantity || items.reduce((acc, i) => acc + (i.availableQuantity || 0), 0)} peças</span>
+            </div>
+            <div className="text-2xl font-black text-amber-600 mt-1">
+              R$ {Number(summary?.totalCostValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          </div>
+          <p className="text-xs text-zinc-500 mt-2">
+            Custo real investido nos produtos finalizados e prontos para envio.
+          </p>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1">
+              <span>Insumos & Filamentos</span>
+              <span className="px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 font-bold text-[10px]">Matéria-Prima</span>
+            </div>
+            <div className="text-2xl font-black text-cyan-700 mt-1">
+              R$ {Number(summary?.materialsCostValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          </div>
+          <p className="text-xs text-zinc-500 mt-2">
+            Bobinas de filamento (PLA), embalagens, argolas e suprimentos 3D.
+          </p>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-zinc-200 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1">
+              <span>Potencial de Venda</span>
+              <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[10px]">Varejo</span>
+            </div>
+            <div className="text-2xl font-black text-indigo-700 mt-1">
+              R$ {Number(summary?.totalRetailValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          </div>
+          <p className="text-xs text-zinc-500 mt-2">
+            Projeção de faturamento bruto na venda de 100% dos produtos do estoque.
+          </p>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -210,7 +275,7 @@ export const InventoryView: React.FC = () => {
                 ))}
                 {filteredItems.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center py-10 text-zinc-500">
+                    <td colSpan={8} className="text-center py-10 text-zinc-500">
                       Nenhum produto em estoque encontrado. Realize uma produção ou ajuste manual.
                     </td>
                   </tr>

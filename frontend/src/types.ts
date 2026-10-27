@@ -712,6 +712,8 @@ export interface CommercialDashboardData {
     totalCostValue?: string;
     totalRetailValue?: string;
     potentialProfit?: string;
+    materialsCostValue?: string;
+    totalValuation?: string;
     criticalCount: number;
     lowCount: number;
     criticalItems: {

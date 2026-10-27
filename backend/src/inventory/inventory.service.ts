@@ -34,27 +34,106 @@ export class InventoryService {
     if (query.productId) where.productId = query.productId;
     if (query.variantId) where.variantId = query.variantId;
 
-    const allRecords = await this.prisma.inventory.findMany({
-      where,
-      include: {
-        product: {
-          select: {
-            id: true,
-            name: true,
-            sku: true,
-            status: true,
-            variants: {
-              where: { isActive: true },
-              select: { id: true, name: true, sku: true, isActive: true },
+    const [allRecords, rawMaterials] = await Promise.all([
+      this.prisma.inventory.findMany({
+        where,
+        include: {
+          product: {
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              status: true,
+              basePrice: true,
+              manualCost: true,
+              costSource: true,
+              wholesalePrice: true,
+              productionProfiles: {
+                include: {
+                  materials: { include: { material: true } },
+                  printer: true,
+                },
+              },
+              productChannelPrices: true,
+              variants: {
+                where: { isActive: true },
+                select: { id: true, name: true, sku: true, isActive: true, price: true },
+              },
             },
           },
+          variant: {
+            select: { id: true, name: true, sku: true, isActive: true, price: true },
+          },
         },
-        variant: {
-          select: { id: true, name: true, sku: true, isActive: true },
-        },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
+        orderBy: { updatedAt: 'desc' },
+      }),
+      (async () => {
+        try {
+          if (this.prisma.material?.findMany) {
+            return await this.prisma.material.findMany({ where: { isActive: true } });
+          }
+        } catch (_) {}
+        return [];
+      })(),
+    ]);
+
+    const resolveItemUnitCost = (prod: any, variant?: any): number => {
+      if (!prod) return 0;
+      if (prod.costSource === 'MANUAL' && prod.manualCost !== null && prod.manualCost !== undefined) {
+        const mc = Number(prod.manualCost);
+        if (mc > 0) return mc;
+      }
+      if (prod.productChannelPrices && prod.productChannelPrices.length > 0) {
+        const varPcp = variant
+          ? prod.productChannelPrices.find((p: any) => p.variantId === variant.id && Number(p.costBasis) > 0)
+          : null;
+        const parentPcp = prod.productChannelPrices.find((p: any) => !p.variantId && Number(p.costBasis) > 0);
+        const pcp = varPcp || parentPcp || prod.productChannelPrices[0];
+        if (pcp?.calculationDetails?.productionCost && Number(pcp.calculationDetails.productionCost) > 0) {
+          return Number(pcp.calculationDetails.productionCost);
+        }
+        if (pcp?.costBasis && Number(pcp.costBasis) > 0) {
+          return Number(pcp.costBasis);
+        }
+      }
+      const profiles = prod.productionProfiles || [];
+      const profile = (variant ? profiles.find((p: any) => p.variantId === variant.id) : null) ||
+        profiles.find((p: any) => !p.variantId) || profiles[0];
+      if (profile) {
+        let matCost = 0;
+        if (profile.materials && profile.materials.length > 0) {
+          for (const pm of profile.materials) {
+            const cpu = pm.material?.costPerUnit ? Number(pm.material.costPerUnit) : 0;
+            const q = pm.quantity ? Number(pm.quantity) : 0;
+            matCost += cpu * q;
+          }
+        }
+        const machineCost = profile.printer?.machineCostPerHour
+          ? (Number(profile.productionTimeMinutes || 0) / 60) * Number(profile.printer.machineCostPerHour)
+          : 0;
+        const addCost = Number(profile.packagingCost || 0) + Number(profile.finishingCost || 0) + Number(profile.laborCost || 0);
+        const totalF7 = matCost + machineCost + addCost;
+        if (totalF7 > 0) return totalF7;
+      }
+      if (prod.manualCost !== null && prod.manualCost !== undefined && Number(prod.manualCost) > 0) {
+        return Number(prod.manualCost);
+      }
+      if (prod.wholesalePrice !== null && prod.wholesalePrice !== undefined && Number(prod.wholesalePrice) > 0) {
+        return Number(prod.wholesalePrice);
+      }
+      return 0;
+    };
+
+    const resolveItemUnitRetailPrice = (prod: any, variant?: any): number => {
+      if (!prod) return 0;
+      if (variant?.price && Number(variant.price) > 0) return Number(variant.price);
+      if (prod.productChannelPrices && prod.productChannelPrices.length > 0) {
+        const pcp = prod.productChannelPrices.find((p: any) => p.effectivePrice && Number(p.effectivePrice) > 0);
+        if (pcp) return Number(pcp.effectivePrice);
+      }
+      if (prod.basePrice && Number(prod.basePrice) > 0) return Number(prod.basePrice);
+      return 0;
+    };
 
     // Regra operacional comercial (homologada em DashboardService e CommercialAlertService):
     // 1. Se o produto possui variantes ativas:
@@ -68,15 +147,10 @@ export class InventoryService {
       const activeVariantsCount = inv.product.variants?.length || 0;
 
       if (activeVariantsCount > 0) {
-        // Produto com variantes ativas:
-        // Oculta registro do produto-pai (variantId === null)
         if (!inv.variantId) return false;
-        // Oculta variantes inativas se houver
         if (inv.variant && !inv.variant.isActive) return false;
         return true;
       } else {
-        // Produto sem variantes ativas:
-        // Mantém apenas o registro do produto-pai
         return !inv.variantId;
       }
     });
@@ -98,20 +172,64 @@ export class InventoryService {
       );
     }
 
-    const total = filtered.length;
-    const paginated = filtered.slice(skip, skip + limit);
+    // Totais consolidados para KPI
+    let totalAvailableQuantity = 0;
+    let totalReservedQuantity = 0;
+    let totalCostValue = 0;
+    let totalRetailValue = 0;
+
+    const enrichedItems = filtered.map((i) => {
+      const avail = Math.max(0, i.quantity - i.reservedQuantity);
+      const isLow = i.quantity - i.reservedQuantity <= i.minimumQuantity;
+      const unitCost = resolveItemUnitCost(i.product, i.variant);
+      const unitPrice = resolveItemUnitRetailPrice(i.product, i.variant);
+      const subtotalCost = avail * unitCost;
+      const subtotalPrice = avail * unitPrice;
+
+      totalAvailableQuantity += avail;
+      totalReservedQuantity += i.reservedQuantity;
+      totalCostValue += subtotalCost;
+      totalRetailValue += subtotalPrice;
+
+      return {
+        ...i,
+        availableQuantity: avail,
+        isLowStock: isLow,
+        unitCost: Number(unitCost.toFixed(2)),
+        subtotalCost: Number(subtotalCost.toFixed(2)),
+        unitPrice: Number(unitPrice.toFixed(2)),
+        subtotalPrice: Number(subtotalPrice.toFixed(2)),
+      };
+    });
+
+    // Valoração de matérias-primas
+    let materialsCostValue = 0;
+    for (const m of rawMaterials) {
+      const q = Number(m.currentQuantity || 0);
+      const c = Number(m.costPerUnit || 0);
+      if (q > 0 && c > 0) {
+        materialsCostValue += q * c;
+      }
+    }
+
+    const total = enrichedItems.length;
+    const paginated = enrichedItems.slice(skip, skip + limit);
 
     return {
-      data: paginated.map((i) => ({
-        ...i,
-        availableQuantity: Math.max(0, i.quantity - i.reservedQuantity),
-        isLowStock: i.quantity - i.reservedQuantity <= i.minimumQuantity,
-      })),
+      data: paginated,
       meta: {
         total,
         page,
         limit,
         totalPages: Math.ceil(total / limit) || 1,
+      },
+      summary: {
+        totalAvailableQuantity,
+        totalReservedQuantity,
+        totalCostValue: totalCostValue.toFixed(2),
+        totalRetailValue: totalRetailValue.toFixed(2),
+        materialsCostValue: materialsCostValue.toFixed(2),
+        totalValuation: (totalCostValue + materialsCostValue).toFixed(2),
       },
     };
   }

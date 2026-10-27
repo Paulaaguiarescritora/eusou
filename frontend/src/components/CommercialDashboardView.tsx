@@ -229,55 +229,80 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
       </div>
 
       {/* SEÇÃO DE ENTRADA: VALOR TOTAL E PANORAMA DO ESTOQUE (DESTAQUE MÁXIMO) */}
-      <section className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-700/60 relative overflow-hidden">
+      <section className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-800 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
         <div className="absolute bottom-0 left-1/3 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
         <div className="relative z-10 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/10">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center justify-center shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-amber-400/20 border border-amber-400/30 text-amber-300 flex items-center justify-center shrink-0 shadow-inner">
                 <Boxes className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-[11px] font-bold tracking-widest uppercase text-amber-400 bg-amber-400/10 px-2.5 py-0.5 rounded-full border border-amber-400/20">
-                  Patrimônio & Valoração de Estoque F7
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold tracking-widest uppercase text-amber-400 bg-amber-400/10 px-2.5 py-0.5 rounded-full border border-amber-400/20">
+                    Patrimônio & Valoração de Estoque
+                  </span>
+                  <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20">
+                    Produtos + Insumos
+                  </span>
+                </div>
                 <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight mt-1">
-                  Valor Total do Estoque em Prateleira
+                  Valor Total do Estoque: <span className="text-amber-300">R$ {Number(data?.inventory.totalValuation || data?.inventory.totalCostValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </h2>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => onNavigate('/admin/inventory')}
                 className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition shadow-lg flex items-center gap-2"
               >
                 <Boxes className="w-4 h-4" />
-                <span>Ver Grade de Estoque</span>
+                <span>Estoque de Produtos</span>
                 <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => onNavigate('/admin/materials')}
+                className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs transition border border-white/10 flex items-center gap-2"
+              >
+                <span>Insumos & Filamentos</span>
               </button>
             </div>
           </div>
 
           {/* Grid de 4 Grandes Indicadores */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {/* 1. VALOR A CUSTO */}
+            {/* 1. PRODUTOS ACABADOS A CUSTO */}
             <div className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-5 backdrop-blur-sm transition">
               <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
-                <span>Valor a Custo</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black">Custo Fabril</span>
+                <span>Produtos Acabados</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black">{data?.inventory.availableQuantity || 0} un</span>
               </div>
               <div className="text-2xl sm:text-3xl font-black text-amber-300 tracking-tight my-1">
                 R$ {Number(data?.inventory.totalCostValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                Custo real investido em matéria-prima, energia e fabricação dos itens estocados.
+                Custo de fabricação e insumos alocados em produtos prontos na prateleira.
               </p>
             </div>
 
-            {/* 2. VALOR A PREÇO DE VENDA */}
+            {/* 2. MATÉRIA-PRIMA & FILAMENTOS */}
+            <div className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-5 backdrop-blur-sm transition">
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                <span>Insumos & Filamentos</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-black">3D & Embalagens</span>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-cyan-300 tracking-tight my-1">
+                R$ {Number(data?.inventory.materialsCostValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Estoque ativo de bobinas de filamento (PLA), embalagens, argolas e componentes.
+              </p>
+            </div>
+
+            {/* 3. VALOR A PREÇO DE VENDA */}
             <div className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-5 backdrop-blur-sm transition">
               <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
                 <span>Potencial de Venda</span>
@@ -287,11 +312,11 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
                 R$ {Number(data?.inventory.totalRetailValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                Faturamento bruto projetado com a venda total do estoque disponível.
+                Faturamento bruto projetado com a venda total dos produtos disponíveis.
               </p>
             </div>
 
-            {/* 3. MARGEM BRUTA PROJETADA */}
+            {/* 4. MARGEM BRUTA PROJETADA */}
             <div className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-5 backdrop-blur-sm transition">
               <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
                 <span>Lucro Bruto Projetado</span>
@@ -301,25 +326,8 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
                 R$ {Number(data?.inventory.potentialProfit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                Lucro potencial calculado subtraindo o custo fabril do valor comercial.
+                Margem bruta estimada subtraindo o custo fabril do valor comercial.
               </p>
-            </div>
-
-            {/* 4. SALDO FÍSICO */}
-            <div className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-5 backdrop-blur-sm transition">
-              <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
-                <span>Volume Físico</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-black">Prateleira</span>
-              </div>
-              <div className="text-2xl sm:text-3xl font-black text-white tracking-tight my-1">
-                {data?.inventory.availableQuantity || 0}{' '}
-                <span className="text-sm font-semibold text-slate-400">unid.</span>
-              </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-300 mt-1">
-                <span>Reservadas: <strong className="text-amber-300">{data?.inventory.reservedQuantity || 0}</strong></span>
-                <span>•</span>
-                <span>Esgotados: <strong className="text-rose-400">{data?.inventory.criticalCount || 0}</strong></span>
-              </div>
             </div>
           </div>
         </div>
