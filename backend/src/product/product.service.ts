@@ -260,6 +260,20 @@ export class ProductService {
     };
   }
 
+  async getDistinctBrands(): Promise<string[]> {
+    const products = await this.prisma.product.findMany({
+      select: { brand: true },
+      distinct: ['brand'],
+    });
+    const brandsSet = new Set<string>(['Felinodelia', 'EuSou']);
+    for (const p of products) {
+      if (p.brand && p.brand.trim()) {
+        brandsSet.add(p.brand.trim());
+      }
+    }
+    return Array.from(brandsSet).sort();
+  }
+
   async findById(id: string): Promise<Product> {
     const product = await this.prisma.product.findUnique({
       where: { id },

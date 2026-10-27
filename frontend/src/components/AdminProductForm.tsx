@@ -87,7 +87,8 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [sku, setSku] = useState('');
-  const [brand, setBrand] = useState('EuSou');
+  const [brand, setBrand] = useState('Felinodelia');
+  const [availableBrands, setAvailableBrands] = useState<string[]>(['Felinodelia', 'EuSou']);
   const [status, setStatus] = useState<
     'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'ARCHIVED'
   >('ACTIVE');
@@ -522,12 +523,13 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
         fetchApi<{ data: Tag[] }>('/tags').catch(() => ({ data: [] })),
         fetchApi<{ data: AttributeDefinition[] }>('/attributes').catch(() => ({ data: [] })),
         fetchApi<any>('/admin/materials?activeOnly=true').catch(() => []),
+        fetchApi<string[]>('/products/brands').catch(() => ['Felinodelia', 'EuSou']),
       ]);
 
       if (isEditing && productId) {
         // Dispara simultaneamente: dados auxiliares + dados do produto + resumo de preços + canais
         const [
-          [nichesRes, catsRes, tagsRes, attrsRes, materialsRes],
+          [nichesRes, catsRes, tagsRes, attrsRes, materialsRes, brandsRes],
           prod,
           pricingRes,
           chanRes,
@@ -546,6 +548,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
         setAllAttributes(attrsRes.data || []);
         const matList = Array.isArray(materialsRes) ? materialsRes : materialsRes?.data || [];
         setAllMaterials(matList);
+        if (Array.isArray(brandsRes) && brandsRes.length > 0) setAvailableBrands(brandsRes);
 
         if (pricingRes) {
           setPricingSummary(pricingRes);
@@ -554,7 +557,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
         setName(prod.name || '');
         setSlug(prod.slug || '');
         setSku(prod.sku || '');
-        setBrand(prod.brand || 'EuSou');
+        setBrand(prod.brand || 'Felinodelia');
         setStatus(prod.status || 'ACTIVE');
         setShortDescription(prod.shortDescription || '');
         setDescription(prod.description || '');
@@ -633,7 +636,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
           setProductChannels(mapped);
         }
       } else {
-        const [nichesRes, catsRes, tagsRes, attrsRes, materialsRes] = await auxPromise;
+        const [nichesRes, catsRes, tagsRes, attrsRes, materialsRes, brandsRes] = await auxPromise;
         const loadedNiches = nichesRes.data || [];
         const loadedCats = catsRes.data || [];
         setAllNiches(loadedNiches);
@@ -1455,16 +1458,45 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Marca
-              </label>
-              <input
-                type="text"
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-                placeholder="EuSou"
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-slate-900"
-              />
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Marca
+                </label>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {availableBrands.map((b) => (
+                    <button
+                      key={b}
+                      type="button"
+                      onClick={() => setBrand(b)}
+                      className={`text-[11px] px-2.5 py-0.5 rounded-lg font-bold transition ${
+                        brand === b
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {b}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  list="available-brands-list"
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  placeholder="Selecione ou digite a marca..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-slate-900 bg-white"
+                />
+                <datalist id="available-brands-list">
+                  {availableBrands.map((b) => (
+                    <option key={b} value={b} />
+                  ))}
+                </datalist>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1">
+                Selecione uma das marcas sugeridas ou digite para autocompletar sem erros.
+              </p>
             </div>
           </div>
 

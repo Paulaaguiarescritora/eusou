@@ -41,6 +41,12 @@ export class ProductController {
     return this.productService.findAll(query);
   }
 
+  @Get('brands')
+  @HttpCode(HttpStatus.OK)
+  async getBrands() {
+    return this.productService.getDistinctBrands();
+  }
+
   @Get(':id')
   @HttpCode(HttpStatus.OK)
   async findById(@Param('id') id: string) {
