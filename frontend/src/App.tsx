@@ -136,6 +136,8 @@ export function App() {
   });
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [pendingRoute, setPendingRoute] = useState<string | null>(null);
+  const [adminLoginLoading, setAdminLoginLoading] = useState(false);
+  const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
 
   // Store data
   const [homeData, setHomeData] = useState<{
@@ -371,7 +373,7 @@ export function App() {
   const handleLoginSuccess = (user: { id: string; email: string; roles: string[] }) => {
     setCurrentUser(user);
     if (user.roles.includes('admin')) {
-      const target = pendingRoute || '/admin/products';
+      const target = pendingRoute || (route.startsWith('/admin') && route !== '/admin' ? route : '/admin/products');
       setRoute(target);
       if (typeof window !== 'undefined') {
         window.history.pushState({}, '', target);
@@ -464,23 +466,78 @@ export function App() {
     }
 
     if (!isAdmin) {
+      const executeAdminLogin = async (eMail: string, pWord: string) => {
+        setAdminLoginLoading(true);
+        setAdminLoginError(null);
+        try {
+          const res = await fetchApi<{ accessToken: string }>('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ email: eMail.trim(), password: pWord }),
+          });
+          localStorage.setItem('token', res.accessToken);
+          const me = await fetchApi<{ id: string; email: string; roles: string[] }>('/auth/me');
+          handleLoginSuccess(me);
+        } catch (err: any) {
+          setAdminLoginError(
+            err.message || 'Falha ao autenticar. Se o servidor estava em repouso na nuvem, aguarde 15 segundos e clique novamente.'
+          );
+        } finally {
+          setAdminLoginLoading(false);
+        }
+      };
+
       return (
-        <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 text-white">
-          <div className="max-w-md w-full bg-white p-8 rounded-2xl border border-slate-200 text-slate-900 shadow-2xl space-y-6">
+        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex flex-col items-center justify-center p-4 text-white">
+          <div className="max-w-md w-full bg-white p-7 sm:p-8 rounded-3xl border border-slate-200 text-slate-900 shadow-2xl space-y-6">
             <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-              <div className="w-10 h-10 rounded-xl bg-slate-900 text-amber-400 font-black flex items-center justify-center text-lg shadow-xs">
+              <div className="w-11 h-11 rounded-2xl bg-slate-900 text-amber-400 font-black flex items-center justify-center text-xl shadow-md">
                 E
               </div>
               <div>
-                <h2 className="text-lg font-black tracking-tight text-slate-900">EuSou Backoffice</h2>
-                <p className="text-xs text-slate-500">Acesso Restrito Administrativo</p>
+                <h2 className="text-xl font-black tracking-tight text-slate-900">EuSou Backoffice</h2>
+                <p className="text-xs text-slate-500 font-medium">Acesso Administrativo à Plataforma</p>
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200/80 text-xs text-amber-900">
-              <span className="font-bold block mb-1">Credenciais de Acesso:</span>
-              <span className="font-mono text-slate-700 block">E-mail: admin@eusou.com</span>
-              <span className="font-mono text-slate-700 block">Senha: admin123</span>
+            {/* BOTÃO DE ACESSO RÁPIDO (1 CLIQUE) */}
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-center space-y-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 block">
+                Acesso Rápido Direto
+              </span>
+              <button
+                type="button"
+                disabled={adminLoginLoading}
+                onClick={() => executeAdminLogin('admin@eusou.com', 'admin123')}
+                className="w-full py-3 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black text-sm transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {adminLoginLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+                    <span>Conectando ao servidor...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Entrar com 1 Clique (Admin)</span>
+                  </>
+                )}
+              </button>
+              <p className="text-[11px] text-slate-500 leading-tight">
+                Entra instantaneamente com as credenciais administrativas configuradas.
+              </p>
+            </div>
+
+            {adminLoginError && (
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium leading-relaxed">
+                {adminLoginError}
+              </div>
+            )}
+
+            <div className="relative flex items-center justify-center">
+              <div className="border-t border-slate-200 w-full"></div>
+              <span className="bg-white px-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">
+                Ou digite seu login
+              </span>
             </div>
 
             <form
@@ -489,17 +546,7 @@ export function App() {
                 const form = e.currentTarget;
                 const emailInput = (form.elements.namedItem('email') as HTMLInputElement).value;
                 const passwordInput = (form.elements.namedItem('password') as HTMLInputElement).value;
-                try {
-                  const res = await fetchApi<{ accessToken: string }>('/auth/login', {
-                    method: 'POST',
-                    body: JSON.stringify({ email: emailInput, password: passwordInput }),
-                  });
-                  localStorage.setItem('token', res.accessToken);
-                  const me = await fetchApi<{ id: string; email: string; roles: string[] }>('/auth/me');
-                  handleLoginSuccess(me);
-                } catch (err: any) {
-                  alert(err.message || 'Falha ao autenticar.');
-                }
+                await executeAdminLogin(emailInput, passwordInput);
               }}
               className="space-y-4"
             >
@@ -510,8 +557,8 @@ export function App() {
                   name="email"
                   required
                   defaultValue="admin@eusou.com"
-                  placeholder="admin@eusou.com"
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+                  placeholder="admin@eusou.com ou seu email"
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 bg-white"
                 />
               </div>
 
@@ -523,8 +570,13 @@ export function App() {
                   required
                   defaultValue="admin123"
                   placeholder="••••••••"
-                  className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+                  className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 bg-white"
                 />
+              </div>
+
+              <div className="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex flex-col gap-0.5">
+                <span><strong>E-mails aceitos:</strong> admin@eusou.com ou paulaaguiarescritora@gmail.com</span>
+                <span><strong>Senha padrão:</strong> admin123</span>
               </div>
 
               <div className="pt-2 flex gap-3">
@@ -537,9 +589,10 @@ export function App() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+                  disabled={adminLoginLoading}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  Entrar no Backoffice
+                  {adminLoginLoading ? 'Entrando...' : 'Entrar'}
                 </button>
               </div>
             </form>
