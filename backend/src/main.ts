@@ -59,12 +59,15 @@ async function bootstrap() {
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+  const allowedOriginsRegex = /^(https?:\/\/([a-zA-Z0-9-]+\.)*vercel\.app|https?:\/\/([a-zA-Z0-9-]+\.)*eusou\.com(\.br)?|http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?)$/;
+
   app.enableCors({
     origin: (origin, callback) => {
-      if (!origin || /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$/.test(origin)) {
+      const frontendUrl = process.env.FRONTEND_URL;
+      if (!origin || allowedOriginsRegex.test(origin) || (frontendUrl && origin === frontendUrl)) {
         callback(null, true);
       } else {
-        callback(null, true);
+        callback(new Error('Origem de requisição não permitida pelas políticas de CORS do EuSou.'), false);
       }
     },
     credentials: true,

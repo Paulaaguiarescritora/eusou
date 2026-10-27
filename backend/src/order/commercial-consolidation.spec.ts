@@ -40,6 +40,8 @@ describe('Consolidação da Integração Comercial — End-to-End Test Suite', (
       },
       productVariant: {
         findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
       },
       channel: {
         findFirst: jest.fn(),

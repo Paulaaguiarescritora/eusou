@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { Header, Footer } from './components/Navigation';
 import { ProductCard } from './components/ProductCard';
 import { ProductDetail } from './components/ProductDetail';
@@ -6,28 +6,39 @@ import { CartView } from './components/CartView';
 import { CheckoutView } from './components/CheckoutView';
 import { OrderConfirmation } from './components/OrderConfirmation';
 import { CatalogView } from './components/CatalogView';
-import { AdminOrdersView } from './components/AdminOrdersView';
-import { AffiliatePortalView } from './components/AffiliatePortalView';
-import { AdminAffiliatesView } from './components/AdminAffiliatesView';
-import { ProductionView } from './components/ProductionView';
-import { InventoryView } from './components/InventoryView';
-import { PromoHubView } from './components/PromoHubView';
-import { ProductEmbedView } from './components/ProductEmbedView';
-import { MarketplacesView } from './components/MarketplacesView';
-import { AdminLayout } from './components/AdminLayout';
-import { AdminProductsView } from './components/AdminProductsView';
-import { AdminProductForm } from './components/AdminProductForm';
-import { AdminNichesView } from './components/AdminNichesView';
-import { AdminCategoriesView } from './components/AdminCategoriesView';
-import { AdminTagsView } from './components/AdminTagsView';
-import { AdminAttributesView } from './components/AdminAttributesView';
-import { AdminThemesView } from './components/AdminThemesView';
-import { AdminCollectionsView } from './components/AdminCollectionsView';
-import { AdminCatalogsView } from './components/AdminCatalogsView';
-import { AdminCatalogForm } from './components/AdminCatalogForm';
-import { AdminPricingView } from './components/AdminPricingView';
-import { CommercialDashboardView } from './components/CommercialDashboardView';
-import { LoginModal } from './components/LoginModal';
+
+// Lazy load backoffice and auxiliary components to drastically reduce initial bundle size for shoppers
+const AdminOrdersView = lazy(() => import('./components/AdminOrdersView').then((m) => ({ default: m.AdminOrdersView })));
+const AffiliatePortalView = lazy(() => import('./components/AffiliatePortalView').then((m) => ({ default: m.AffiliatePortalView })));
+const AdminAffiliatesView = lazy(() => import('./components/AdminAffiliatesView').then((m) => ({ default: m.AdminAffiliatesView })));
+const ProductionView = lazy(() => import('./components/ProductionView').then((m) => ({ default: m.ProductionView })));
+const InventoryView = lazy(() => import('./components/InventoryView').then((m) => ({ default: m.InventoryView })));
+const PromoHubView = lazy(() => import('./components/PromoHubView').then((m) => ({ default: m.PromoHubView })));
+const ProductEmbedView = lazy(() => import('./components/ProductEmbedView').then((m) => ({ default: m.ProductEmbedView })));
+const MarketplacesView = lazy(() => import('./components/MarketplacesView').then((m) => ({ default: m.MarketplacesView })));
+const AdminLayout = lazy(() => import('./components/AdminLayout').then((m) => ({ default: m.AdminLayout })));
+const AdminProductsView = lazy(() => import('./components/AdminProductsView').then((m) => ({ default: m.AdminProductsView })));
+const AdminProductForm = lazy(() => import('./components/AdminProductForm').then((m) => ({ default: m.AdminProductForm })));
+const AdminNichesView = lazy(() => import('./components/AdminNichesView').then((m) => ({ default: m.AdminNichesView })));
+const AdminCategoriesView = lazy(() => import('./components/AdminCategoriesView').then((m) => ({ default: m.AdminCategoriesView })));
+const AdminTagsView = lazy(() => import('./components/AdminTagsView').then((m) => ({ default: m.AdminTagsView })));
+const AdminAttributesView = lazy(() => import('./components/AdminAttributesView').then((m) => ({ default: m.AdminAttributesView })));
+const AdminThemesView = lazy(() => import('./components/AdminThemesView').then((m) => ({ default: m.AdminThemesView })));
+const AdminCollectionsView = lazy(() => import('./components/AdminCollectionsView').then((m) => ({ default: m.AdminCollectionsView })));
+const AdminCatalogsView = lazy(() => import('./components/AdminCatalogsView').then((m) => ({ default: m.AdminCatalogsView })));
+const AdminCatalogForm = lazy(() => import('./components/AdminCatalogForm').then((m) => ({ default: m.AdminCatalogForm })));
+const AdminPricingView = lazy(() => import('./components/AdminPricingView').then((m) => ({ default: m.AdminPricingView })));
+const CommercialDashboardView = lazy(() => import('./components/CommercialDashboardView').then((m) => ({ default: m.CommercialDashboardView })));
+const LoginModal = lazy(() => import('./components/LoginModal').then((m) => ({ default: m.LoginModal })));
+
+const ViewFallback = () => (
+  <div className="flex items-center justify-center min-h-[350px] p-8">
+    <div className="flex flex-col items-center gap-3">
+      <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      <span className="text-xs text-slate-500 font-medium">Carregando painel...</span>
+    </div>
+  </div>
+);
 import { useCart } from './useCart';
 import { fetchApi } from './api';
 import { Product, Catalog, Category, Collection, Order, CartItem } from './types';
@@ -434,9 +445,11 @@ export function App() {
   if (route.startsWith('/embed/products/')) {
     const embedId = route.replace('/embed/products/', '').split('?')[0];
     return (
-      <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
-        <ProductEmbedView productId={embedId} />
-      </div>
+      <Suspense fallback={<ViewFallback />}>
+        <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
+          <ProductEmbedView productId={embedId} />
+        </div>
+      </Suspense>
     );
   }
 
@@ -536,7 +549,8 @@ export function App() {
     }
 
     return (
-      <AdminLayout
+      <Suspense fallback={<ViewFallback />}>
+        <AdminLayout
         currentRoute={route}
         onNavigate={navigateTo}
         onLogout={handleLogout}
@@ -623,7 +637,8 @@ export function App() {
         {route === '/admin/marketplaces' && (
           <MarketplacesView token={localStorage.getItem('token') || ''} />
         )}
-      </AdminLayout>
+        </AdminLayout>
+      </Suspense>
     );
   }
 
@@ -639,11 +654,15 @@ export function App() {
         brandTitle={publicBrand}
       />
 
-      <LoginModal
-        isOpen={showLoginModal}
-        onClose={() => setShowLoginModal(false)}
-        onSuccess={handleLoginSuccess}
-      />
+      {showLoginModal && (
+        <Suspense fallback={null}>
+          <LoginModal
+            isOpen={showLoginModal}
+            onClose={() => setShowLoginModal(false)}
+            onSuccess={handleLoginSuccess}
+          />
+        </Suspense>
+      )}
 
       <main className="flex-1">
         {/* ROUTE: HOME */}
@@ -997,7 +1016,9 @@ export function App() {
 
         {/* ROUTE: PORTAL DO AFILIADO */}
         {route === '/affiliate' && (
-          <AffiliatePortalView onNavigate={navigateTo} />
+          <Suspense fallback={<ViewFallback />}>
+            <AffiliatePortalView onNavigate={navigateTo} />
+          </Suspense>
         )}
       </main>
 

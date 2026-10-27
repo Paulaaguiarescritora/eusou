@@ -104,6 +104,8 @@ describe('Integração de Precificação F7 → F12 → Loja Própria → Canais
       },
       productVariant: {
         findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
       },
       order: {
         create: jest.fn(),
@@ -111,8 +113,8 @@ describe('Integração de Precificação F7 → F12 → Loja Própria → Canais
         update: jest.fn(),
       },
       inventory: {
-        findFirst: jest.fn(),
-        create: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue({ id: 'inv-1', quantity: 10, reservedQuantity: 0 }),
+        create: jest.fn().mockResolvedValue({ id: 'inv-1', quantity: 10, reservedQuantity: 0 }),
       },
       category: {
         findMany: jest.fn().mockResolvedValue([]),
