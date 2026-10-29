@@ -155,10 +155,18 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
         setEditNewPassword('');
         setEditConfirmPassword('');
 
-        let dashData: any = null;
-        try {
-          dashData = await fetchApi<any>('/affiliate/dashboard');
-        } catch {}
+        // Carregar métricas, links, conversões e coleções em paralelo para máxima velocidade
+        const [dashRes, linksRes, convRes, colRes] = await Promise.allSettled([
+          fetchApi<any>('/affiliate/dashboard'),
+          fetchApi<any[]>('/affiliate/links'),
+          fetchApi<any[]>('/affiliate/conversions'),
+          fetchApi<any[]>('/affiliate/collections'),
+        ]);
+
+        const dashData = dashRes.status === 'fulfilled' ? dashRes.value : null;
+        const fetchedLinks = linksRes.status === 'fulfilled' && Array.isArray(linksRes.value) ? linksRes.value : [];
+        const fetchedConversions = convRes.status === 'fulfilled' && Array.isArray(convRes.value) ? convRes.value : [];
+        const fetchedCollections = colRes.status === 'fulfilled' && Array.isArray(colRes.value) ? colRes.value : [];
 
         setStats({
           affiliate: affMe,
@@ -169,26 +177,9 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
           approvedCommission: Number(dashData?.commissions?.approved) || 0,
         });
 
-        try {
-          const linksRes = await fetchApi<any[]>('/affiliate/links');
-          setLinks(Array.isArray(linksRes) ? linksRes : []);
-        } catch {
-          setLinks([]);
-        }
-
-        try {
-          const convRes = await fetchApi<any[]>('/affiliate/conversions');
-          setConversions(Array.isArray(convRes) ? convRes : []);
-        } catch {
-          setConversions([]);
-        }
-
-        try {
-          const colRes = await fetchApi<any[]>('/affiliate/collections');
-          setCollections(Array.isArray(colRes) ? colRes : []);
-        } catch {
-          setCollections([]);
-        }
+        setLinks(fetchedLinks);
+        setConversions(fetchedConversions);
+        setCollections(fetchedCollections);
       } else {
         setStats(null);
       }
@@ -1107,8 +1098,10 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                 </div>
               ) : (
                 <div className="divide-y divide-zinc-100">
-                  {links.slice(0, 4).map((link) => {
-                    const fullUrl = `${baseOrigin}${link.targetUrl || '/'}?ref=${link.code || stats?.affiliate?.code}`;
+                  {links.slice(0, 4).map((link: any) => {
+                    const destinationPath = link.targetUrl || link.destination || '/';
+                    const fullUrl = `${baseOrigin}${destinationPath.startsWith('/') ? destinationPath : `/${destinationPath}`}?ref=${link.code || stats?.affiliate?.code}`;
+                    const clicks = link.clicksCount ?? link._count?.clicks ?? 0;
                     return (
                       <div key={link.id} className="py-3 flex items-center justify-between gap-4">
                         <div className="min-w-0">
@@ -1116,7 +1109,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                             {fullUrl}
                           </p>
                           <p className="text-xs text-zinc-400">
-                            {link.clicksCount} cliques • Criado em {new Date(link.createdAt).toLocaleDateString()}
+                            {clicks} cliques • Criado em {link.createdAt ? new Date(link.createdAt).toLocaleDateString('pt-BR') : '-'}
                           </p>
                         </div>
                         <button
@@ -1189,16 +1182,18 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
-                    {links.map((link) => {
-                      const fullUrl = `${baseOrigin}${link.targetUrl || '/'}?ref=${link.code || stats?.affiliate?.code}`;
+                    {links.map((link: any) => {
+                      const destinationPath = link.targetUrl || link.destination || '/';
+                      const fullUrl = `${baseOrigin}${destinationPath.startsWith('/') ? destinationPath : `/${destinationPath}`}?ref=${link.code || stats?.affiliate?.code}`;
+                      const clicks = link.clicksCount ?? link._count?.clicks ?? 0;
                       return (
                         <tr key={link.id} className="hover:bg-zinc-50/50">
                           <td className="px-6 py-4 font-medium text-zinc-900">
-                            {link.targetUrl || 'Página Inicial'}
+                            {destinationPath === '/' ? 'Página Inicial' : destinationPath}
                           </td>
                           <td className="px-6 py-4">
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {link.clicksCount} cliques
+                              {clicks} cliques
                             </span>
                           </td>
                           <td className="px-6 py-4 font-mono text-xs text-zinc-500 truncate max-w-xs">
@@ -1312,42 +1307,60 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
-                    {conversions.map((conv) => (
-                      <tr key={conv.id} className="hover:bg-zinc-50/50">
-                        <td className="px-6 py-4 text-xs">
-                          {new Date(conv.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 font-mono text-xs text-zinc-900">
-                          #{conv.orderId.slice(0, 8)}
-                        </td>
-                        <td className="px-6 py-4 font-semibold text-zinc-900">
-                          {formatCurrency(conv.orderAmount)}
-                        </td>
-                        <td className="px-6 py-4 text-xs font-semibold text-amber-700">
-                          {conv.appliedCommissionPercent || conv.commissionRate}%
-                        </td>
-                        <td className="px-6 py-4 font-bold text-amber-600">
-                          {formatCurrency(conv.commissionAmount)}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                              conv.status === 'APPROVED'
-                                ? 'bg-green-100 text-green-800'
-                                : conv.status === 'PENDING'
-                                ? 'bg-orange-100 text-orange-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {conv.status === 'APPROVED'
-                              ? 'Aprovada'
-                              : conv.status === 'PENDING'
-                              ? 'Pendente'
-                              : 'Cancelada'}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {conversions.map((conv: any) => {
+                      const orderIdStr = String(conv.orderId || conv.orderNumber || conv.order?.id || conv.id || '').trim();
+                      const displayOrderId = orderIdStr ? `#${orderIdStr.slice(0, 8)}` : '-';
+                      const rawDate = conv.createdAt || conv.date || (conv.order && conv.order.createdAt);
+                      let dateStr = '-';
+                      try {
+                        if (rawDate) {
+                          dateStr = new Date(rawDate).toLocaleDateString('pt-BR');
+                        }
+                      } catch {
+                        dateStr = '-';
+                      }
+                      const amountVal = conv.orderAmount ?? conv.amount ?? 0;
+                      const rateVal = conv.appliedCommissionPercent ?? conv.commissionRate ?? stats?.affiliate?.defaultCommissionPercent ?? 10;
+                      const commissionVal = conv.commissionAmount ?? 0;
+                      const convStatus = String(conv.status || conv.conversionStatus || 'PENDING').toUpperCase();
+
+                      return (
+                        <tr key={conv.id || Math.random()} className="hover:bg-zinc-50/50">
+                          <td className="px-6 py-4 text-xs text-zinc-600">
+                            {dateStr}
+                          </td>
+                          <td className="px-6 py-4 font-mono text-xs text-zinc-900 font-semibold">
+                            {displayOrderId}
+                          </td>
+                          <td className="px-6 py-4 font-semibold text-zinc-900">
+                            {formatCurrency(amountVal)}
+                          </td>
+                          <td className="px-6 py-4 text-xs font-semibold text-amber-700">
+                            {rateVal}%
+                          </td>
+                          <td className="px-6 py-4 font-bold text-amber-600">
+                            {formatCurrency(commissionVal)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                                convStatus === 'APPROVED'
+                                  ? 'bg-green-100 text-green-800'
+                                  : convStatus === 'PENDING'
+                                  ? 'bg-orange-100 text-orange-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}
+                            >
+                              {convStatus === 'APPROVED'
+                                ? 'Aprovada'
+                                : convStatus === 'PENDING'
+                                ? 'Pendente'
+                                : 'Cancelada'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

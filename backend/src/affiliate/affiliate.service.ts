@@ -279,7 +279,7 @@ export class AffiliateService {
   }
 
   async findLinksByAffiliate(affiliateId: string) {
-    return this.prisma.affiliateLink.findMany({
+    const links = await this.prisma.affiliateLink.findMany({
       where: { affiliateId },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -289,6 +289,13 @@ export class AffiliateService {
         _count: { select: { clicks: true, conversions: true } },
       },
     });
+
+    return links.map((l) => ({
+      ...l,
+      targetUrl: l.destination,
+      clicksCount: l._count?.clicks || 0,
+      conversionsCount: l._count?.conversions || 0,
+    }));
   }
 
   async updateLink(
@@ -749,11 +756,15 @@ export class AffiliateService {
 
     return conversions.map((c) => ({
       id: c.id,
-      orderNumber: c.orderId.slice(0, 8),
+      orderId: c.orderId || c.order?.id || '',
+      orderNumber: (c.orderId || c.order?.id || '').slice(0, 8),
       date: c.createdAt,
-      orderStatus: c.order.status,
+      createdAt: c.createdAt,
+      orderStatus: c.order?.status || 'PENDING',
       conversionStatus: c.status,
+      status: c.status,
       amount: c.amount,
+      orderAmount: c.amount,
       commissionAmount: c.commissionAmount,
       appliedCommissionPercent: c.appliedCommissionPercent,
     }));
