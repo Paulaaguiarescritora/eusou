@@ -25,6 +25,18 @@ export class CreateAffiliateDto {
   @IsNotEmpty()
   displayName: string;
 
+  @IsString()
+  @IsOptional()
+  cpf?: string;
+
+  @IsString()
+  @IsOptional()
+  whatsapp?: string;
+
+  @IsString()
+  @IsOptional()
+  pixKey?: string;
+
   @IsEnum(AffiliateStatus)
   @IsOptional()
   status?: AffiliateStatus;
@@ -46,6 +58,18 @@ export class UpdateAffiliateDto {
   @IsOptional()
   code?: string;
 
+  @IsString()
+  @IsOptional()
+  cpf?: string;
+
+  @IsString()
+  @IsOptional()
+  whatsapp?: string;
+
+  @IsString()
+  @IsOptional()
+  pixKey?: string;
+
   @IsEnum(AffiliateStatus)
   @IsOptional()
   status?: AffiliateStatus;
@@ -66,6 +90,18 @@ export class JoinAffiliateDto {
   @IsString()
   @IsNotEmpty()
   code: string;
+
+  @IsString()
+  @IsNotEmpty()
+  cpf: string;
+
+  @IsString()
+  @IsNotEmpty()
+  whatsapp: string;
+
+  @IsString()
+  @IsOptional()
+  pixKey?: string;
 }
 
 export class PublicRegisterAffiliateDto {
@@ -83,4 +119,16 @@ export class PublicRegisterAffiliateDto {
   @IsString()
   @IsNotEmpty()
   code: string;
+
+  @IsString()
+  @IsNotEmpty()
+  cpf: string;
+
+  @IsString()
+  @IsNotEmpty()
+  whatsapp: string;
+
+  @IsString()
+  @IsOptional()
+  pixKey?: string;
 }

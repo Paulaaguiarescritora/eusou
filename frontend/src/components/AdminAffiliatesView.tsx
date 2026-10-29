@@ -218,7 +218,7 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNavi
                 <tr>
                   <th className="px-6 py-3.5">Nome / Identificação</th>
                   <th className="px-6 py-3.5">Código Único</th>
-                  <th className="px-6 py-3.5">Email Cadastrado</th>
+                  <th className="px-6 py-3.5">Dados de Contato & PIX</th>
                   <th className="px-6 py-3.5">Status</th>
                   <th className="px-6 py-3.5 text-right">Ações</th>
                 </tr>
@@ -230,7 +230,18 @@ export const AdminAffiliatesView: React.FC<AdminAffiliatesViewProps> = ({ onNavi
                     <td className="px-6 py-4 font-mono text-xs font-bold text-amber-700 bg-amber-50/50 w-fit rounded">
                       {aff.code}
                     </td>
-                    <td className="px-6 py-4 text-zinc-600">{aff.user?.email || '-'}</td>
+                    <td className="px-6 py-4 text-xs text-zinc-600">
+                      <div className="font-medium text-zinc-800">{aff.user?.email || '-'}</div>
+                      {aff.whatsapp && (
+                        <div className="text-zinc-500 mt-0.5">WhatsApp: <span className="font-mono font-medium text-zinc-700">{aff.whatsapp}</span></div>
+                      )}
+                      {aff.cpf && (
+                        <div className="text-zinc-500 mt-0.5">CPF: <span className="font-mono text-zinc-700">{aff.cpf}</span></div>
+                      )}
+                      {aff.pixKey && (
+                        <div className="text-amber-700 mt-0.5 font-medium">PIX: <span className="font-mono">{aff.pixKey}</span></div>
+                      )}
+                    </td>
                     <td className="px-6 py-4">
                       <span
                         className={`px-2.5 py-1 rounded-full text-xs font-semibold ${

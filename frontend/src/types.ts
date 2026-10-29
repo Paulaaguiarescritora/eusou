@@ -265,6 +265,9 @@ export interface Affiliate {
   userId: string;
   code: string;
   displayName: string;
+  cpf?: string | null;
+  whatsapp?: string | null;
+  pixKey?: string | null;
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   defaultCommissionPercent?: number | string | null;
   createdAt: string;

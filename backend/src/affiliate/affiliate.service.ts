@@ -67,6 +67,9 @@ export class AffiliateService {
         userId: dto.userId,
         code: cleanCode,
         displayName: dto.displayName.trim(),
+        cpf: dto.cpf?.trim() || null,
+        whatsapp: dto.whatsapp?.trim() || null,
+        pixKey: dto.pixKey?.trim() || null,
         status: dto.status || AffiliateStatus.ACTIVE,
         defaultCommissionPercent:
           dto.defaultCommissionPercent !== undefined

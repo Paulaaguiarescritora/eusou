@@ -24,12 +24,47 @@ import {
   Check,
   AlertCircle,
   HelpCircle,
-  Award
+  Award,
+  Phone,
+  CreditCard,
+  FileText
 } from 'lucide-react';
 
 interface AffiliatePortalViewProps {
   onNavigate: (route: string) => void;
 }
+
+const isValidCPF = (cpf: string) => {
+  const clean = cpf.replace(/\D/g, '');
+  if (clean.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(clean)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(clean.charAt(i)) * (10 - i);
+  let rev = 11 - (sum % 11);
+  if (rev === 10 || rev === 11) rev = 0;
+  if (rev !== parseInt(clean.charAt(9))) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(clean.charAt(i)) * (11 - i);
+  rev = 11 - (sum % 11);
+  if (rev === 10 || rev === 11) rev = 0;
+  if (rev !== parseInt(clean.charAt(10))) return false;
+  return true;
+};
+
+const formatCPF = (val: string) => {
+  const digits = val.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9, 11)}`;
+};
+
+const formatWhatsApp = (val: string) => {
+  const digits = val.replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7, 11)}`;
+};
 
 export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavigate }) => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'links' | 'collections' | 'share' | 'reports'>('dashboard');
@@ -47,6 +82,9 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
   const [joinCode, setJoinCode] = useState('');
   const [joinEmail, setJoinEmail] = useState('');
   const [joinPassword, setJoinPassword] = useState('');
+  const [joinCpf, setJoinCpf] = useState('');
+  const [joinWhatsapp, setJoinWhatsapp] = useState('');
+  const [joinPixKey, setJoinPixKey] = useState('');
   const [joinTermsAccepted, setJoinTermsAccepted] = useState(true);
   const [submittingJoin, setSubmittingJoin] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -152,22 +190,38 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
     setJoinCode(suggested);
   };
 
-  const handleJoinLogged = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const validateCommonFields = () => {
     if (!joinDisplayName.trim()) {
-      setJoinError('Por favor, informe o seu nome ou o nome da sua marca/perfil.');
-      return;
+      setJoinError('Por favor, informe seu nome completo ou o nome da sua marca/canal.');
+      return false;
+    }
+    const cleanPhone = joinWhatsapp.replace(/\D/g, '');
+    if (cleanPhone.length < 10) {
+      setJoinError('Informe um número de WhatsApp válido com DDD (ex: 11 98888-7777).');
+      return false;
+    }
+    const cleanCpf = joinCpf.replace(/\D/g, '');
+    if (!isValidCPF(cleanCpf)) {
+      setJoinError('Por favor, informe um CPF válido.');
+      return false;
     }
     const cleanCode = joinCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
     if (!cleanCode) {
       setJoinError('Informe um código de indicação válido (somente letras, números e hífens).');
-      return;
+      return false;
     }
     if (!joinTermsAccepted) {
       setJoinError('É necessário aceitar os termos do programa para continuar.');
-      return;
+      return false;
     }
+    return true;
+  };
 
+  const handleJoinLogged = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateCommonFields()) return;
+
+    const cleanCode = joinCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
     setSubmittingJoin(true);
     setJoinError(null);
     try {
@@ -176,6 +230,9 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
         body: JSON.stringify({
           displayName: joinDisplayName.trim(),
           code: cleanCode,
+          cpf: joinCpf.trim(),
+          whatsapp: joinWhatsapp.trim(),
+          pixKey: joinPixKey.trim() || joinCpf.trim(),
         }),
       });
 
@@ -193,28 +250,17 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
 
   const handlePublicRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!joinEmail.trim() || !joinPassword.trim()) {
-      setJoinError('Preencha seu e-mail e crie uma senha.');
+    if (!joinEmail.trim() || !joinEmail.includes('@') || !joinEmail.includes('.')) {
+      setJoinError('Preencha um endereço de e-mail válido.');
       return;
     }
-    if (joinPassword.length < 6) {
+    if (!joinPassword.trim() || joinPassword.length < 6) {
       setJoinError('A senha deve ter no mínimo 6 caracteres.');
       return;
     }
-    if (!joinDisplayName.trim()) {
-      setJoinError('Informe seu nome ou nome da sua marca/perfil.');
-      return;
-    }
-    const cleanCode = joinCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-    if (!cleanCode) {
-      setJoinError('Informe um código de indicação válido.');
-      return;
-    }
-    if (!joinTermsAccepted) {
-      setJoinError('É necessário aceitar os termos do programa para continuar.');
-      return;
-    }
+    if (!validateCommonFields()) return;
 
+    const cleanCode = joinCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
     setSubmittingJoin(true);
     setJoinError(null);
     try {
@@ -225,6 +271,9 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
           password: joinPassword,
           displayName: joinDisplayName.trim(),
           code: cleanCode,
+          cpf: joinCpf.trim(),
+          whatsapp: joinWhatsapp.trim(),
+          pixKey: joinPixKey.trim() || joinCpf.trim(),
         }),
       });
 
@@ -394,11 +443,11 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
         </div>
 
         {/* Registration Card */}
-        <div className="max-w-xl mx-auto bg-white rounded-3xl border border-zinc-200 shadow-xl overflow-hidden mb-16">
+        <div className="max-w-2xl mx-auto bg-white rounded-3xl border border-zinc-200 shadow-xl overflow-hidden mb-16">
           <div className="bg-gradient-to-r from-zinc-900 via-zinc-800 to-amber-950 p-6 text-white text-center">
             <h2 className="text-xl sm:text-2xl font-serif font-bold">Cadastro de Afiliado</h2>
             <p className="text-zinc-300 text-xs sm:text-sm mt-1">
-              Ativação imediata para você começar a divulgar hoje mesmo
+              Preencha seus dados cadastrais para liberação e recebimento de comissões
             </p>
           </div>
 
@@ -419,58 +468,125 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
 
             {currentUserEmail ? (
               // Case A: User is already logged in
-              <form onSubmit={handleJoinLogged} className="space-y-5">
-                <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/60 text-amber-950 flex items-center gap-3 text-sm">
-                  <User size={18} className="text-amber-700 shrink-0" />
-                  <div className="truncate">
-                    Conectado como <strong className="font-semibold text-zinc-900">{currentUserEmail}</strong>
+              <form onSubmit={handleJoinLogged} className="space-y-4">
+                <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/60 text-amber-950 flex items-center justify-between gap-3 text-sm">
+                  <div className="flex items-center gap-2.5 truncate">
+                    <User size={18} className="text-amber-700 shrink-0" />
+                    <span className="truncate">
+                      Conectado como <strong className="font-semibold text-zinc-900">{currentUserEmail}</strong>
+                    </span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.removeItem('token');
+                      setCurrentUserEmail(null);
+                    }}
+                    className="text-xs text-amber-900 hover:text-amber-700 underline shrink-0 font-medium"
+                  >
+                    Trocar
+                  </button>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
-                    Nome da Sua Marca / Canal / Perfil
+                  <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                    Nome Completo ou Nome da Sua Marca / Perfil *
                   </label>
                   <input
                     type="text"
                     required
-                    placeholder="ex: Felinodelia Blog, Decoração Criativa..."
+                    placeholder="ex: Felinodelia Blog ou Paula Aguiar"
                     value={joinDisplayName}
                     onChange={(e) => handleDisplayNameChange(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-zinc-300 text-sm text-zinc-900 placeholder-zinc-400 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                   />
-                  <p className="text-xs text-zinc-500 mt-1">Este é o nome exibido no topo do seu painel e nas suas coleções.</p>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
-                    Código de Indicação Desejado
-                  </label>
-                  <div className="relative">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                      <Phone size={13} className="text-zinc-400" />
+                      WhatsApp (com DDD) *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="(11) 98888-7777"
+                      value={joinWhatsapp}
+                      onChange={(e) => setJoinWhatsapp(formatWhatsApp(e.target.value))}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                      <FileText size={13} className="text-zinc-400" />
+                      CPF *
+                    </label>
                     <input
                       type="text"
                       required
-                      placeholder="ex: FELINODELIA"
-                      value={joinCode}
-                      onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
-                      className="w-full px-4 py-3 rounded-xl border border-zinc-300 text-sm font-mono font-bold tracking-wider text-zinc-900 uppercase focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none transition"
+                      placeholder="000.000.000-00"
+                      value={joinCpf}
+                      onChange={(e) => setJoinCpf(formatCPF(e.target.value))}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none font-mono"
                     />
                   </div>
-                  <div className="mt-2 p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs text-zinc-600 font-mono break-all flex items-center gap-2">
-                    <Sparkles size={14} className="text-amber-600 shrink-0" />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <CreditCard size={13} className="text-zinc-400" />
+                      Chave PIX para Comissões
+                    </label>
+                    {joinCpf && (
+                      <button
+                        type="button"
+                        onClick={() => setJoinPixKey(joinCpf)}
+                        className="text-xs text-amber-700 hover:text-amber-800 font-semibold"
+                      >
+                        Usar meu CPF
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Chave PIX (CPF, Celular, E-mail ou Aleatória)"
+                    value={joinPixKey}
+                    onChange={(e) => setJoinPixKey(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                  <p className="text-xs text-zinc-400 mt-1">Se não preencher agora, será utilizado o seu CPF para os repasses.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                    Código de Afiliado Desejado *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ex: FELINODELIA"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm font-mono font-bold tracking-wider uppercase focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                  <div className="mt-2 p-2.5 bg-zinc-50 rounded-lg border border-zinc-200 text-xs text-zinc-600 font-mono break-all flex items-center gap-2">
+                    <Sparkles size={13} className="text-amber-600 shrink-0" />
                     <span>Link prévio: <strong className="text-zinc-900">{previewRefUrl}</strong></span>
                   </div>
                 </div>
 
-                <div className="flex items-start gap-2.5 pt-1">
+                <div className="flex items-start gap-2.5 pt-2">
                   <input
                     type="checkbox"
-                    id="terms-check"
+                    id="terms-check-logged"
                     checked={joinTermsAccepted}
                     onChange={(e) => setJoinTermsAccepted(e.target.checked)}
                     className="mt-1 h-4 w-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500"
                   />
-                  <label htmlFor="terms-check" className="text-xs text-zinc-600 leading-snug cursor-pointer">
+                  <label htmlFor="terms-check-logged" className="text-xs text-zinc-600 leading-snug cursor-pointer">
                     Concordo com os Termos de Parceria e Comissionamento do Programa de Afiliados EuSou.
                   </label>
                 </div>
@@ -478,7 +594,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                 <button
                   type="submit"
                   disabled={submittingJoin}
-                  className="w-full py-3.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-sm shadow-lg shadow-amber-600/20 active:scale-98 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-3.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-sm shadow-md active:scale-98 transition disabled:opacity-50 flex items-center justify-center gap-2 mt-4"
                 >
                   {submittingJoin ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -489,19 +605,6 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                     </>
                   )}
                 </button>
-
-                <div className="text-center pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      localStorage.removeItem('token');
-                      setCurrentUserEmail(null);
-                    }}
-                    className="text-xs text-zinc-500 hover:text-zinc-800 underline transition"
-                  >
-                    Entrar com outra conta
-                  </button>
-                </div>
               </form>
             ) : (
               // Case B: User is not logged in
@@ -532,49 +635,110 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                   <form onSubmit={handlePublicRegister} className="space-y-4">
                     <div>
                       <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                        Seu Nome / Nome do Canal ou Perfil
+                        Nome Completo ou Razão Social *
                       </label>
                       <input
                         type="text"
                         required
-                        placeholder="ex: Felinodelia Blog"
+                        placeholder="ex: Felinodelia Blog ou Paula Aguiar"
                         value={joinDisplayName}
                         onChange={(e) => handleDisplayNameChange(e.target.value)}
                         className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                       />
                     </div>
 
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                          <Mail size={13} className="text-zinc-400" />
+                          Seu E-mail *
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          placeholder="seuemail@exemplo.com"
+                          value={joinEmail}
+                          onChange={(e) => setJoinEmail(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                          <Lock size={13} className="text-zinc-400" />
+                          Crie uma Senha *
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          placeholder="Mínimo 6 caracteres"
+                          value={joinPassword}
+                          onChange={(e) => setJoinPassword(e.target.value)}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                          <Phone size={13} className="text-zinc-400" />
+                          WhatsApp (com DDD) *
+                        </label>
+                        <input
+                          type="tel"
+                          required
+                          placeholder="(11) 98888-7777"
+                          value={joinWhatsapp}
+                          onChange={(e) => setJoinWhatsapp(formatWhatsApp(e.target.value))}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none font-mono"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                          <FileText size={13} className="text-zinc-400" />
+                          CPF *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="000.000.000-00"
+                          value={joinCpf}
+                          onChange={(e) => setJoinCpf(formatCPF(e.target.value))}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+
                     <div>
-                      <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                        Seu Melhor E-mail
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <CreditCard size={13} className="text-zinc-400" />
+                          Chave PIX para Comissões
+                        </label>
+                        {joinCpf && (
+                          <button
+                            type="button"
+                            onClick={() => setJoinPixKey(joinCpf)}
+                            className="text-xs text-amber-700 hover:text-amber-800 font-semibold"
+                          >
+                            Usar meu CPF
+                          </button>
+                        )}
+                      </div>
                       <input
-                        type="email"
-                        required
-                        placeholder="seuemail@exemplo.com"
-                        value={joinEmail}
-                        onChange={(e) => setJoinEmail(e.target.value)}
+                        type="text"
+                        placeholder="Chave PIX (CPF, Celular, E-mail ou Aleatória)"
+                        value={joinPixKey}
+                        onChange={(e) => setJoinPixKey(e.target.value)}
                         className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                       />
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                        Crie uma Senha
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        placeholder="Mínimo 6 caracteres"
-                        value={joinPassword}
-                        onChange={(e) => setJoinPassword(e.target.value)}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
-                        Código de Afiliado Desejado
+                        Código de Afiliado Desejado *
                       </label>
                       <input
                         type="text"
@@ -584,8 +748,9 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                         onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
                         className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-sm font-mono font-bold tracking-wider uppercase focus:ring-2 focus:ring-amber-500 outline-none"
                       />
-                      <div className="mt-2 p-2.5 bg-zinc-50 rounded-lg border border-zinc-200 text-xs text-zinc-600 font-mono break-all">
-                        Link: <strong className="text-zinc-900">{previewRefUrl}</strong>
+                      <div className="mt-2 p-2.5 bg-zinc-50 rounded-lg border border-zinc-200 text-xs text-zinc-600 font-mono break-all flex items-center gap-2">
+                        <Sparkles size={13} className="text-amber-600 shrink-0" />
+                        <span>Link: <strong className="text-zinc-900">{previewRefUrl}</strong></span>
                       </div>
                     </div>
 
@@ -620,7 +785,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                 ) : (
                   <form onSubmit={handleLoginAndContinue} className="space-y-4">
                     <p className="text-xs text-zinc-500 mb-2">
-                      Já tem conta como cliente na loja? Entre abaixo e ative seu código de afiliado em seguida.
+                      Já tem conta como cliente na loja? Entre abaixo e complete seus dados cadastrais para ativar seu perfil de parceiro.
                     </p>
                     <div>
                       <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
@@ -680,7 +845,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                 Como recebo as comissões?
               </h4>
               <p className="text-zinc-600 leading-relaxed text-xs">
-                As comissões são creditadas no seu saldo assim que o pagamento do pedido é confirmado. Você pode solicitar o resgate via PIX diretamente no seu painel.
+                As comissões são creditadas no seu saldo assim que o pagamento do pedido é confirmado. Os pagamentos são transferidos diretamente na sua chave PIX cadastrada.
               </p>
             </div>
 
