@@ -121,7 +121,34 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
   const [newCollectionName, setNewCollectionName] = useState('');
   const [newCollectionSlug, setNewCollectionSlug] = useState('');
   const [newCollectionDesc, setNewCollectionDesc] = useState('');
-  const [availableProducts, setAvailableProducts] = useState<{ id: string; name: string; slug: string; price: number; imageUrl: string | null }[]>([]);
+  interface CategorySubItem {
+    id: string;
+    name: string;
+    slug: string;
+    parentId: string;
+    productsCount: number;
+  }
+  interface CategoryTreeItem {
+    id: string;
+    name: string;
+    slug: string;
+    productsCount: number;
+    subcategories: CategorySubItem[];
+  }
+  interface CatalogProductItem {
+    id: string;
+    name: string;
+    slug: string;
+    price: number;
+    imageUrl: string | null;
+    categoryIds?: string[];
+    categoryLabel?: string;
+  }
+
+  const [availableProducts, setAvailableProducts] = useState<CatalogProductItem[]>([]);
+  const [categoriesTree, setCategoriesTree] = useState<CategoryTreeItem[]>([]);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string | null>(null);
+  const [selectedSubcategoryFilter, setSelectedSubcategoryFilter] = useState<string | null>(null);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [productSearch, setProductSearch] = useState('');
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
@@ -450,15 +477,21 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
     }
   };
 
-  const loadCatalogProducts = async (search?: string) => {
+  const loadCatalogProductsAndCategories = async (search?: string) => {
     try {
       const q = search ? `?search=${encodeURIComponent(search)}` : '';
-      const res = await fetchApi<any[]>(`/affiliate/catalog-products${q}`);
-      if (Array.isArray(res)) {
-        setAvailableProducts(res);
+      const [prodRes, catRes] = await Promise.allSettled([
+        fetchApi<any[]>(`/affiliate/catalog-products${q}`),
+        fetchApi<any[]>('/affiliate/categories'),
+      ]);
+      if (prodRes.status === 'fulfilled' && Array.isArray(prodRes.value)) {
+        setAvailableProducts(prodRes.value);
+      }
+      if (catRes.status === 'fulfilled' && Array.isArray(catRes.value)) {
+        setCategoriesTree(catRes.value);
       }
     } catch (err) {
-      console.error('Failed to load catalog products:', err);
+      console.error('Failed to load catalog products or categories:', err);
     }
   };
 
@@ -468,9 +501,11 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
     setNewCollectionSlug('');
     setNewCollectionDesc('');
     setSelectedProductIds([]);
+    setSelectedCategoryFilter(null);
+    setSelectedSubcategoryFilter(null);
     setProductSearch('');
     setShowCreateCollectionModal(true);
-    loadCatalogProducts();
+    loadCatalogProductsAndCategories();
   };
 
   const openEditCollection = (col: any) => {
@@ -482,9 +517,23 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
       ? col.items.map((it: any) => it.productId || it.product?.id).filter(Boolean)
       : [];
     setSelectedProductIds(currentProductIds);
+    setSelectedCategoryFilter(null);
+    setSelectedSubcategoryFilter(null);
     setProductSearch('');
     setShowCreateCollectionModal(true);
-    loadCatalogProducts();
+    loadCatalogProductsAndCategories();
+  };
+
+  const handleSelectEntireCategory = (catId: string) => {
+    const matchingProds = availableProducts.filter((p) => p.categoryIds?.includes(catId));
+    const idsToAdd = matchingProds.map((p) => p.id);
+    setSelectedProductIds((prev) => Array.from(new Set([...prev, ...idsToAdd])));
+  };
+
+  const handleDeselectEntireCategory = (catId: string) => {
+    const matchingProds = availableProducts.filter((p) => p.categoryIds?.includes(catId));
+    const idsToRemove = new Set(matchingProds.map((p) => p.id));
+    setSelectedProductIds((prev) => prev.filter((id) => !idsToRemove.has(id)));
   };
 
   const handleDeleteCollection = async (collectionId: string) => {
@@ -1976,11 +2025,152 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                         onClick={() => setSelectedProductIds([])}
                         className="text-xs text-zinc-500 hover:text-zinc-700 font-semibold cursor-pointer"
                       >
-                        Limpar
+                        Limpar Todos
                       </button>
                     </div>
                   )}
                 </div>
+
+                {/* Category & Subcategory Filter Bar */}
+                {categoriesTree.length > 0 && (
+                  <div className="mb-3 space-y-2 bg-zinc-50 p-2.5 rounded-xl border border-zinc-200">
+                    {/* Primary Categories */}
+                    <div>
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5 flex items-center justify-between">
+                        <span>Categorias:</span>
+                        {selectedCategoryFilter && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCategoryFilter(null);
+                              setSelectedSubcategoryFilter(null);
+                            }}
+                            className="text-amber-700 hover:text-amber-800 font-medium normal-case cursor-pointer"
+                          >
+                            Ver todas as categorias
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategoryFilter(null);
+                            setSelectedSubcategoryFilter(null);
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                            selectedCategoryFilter === null
+                              ? 'bg-amber-600 text-white shadow-xs'
+                              : 'bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200'
+                          }`}
+                        >
+                          Todas ({availableProducts.length})
+                        </button>
+                        {categoriesTree.map((cat) => {
+                          const isActive = selectedCategoryFilter === cat.id;
+                          const catProds = availableProducts.filter((p) => p.categoryIds?.includes(cat.id));
+                          return (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedCategoryFilter(cat.id);
+                                setSelectedSubcategoryFilter(null);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                                isActive
+                                  ? 'bg-amber-600 text-white shadow-xs'
+                                  : 'bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-200'
+                              }`}
+                            >
+                              {cat.name} ({catProds.length})
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Subcategories (shown when parent category selected) */}
+                    {selectedCategoryFilter && (() => {
+                      const activeRoot = categoriesTree.find((c) => c.id === selectedCategoryFilter);
+                      if (!activeRoot || activeRoot.subcategories.length === 0) return null;
+
+                      return (
+                        <div className="pt-2 border-t border-zinc-200/60">
+                          <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
+                            Subcategorias de {activeRoot.name}:
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSubcategoryFilter(null)}
+                              className={`px-2 py-0.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                                selectedSubcategoryFilter === null
+                                  ? 'bg-zinc-800 text-white shadow-xs'
+                                  : 'bg-white hover:bg-zinc-100 text-zinc-600 border border-zinc-200'
+                              }`}
+                            >
+                              Todas de {activeRoot.name}
+                            </button>
+                            {activeRoot.subcategories.map((sub) => {
+                              const isSubActive = selectedSubcategoryFilter === sub.id;
+                              const subProds = availableProducts.filter((p) => p.categoryIds?.includes(sub.id));
+                              return (
+                                <button
+                                  key={sub.id}
+                                  type="button"
+                                  onClick={() => setSelectedSubcategoryFilter(sub.id)}
+                                  className={`px-2 py-0.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                                    isSubActive
+                                      ? 'bg-zinc-800 text-white shadow-xs'
+                                      : 'bg-white hover:bg-zinc-100 text-zinc-600 border border-zinc-200'
+                                  }`}
+                                >
+                                  {sub.name} ({subProds.length})
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Quick Category Action Box */}
+                    {selectedCategoryFilter && (() => {
+                      const activeRoot = categoriesTree.find((c) => c.id === selectedCategoryFilter);
+                      const activeSub = activeRoot?.subcategories.find((s) => s.id === selectedSubcategoryFilter);
+                      const targetId = selectedSubcategoryFilter || selectedCategoryFilter;
+                      const targetName = activeSub ? `subcategoria "${activeSub.name}"` : `categoria "${activeRoot?.name}"`;
+                      const targetProds = availableProducts.filter((p) => p.categoryIds?.includes(targetId));
+                      const allTargetSelected = targetProds.length > 0 && targetProds.every((p) => selectedProductIds.includes(p.id));
+
+                      return (
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-200/60 bg-amber-50/70 p-2 rounded-lg">
+                          <span className="text-xs text-amber-900 font-medium">
+                            Ação rápida para {targetName} ({targetProds.length} produtos):
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectEntireCategory(targetId)}
+                              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-xs transition cursor-pointer flex items-center gap-1"
+                            >
+                              <Plus size={13} />
+                              Selecionar todos de {activeSub ? activeSub.name : activeRoot?.name}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeselectEntireCategory(targetId)}
+                              className="px-2.5 py-1 bg-white hover:bg-zinc-100 text-zinc-700 border border-zinc-300 text-xs font-medium rounded-lg transition cursor-pointer"
+                            >
+                              Desmarcar categoria
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
 
                 {/* Search Bar */}
                 <div className="relative mb-3">
@@ -2000,55 +2190,81 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                     <div className="p-8 text-center text-xs text-zinc-400">
                       Carregando produtos do catálogo...
                     </div>
-                  ) : (
-                    availableProducts
-                      .filter((p) => p.name.toLowerCase().includes(productSearch.toLowerCase()))
-                      .map((product) => {
-                        const isSelected = selectedProductIds.includes(product.id);
-                        return (
-                          <div
-                            key={product.id}
-                            onClick={() => toggleProductSelection(product.id)}
-                            className={`flex items-center justify-between p-2.5 rounded-xl transition cursor-pointer ${
-                              isSelected
-                                ? 'bg-amber-50/90 border border-amber-300 text-amber-950 font-medium'
-                                : 'bg-white hover:bg-zinc-50 text-zinc-700 border border-transparent'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-11 h-11 rounded-lg border border-zinc-200 overflow-hidden bg-white shrink-0 flex items-center justify-center">
-                                {product.imageUrl ? (
-                                  <img
-                                    src={resolveMediaUrl(product.imageUrl)}
-                                    alt={product.name}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      (e.currentTarget as HTMLElement).style.display = 'none';
-                                    }}
-                                  />
-                                ) : (
-                                  <ShoppingBag size={18} className="text-zinc-400" />
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold truncate text-zinc-900">{product.name}</p>
-                                <p className="text-xs text-amber-700 font-bold">{formatCurrency(product.price)}</p>
-                              </div>
-                            </div>
+                  ) : (() => {
+                    const filtered = availableProducts.filter((product) => {
+                      if (selectedSubcategoryFilter && !product.categoryIds?.includes(selectedSubcategoryFilter)) {
+                        return false;
+                      }
+                      if (selectedCategoryFilter && !selectedSubcategoryFilter && !product.categoryIds?.includes(selectedCategoryFilter)) {
+                        return false;
+                      }
+                      if (productSearch && !product.name.toLowerCase().includes(productSearch.toLowerCase())) {
+                        return false;
+                      }
+                      return true;
+                    });
 
-                            <div className="shrink-0 pl-3">
-                              {isSelected ? (
-                                <div className="w-6 h-6 rounded-lg bg-amber-600 text-white flex items-center justify-center shadow-xs">
-                                  <Check size={14} />
-                                </div>
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="p-8 text-center text-xs text-zinc-500">
+                          Nenhum produto encontrado nesta categoria ou pesquisa.
+                        </div>
+                      );
+                    }
+
+                    return filtered.map((product) => {
+                      const isSelected = selectedProductIds.includes(product.id);
+                      return (
+                        <div
+                          key={product.id}
+                          onClick={() => toggleProductSelection(product.id)}
+                          className={`flex items-center justify-between p-2.5 rounded-xl transition cursor-pointer ${
+                            isSelected
+                              ? 'bg-amber-50/90 border border-amber-300 text-amber-950 font-medium'
+                              : 'bg-white hover:bg-zinc-50 text-zinc-700 border border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-11 h-11 rounded-lg border border-zinc-200 overflow-hidden bg-white shrink-0 flex items-center justify-center">
+                              {product.imageUrl ? (
+                                <img
+                                  src={resolveMediaUrl(product.imageUrl)}
+                                  alt={product.name}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLElement).style.display = 'none';
+                                  }}
+                                />
                               ) : (
-                                <div className="w-6 h-6 rounded-lg border-2 border-zinc-300 bg-white" />
+                                <ShoppingBag size={18} className="text-zinc-400" />
                               )}
                             </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold truncate text-zinc-900">{product.name}</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-xs text-amber-700 font-bold">{formatCurrency(product.price)}</span>
+                                {product.categoryLabel && (
+                                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-zinc-100 text-zinc-600 rounded">
+                                    {product.categoryLabel}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        );
-                      })
-                  )}
+
+                          <div className="shrink-0 pl-3">
+                            {isSelected ? (
+                              <div className="w-6 h-6 rounded-lg bg-amber-600 text-white flex items-center justify-center shadow-xs">
+                                <Check size={14} />
+                              </div>
+                            ) : (
+                              <div className="w-6 h-6 rounded-lg border-2 border-zinc-300 bg-white" />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
                 <p className="text-xs text-zinc-400 mt-1.5">
                   Clique nos produtos para marcar ou desmarcar. Os itens marcados formarão a vitrine exclusiva do seu link.

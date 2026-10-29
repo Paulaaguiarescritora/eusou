@@ -643,6 +643,42 @@ export class AffiliateService {
 
   // --- AFFILIATE COLLECTIONS ---
 
+  async getCategoriesTree() {
+    const categories = await this.prisma.category.findMany({
+      where: { status: 'ACTIVE' },
+      orderBy: { name: 'asc' },
+      include: {
+        children: {
+          where: { status: 'ACTIVE' },
+          orderBy: { name: 'asc' },
+          include: {
+            _count: {
+              select: { products: true },
+            },
+          },
+        },
+        _count: {
+          select: { products: true },
+        },
+      },
+    });
+
+    const rootCategories = categories.filter((c) => !c.parentId);
+    return rootCategories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      productsCount: c._count.products,
+      subcategories: c.children.map((sub) => ({
+        id: sub.id,
+        name: sub.name,
+        slug: sub.slug,
+        parentId: c.id,
+        productsCount: sub._count?.products || 0,
+      })),
+    }));
+  }
+
   async getCatalogProducts(search?: string) {
     const where: any = {
       status: 'ACTIVE',
@@ -661,7 +697,7 @@ export class AffiliateService {
     const products = await this.prisma.product.findMany({
       where,
       orderBy: { name: 'asc' },
-      take: 100,
+      take: 150,
       include: {
         media: {
           orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
@@ -670,6 +706,19 @@ export class AffiliateService {
         productChannelPrices: ownStore
           ? { where: { channelId: ownStore.id } }
           : true,
+        categories: {
+          include: {
+            category: {
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                parentId: true,
+                parent: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -683,12 +732,28 @@ export class AffiliateService {
         price = Number(p.wholesalePrice) || 0;
       }
 
+      const categoryIds = new Set<string>();
+      let categoryLabel = '';
+      p.categories.forEach((c) => {
+        categoryIds.add(c.categoryId);
+        if (c.category?.parentId) {
+          categoryIds.add(c.category.parentId);
+          if (!categoryLabel && c.category.parent) {
+            categoryLabel = `${c.category.parent.name} › ${c.category.name}`;
+          }
+        } else if (!categoryLabel) {
+          categoryLabel = c.category?.name || '';
+        }
+      });
+
       return {
         id: p.id,
         name: p.name,
         slug: p.slug,
         price,
         imageUrl: p.media[0]?.url || null,
+        categoryIds: Array.from(categoryIds),
+        categoryLabel: categoryLabel || 'Geral',
       };
     });
   }

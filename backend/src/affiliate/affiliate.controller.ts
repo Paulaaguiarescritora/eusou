@@ -258,6 +258,12 @@ export class AffiliateController {
     return this.affiliateService.getCatalogProducts(search);
   }
 
+  @Get('categories')
+  @Roles('affiliate', 'admin')
+  async getCategories() {
+    return this.affiliateService.getCategoriesTree();
+  }
+
   @Get('collections')
   @Roles('affiliate', 'admin')
   async getCollections(@Req() req: any) {
