@@ -225,11 +225,61 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
         if (homeRes.status === 'fulfilled' && Array.isArray(homeRes.value?.catalogs)) {
           setPublicCatalogs(homeRes.value.catalogs);
         }
-        if (prodsRes.status === 'fulfilled' && Array.isArray(prodsRes.value)) {
-          setAvailableProducts(prodsRes.value);
+
+        let prodsList: any[] = [];
+        if (prodsRes.status === 'fulfilled' && Array.isArray(prodsRes.value) && prodsRes.value.length > 0) {
+          prodsList = prodsRes.value;
+        } else {
+          try {
+            const pubRes = await fetchApi<any>('/public/products?limit=100');
+            const rawList = Array.isArray(pubRes) ? pubRes : pubRes?.data || [];
+            prodsList = rawList.map((p: any) => {
+              let price = Number(p.basePrice) || 0;
+              if (!price && p.productChannelPrices && p.productChannelPrices.length > 0) {
+                const cp = p.productChannelPrices.find((c: any) => c.channelType === 'OWN_STORE') || p.productChannelPrices[0];
+                price = Number(cp.effectivePrice || cp.calculatedPrice || cp.manualPrice) || 0;
+              }
+              if (!price && p.wholesalePrice) price = Number(p.wholesalePrice) || 0;
+
+              return {
+                id: p.id,
+                name: p.name,
+                slug: p.slug,
+                price,
+                imageUrl: p.media?.[0]?.url || null,
+                categoryIds: p.categories?.map((c: any) => c.categoryId || c.category?.id).filter(Boolean) || [],
+                categoryLabel: p.categories?.[0]?.category?.name || 'Geral',
+              };
+            });
+          } catch (e) {
+            console.error('Error fetching public fallback products:', e);
+          }
         }
-        if (catsRes.status === 'fulfilled' && Array.isArray(catsRes.value)) {
+        if (prodsList.length > 0) {
+          setAvailableProducts(prodsList);
+        }
+
+        if (catsRes.status === 'fulfilled' && Array.isArray(catsRes.value) && catsRes.value.length > 0) {
           setCategoriesTree(catsRes.value);
+        } else {
+          try {
+            const pubCats = await fetchApi<any[]>('/public/categories');
+            if (Array.isArray(pubCats)) {
+              setCategoriesTree(pubCats.map((c) => ({
+                id: c.id,
+                name: c.name,
+                slug: c.slug,
+                productsCount: 0,
+                subcategories: (c.children || []).map((sub: any) => ({
+                  id: sub.id,
+                  name: sub.name,
+                  slug: sub.slug,
+                  parentId: c.id,
+                  productsCount: 0,
+                })),
+              })));
+            }
+          } catch {}
         }
       } else {
         setStats(null);
@@ -1109,6 +1159,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
   // ==========================================
   const storeRefLink = stats?.affiliate?.code ? `${baseOrigin}?ref=${stats.affiliate.code}` : '';
   const catalogRefLink = stats?.affiliate?.code ? `${baseOrigin}/produtos?ref=${stats.affiliate.code}` : '';
+  const affiliatePageLink = stats?.affiliate?.code ? `${baseOrigin}/catalogo/${stats.affiliate.code}` : '';
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1598,7 +1649,64 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
             </div>
           </div>
 
-          {/* Section 1: Main Catalog & Store Links */}
+          {/* Section 1: Sua Página de Catálogo Exclusiva (Grande Destaque) */}
+          <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-amber-700 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+            <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              <div className="max-w-2xl">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-xs font-bold uppercase tracking-wider mb-3">
+                  <Sparkles size={14} />
+                  Sua Página Oficial de Catálogo
+                </div>
+                <h4 className="text-2xl sm:text-3xl font-black font-serif tracking-tight mb-2">
+                  Catálogo & Vitrine de {stats?.affiliate?.displayName || 'Afiliado'}
+                </h4>
+                <p className="text-amber-50 text-xs sm:text-sm leading-relaxed mb-4">
+                  Esta é a sua página própria de vendas. Seus seguidores verão seu nome, sua curadoria de produtos e todas as suas vitrines. Qualquer compra iniciada aqui garante automaticamente sua comissão!
+                </p>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-xl">
+                  <input
+                    type="text"
+                    readOnly
+                    value={affiliatePageLink}
+                    className="bg-white/95 text-zinc-900 border-none rounded-xl px-3.5 py-2.5 text-xs font-mono font-semibold flex-1 shadow-inner outline-none select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(affiliatePageLink, 'affiliate_page_link')}
+                    className="px-4 py-2.5 bg-zinc-950 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-md shrink-0"
+                  >
+                    {copiedLink === 'affiliate_page_link' ? <CheckCircle2 size={15} className="text-green-400" /> : <Copy size={15} />}
+                    {copiedLink === 'affiliate_page_link' ? 'Copiado!' : 'Copiar Link'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-row lg:flex-col gap-3 w-full lg:w-auto shrink-0">
+                <a
+                  href={affiliatePageLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 lg:flex-initial px-5 py-3 rounded-xl bg-white hover:bg-amber-50 text-amber-950 text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm text-center"
+                >
+                  <ExternalLink size={15} />
+                  Visualizar Minha Página
+                </a>
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                    `Olá! Criei uma página com meu catálogo exclusivo de produtos da EuSou com itens colecionáveis e presentes incríveis. Dá uma olhada aqui: ${affiliatePageLink}`
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 lg:flex-initial px-5 py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm text-center"
+                >
+                  <Share2 size={15} />
+                  Divulgar no WhatsApp
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 1.5: Main Catalog & Store Links */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Full Product Catalog */}
             <div className="bg-gradient-to-br from-white to-amber-50/40 rounded-2xl border-2 border-amber-200 p-6 shadow-sm flex flex-col justify-between relative overflow-hidden">

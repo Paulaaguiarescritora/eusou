@@ -314,6 +314,11 @@ export class PublicAffiliateController {
     private readonly authService: AuthService,
   ) {}
 
+  @Get('catalog/:code')
+  async getAffiliateCatalog(@Param('code') code: string) {
+    return this.affiliateService.getPublicAffiliateCatalog(code);
+  }
+
   @Post('click')
   async recordClick(
     @Body() body: { refCode: string; productId?: string; sessionId?: string },

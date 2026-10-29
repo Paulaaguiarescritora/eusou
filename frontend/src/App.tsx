@@ -6,6 +6,7 @@ import { CartView } from './components/CartView';
 import { CheckoutView } from './components/CheckoutView';
 import { OrderConfirmation } from './components/OrderConfirmation';
 import { CatalogView } from './components/CatalogView';
+import { AffiliateCatalogView } from './components/AffiliateCatalogView';
 
 // Lazy load backoffice and auxiliary components to drastically reduce initial bundle size for shoppers
 const AdminOrdersView = lazy(() => import('./components/AdminOrdersView').then((m) => ({ default: m.AdminOrdersView })));
@@ -75,9 +76,7 @@ function normalizeCanonicalRoute(path: string): string {
   if (path.startsWith('/produto/')) {
     return path.replace('/produto/', '/produtos/');
   }
-  if (path.startsWith('/catalogo/')) {
-    return path.replace('/catalogo/', '/catalogos/');
-  }
+  // Preserve /catalogo/ for affiliate catalogs
   return path;
 }
 
@@ -284,7 +283,7 @@ export function App() {
       setSelectedProduct(null);
       setLoading(true);
       const slug = route.replace('/colecoes/', '').split('?')[0];
-      fetchApi<any>(`/public/store/collections/${encodeURIComponent(slug)}`)
+      fetchApi<any>(`/public/collections/${encodeURIComponent(slug)}`)
         .then((res) => {
           if (res && Array.isArray(res.products)) {
             setProductsList(res.products);
@@ -1038,6 +1037,14 @@ export function App() {
               navigateTo('/produtos');
             }}
             onAddToCart={handleAddToCart}
+          />
+        )}
+
+        {/* ROUTE: PÁGINA DE CATÁLOGO / VITRINE DO AFILIADO */}
+        {(route.startsWith('/catalogo/') || route.startsWith('/afiliado/')) && (
+          <AffiliateCatalogView
+            code={route.replace(/^\/(catalogo|afiliado)\//, '').split('?')[0]}
+            onNavigate={navigateTo}
           />
         )}
 

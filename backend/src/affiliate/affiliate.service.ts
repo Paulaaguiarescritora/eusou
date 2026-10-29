@@ -986,4 +986,93 @@ export class AffiliateService {
       appliedCommissionPercent: c.appliedCommissionPercent,
     }));
   }
+
+  async getPublicAffiliateCatalog(code: string) {
+    const affiliate = await this.prisma.affiliate.findFirst({
+      where: {
+        code: { equals: code.trim(), mode: 'insensitive' },
+        status: AffiliateStatus.ACTIVE,
+      },
+      include: {
+        ownedCollections: {
+          where: { status: 'ACTIVE' },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            items: {
+              orderBy: { position: 'asc' },
+              include: {
+                product: {
+                  include: {
+                    media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 2 },
+                    productChannelPrices: true,
+                    categories: { include: { category: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!affiliate) {
+      throw new NotFoundException('Afiliado não encontrado ou inativo');
+    }
+
+    const ownStore = await this.prisma.channel.findFirst({
+      where: { type: 'OWN_STORE', isActive: true },
+    });
+
+    const allProducts = await this.prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      orderBy: { name: 'asc' },
+      take: 120,
+      include: {
+        media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 2 },
+        productChannelPrices: ownStore ? { where: { channelId: ownStore.id } } : true,
+        categories: { include: { category: true } },
+      },
+    });
+
+    const formatProd = (p: any) => {
+      let price = Number(p.basePrice) || 0;
+      if (!price && p.productChannelPrices && p.productChannelPrices.length > 0) {
+        const cp = p.productChannelPrices[0];
+        price = Number(cp.effectivePrice || cp.calculatedPrice || cp.manualPrice) || 0;
+      }
+      if (!price && p.wholesalePrice) {
+        price = Number(p.wholesalePrice) || 0;
+      }
+
+      return {
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        shortDescription: p.shortDescription || null,
+        price,
+        imageUrl: p.media[0]?.url || null,
+        categoryName: p.categories[0]?.category?.name || 'Geral',
+        categorySlug: p.categories[0]?.category?.slug || 'geral',
+      };
+    };
+
+    return {
+      affiliate: {
+        id: affiliate.id,
+        displayName: affiliate.displayName,
+        code: affiliate.code,
+        whatsapp: affiliate.whatsapp,
+      },
+      collections: affiliate.ownedCollections.map((col) => ({
+        id: col.id,
+        name: col.name,
+        slug: col.slug,
+        description: col.description,
+        products: col.items
+          .filter((item) => item.product && item.product.status === 'ACTIVE')
+          .map((item) => formatProd(item.product)),
+      })),
+      products: allProducts.map(formatProd),
+    };
+  }
 }
