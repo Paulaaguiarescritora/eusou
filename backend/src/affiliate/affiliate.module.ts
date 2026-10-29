@@ -7,8 +7,10 @@ import {
 } from './affiliate.controller';
 import { PrismaService } from '../prisma.service';
 import { AuditLogService } from '../audit-log.service';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
+  imports: [AuthModule],
   controllers: [
     AdminAffiliateController,
     AffiliateController,

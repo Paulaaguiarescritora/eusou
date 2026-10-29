@@ -28,7 +28,9 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('Access denied: insufficient permissions');
     }
 
-    const hasRole = requiredRoles.some((role) => user.roles.includes(role));
+    const hasRole = requiredRoles.some((role) =>
+      user.roles.some((r: string) => r.toLowerCase() === role.toLowerCase()),
+    );
     if (!hasRole) {
       throw new ForbiddenException('Access denied: insufficient permissions');
     }

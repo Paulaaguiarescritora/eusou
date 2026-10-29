@@ -5,6 +5,8 @@ import {
   IsEnum,
   IsUUID,
   IsNumber,
+  IsEmail,
+  MinLength,
   Min,
   Max,
 } from 'class-validator';
@@ -56,3 +58,29 @@ export class UpdateAffiliateDto {
   defaultCommissionPercent?: number;
 }
 
+export class JoinAffiliateDto {
+  @IsString()
+  @IsNotEmpty()
+  displayName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  code: string;
+}
+
+export class PublicRegisterAffiliateDto {
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(6)
+  password: string;
+
+  @IsString()
+  @IsNotEmpty()
+  displayName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  code: string;
+}
