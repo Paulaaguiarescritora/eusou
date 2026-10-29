@@ -171,7 +171,8 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
   // Card & QR Code Generator States
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrProduct, setQrProduct] = useState<any | null>(null);
-  const [qrCardFormat, setQrCardFormat] = useState<'story' | 'feed'>('story');
+  const [qrCardFormat, setQrCardFormat] = useState<'story' | 'feed' | 'sidebar' | 'banner_h'>('sidebar');
+  const [copiedEmbed, setCopiedEmbed] = useState(false);
   const [generatingCard, setGeneratingCard] = useState(false);
 
   const loadData = async () => {
@@ -500,12 +501,27 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
     }
   };
 
-  const downloadPromoCard = async (item: any | null, format: 'story' | 'feed') => {
+  const downloadPromoCard = async (
+    item: any | null,
+    format: 'story' | 'feed' | 'sidebar' | 'banner_h'
+  ) => {
     setGeneratingCard(true);
     try {
-      const isStory = format === 'story';
-      const width = 1080;
-      const height = isStory ? 1920 : 1080;
+      let width = 1080;
+      let height = 1920;
+
+      if (format === 'feed') {
+        width = 1080;
+        height = 1080;
+      } else if (format === 'sidebar') {
+        // WordPress Sidebar (600x500 retina for 300x250 standard widget)
+        width = 600;
+        height = 500;
+      } else if (format === 'banner_h') {
+        // WordPress Leaderboard (1456x180 retina for 728x90)
+        width = 1456;
+        height = 180;
+      }
 
       const canvas = document.createElement('canvas');
       canvas.width = width;
@@ -514,8 +530,13 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
       if (!ctx) return;
 
       const color = themePrimaryColor || '#d97706';
+      const targetUrl = item
+        ? `${baseOrigin}/produtos/${item.slug}?ref=${stats?.affiliate?.code}`
+        : `${baseOrigin}/catalogo/${stats?.affiliate?.code}`;
+      const title = item ? item.name : (themeStoreTitle || `Catálogo Oficial de ${stats?.affiliate?.displayName}`);
+      const affName = (stats?.affiliate?.displayName || 'AFILIADO').toUpperCase();
 
-      // 1. Background
+      // Background
       const bgGrad = ctx.createLinearGradient(0, 0, width, height);
       bgGrad.addColorStop(0, '#09090b');
       bgGrad.addColorStop(0.5, '#18181b');
@@ -523,99 +544,196 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, width, height);
 
-      // Top Header / Badge
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.roundRect(80, 70, 360, 50, 25);
-      ctx.fill();
+      if (format === 'banner_h') {
+        // Horizontal blog banner (728x90 @ 2x)
+        if (item && item.imageUrl) {
+          try {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = resolveMediaUrl(item.imageUrl);
+            await new Promise((res) => { img.onload = res; img.onerror = res; });
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(20, 20, 140, 140, 16);
+            ctx.clip();
+            ctx.drawImage(img, 20, 20, 140, 140);
+            ctx.restore();
+          } catch {}
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 34px sans-serif';
+        ctx.fillText(title.length > 35 ? title.slice(0, 35) + '...' : title, 180, 75);
 
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 22px sans-serif';
-      ctx.fillText('CURADORIA EXCLUSIVA', 105, 104);
+        if (item) {
+          ctx.fillStyle = '#fde047';
+          ctx.font = 'bold 44px sans-serif';
+          ctx.fillText(formatCurrency(item.price), 180, 135);
+        }
 
-      const affName = (stats?.affiliate?.displayName || 'AFILIADO').toUpperCase();
-      ctx.fillStyle = '#d4d4d8';
-      ctx.font = 'bold 22px sans-serif';
-      ctx.fillText(`POR ${affName}`, 80, 160);
+        // Button on the right
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(width - 340, 45, 300, 90, 20);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 30px sans-serif';
+        ctx.fillText('COMPRAR AGORA →', width - 315, 102);
 
-      const targetUrl = item
-        ? `${baseOrigin}/produtos/${item.slug}?ref=${stats?.affiliate?.code}`
-        : `${baseOrigin}/catalogo/${stats?.affiliate?.code}`;
+      } else if (format === 'sidebar') {
+        // WordPress sidebar widget (300x250 @ 2x = 600x500)
+        const imgSize = 220;
+        const imgX = 30;
+        const imgY = 40;
 
-      // 2. Product Image
-      const imgY = isStory ? 220 : 160;
-      const imgSize = isStory ? 760 : 460;
-      const imgX = (width - imgSize) / 2;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(imgX, imgY, imgSize, imgSize, 20);
+        ctx.fill();
 
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(imgX, imgY, imgSize, imgSize, 36);
-      ctx.fill();
+        if (item && item.imageUrl) {
+          try {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = resolveMediaUrl(item.imageUrl);
+            await new Promise((res) => { img.onload = res; img.onerror = res; });
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(imgX + 10, imgY + 10, imgSize - 20, imgSize - 20, 16);
+            ctx.clip();
+            ctx.drawImage(img, imgX + 10, imgY + 10, imgSize - 20, imgSize - 20);
+            ctx.restore();
+          } catch {}
+        }
 
-      if (item && item.imageUrl) {
-        try {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.src = resolveMediaUrl(item.imageUrl);
-          await new Promise((resolve) => {
-            img.onload = resolve;
-            img.onerror = resolve;
-          });
-          ctx.save();
-          ctx.beginPath();
-          ctx.roundRect(imgX + 16, imgY + 16, imgSize - 32, imgSize - 32, 28);
-          ctx.clip();
-          ctx.drawImage(img, imgX + 16, imgY + 16, imgSize - 32, imgSize - 32);
-          ctx.restore();
-        } catch {}
+        // Title and price next to image
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(280, 45, 290, 36, 18);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText('RECOMENDADO', 350, 70);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText(title.length > 20 ? title.slice(0, 20) + '...' : title, 280, 130);
+
+        if (item) {
+          ctx.fillStyle = '#fde047';
+          ctx.font = 'bold 36px sans-serif';
+          ctx.fillText(formatCurrency(item.price), 280, 190);
+        }
+
+        // QR Code in bottom left
+        const qrSize = 130;
+        const qrImg = new Image();
+        qrImg.crossOrigin = 'anonymous';
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(targetUrl)}`;
+        await new Promise((res) => { qrImg.onload = res; qrImg.onerror = res; });
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(30, 310, qrSize + 20, qrSize + 20, 16);
+        ctx.fill();
+        ctx.drawImage(qrImg, 40, 320, qrSize, qrSize);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText('Aponte a câmera', 190, 365);
+        ctx.fillStyle = '#a1a1aa';
+        ctx.font = '14px sans-serif';
+        ctx.fillText('ou acerte seu pedido', 190, 395);
+
+        // CTA Button in bottom right
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(190, 415, 380, 50, 14);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText('COMPRAR AGORA →', 270, 448);
+
+      } else {
+        // Story (9:16) or Feed (1:1)
+        const isStory = format === 'story';
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(80, 70, 360, 50, 25);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.fillText('CURADORIA EXCLUSIVA', 105, 104);
+
+        ctx.fillStyle = '#d4d4d8';
+        ctx.font = 'bold 22px sans-serif';
+        ctx.fillText(`POR ${affName}`, 80, 160);
+
+        const imgY = isStory ? 220 : 160;
+        const imgSize = isStory ? 760 : 460;
+        const imgX = (width - imgSize) / 2;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(imgX, imgY, imgSize, imgSize, 36);
+        ctx.fill();
+
+        if (item && item.imageUrl) {
+          try {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = resolveMediaUrl(item.imageUrl);
+            await new Promise((res) => { img.onload = res; img.onerror = res; });
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(imgX + 16, imgY + 16, imgSize - 32, imgSize - 32, 28);
+            ctx.clip();
+            ctx.drawImage(img, imgX + 16, imgY + 16, imgSize - 32, imgSize - 32);
+            ctx.restore();
+          } catch {}
+        }
+
+        const textY = isStory ? imgY + imgSize + 70 : imgY + 70;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 40px sans-serif';
+        const cleanTitle = title.length > 38 ? title.slice(0, 38) + '...' : title;
+        ctx.fillText(cleanTitle, 80, textY);
+
+        if (item) {
+          ctx.fillStyle = '#fde047';
+          ctx.font = 'bold 54px sans-serif';
+          ctx.fillText(formatCurrency(item.price), 80, textY + 70);
+        }
+
+        const qrSize = isStory ? 280 : 200;
+        const qrX = width - qrSize - 80;
+        const qrY = height - qrSize - 70;
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(qrX - 12, qrY - 12, qrSize + 24, qrSize + 24, 20);
+        ctx.fill();
+
+        const qrImg = new Image();
+        qrImg.crossOrigin = 'anonymous';
+        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize * 2}x${qrSize * 2}&data=${encodeURIComponent(targetUrl)}`;
+        await new Promise((res) => { qrImg.onload = res; qrImg.onerror = res; });
+        ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText('APONTE A CÂMERA', 80, height - 110);
+        ctx.fillStyle = '#a1a1aa';
+        ctx.font = '20px sans-serif';
+        ctx.fillText('Para comprar direto pelo link exclusivo', 80, height - 75);
       }
-
-      // 3. Title & Price
-      const textY = isStory ? imgY + imgSize + 70 : imgY + 70;
-      const title = item ? item.name : (themeStoreTitle || `Catálogo Oficial de ${stats?.affiliate?.displayName}`);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 40px sans-serif';
-      const cleanTitle = title.length > 38 ? title.slice(0, 38) + '...' : title;
-      ctx.fillText(cleanTitle, 80, textY);
-
-      if (item) {
-        ctx.fillStyle = '#fde047';
-        ctx.font = 'bold 54px sans-serif';
-        ctx.fillText(formatCurrency(item.price), 80, textY + 70);
-      }
-
-      // 4. QR Code
-      const qrSize = isStory ? 280 : 200;
-      const qrX = width - qrSize - 80;
-      const qrY = height - qrSize - 70;
-
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.roundRect(qrX - 12, qrY - 12, qrSize + 24, qrSize + 24, 20);
-      ctx.fill();
-
-      const qrImg = new Image();
-      qrImg.crossOrigin = 'anonymous';
-      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize * 2}x${qrSize * 2}&data=${encodeURIComponent(targetUrl)}`;
-      await new Promise((resolve) => {
-        qrImg.onload = resolve;
-        qrImg.onerror = resolve;
-      });
-      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 24px sans-serif';
-      ctx.fillText('APONTE A CÂMERA', 80, height - 110);
-      ctx.fillStyle = '#a1a1aa';
-      ctx.font = '20px sans-serif';
-      ctx.fillText('Para comprar direto pelo link exclusivo', 80, height - 75);
 
       const a = document.createElement('a');
       a.href = canvas.toDataURL('image/png');
-      a.download = `card-${item ? item.slug : 'catalogo'}-${format}.png`;
+      a.download = `banner-propaganda-${item ? item.slug : 'catalogo'}-${format}.png`;
       a.click();
     } catch (err) {
-      console.error('Erro ao gerar card:', err);
+      console.error('Erro ao gerar card/banner:', err);
     } finally {
       setGeneratingCard(false);
     }
@@ -3078,33 +3196,39 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                   </div>
                 </div>
 
-                {/* Card Promocional Generator */}
+                {/* Card & Banner Promocional Generator */}
                 <div className="p-4 bg-gradient-to-br from-amber-50 to-white rounded-2xl border border-amber-200 space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                      <h5 className="font-bold text-zinc-900 text-sm">Card Promocional Pronto para Postar</h5>
-                      <p className="text-xs text-zinc-500">Gera imagem de alta resolução com foto, preço e QR Code integrado</p>
+                      <h5 className="font-bold text-zinc-900 text-sm">Quadro de Propaganda para Blog / Redes</h5>
+                      <p className="text-xs text-zinc-500">Escolha o formato ideal para seu blog WordPress ou redes:</p>
                     </div>
-                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-zinc-200 text-xs">
+                  </div>
+
+                  {/* Format Pills */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { id: 'sidebar', label: 'Blog Sidebar', desc: '300x250 (Barra Lateral)' },
+                      { id: 'banner_h', label: 'Blog Topo', desc: '728x90 (Horizontal)' },
+                      { id: 'feed', label: 'Quadrado', desc: '1:1 (Post/Feed)' },
+                      { id: 'story', label: 'Stories', desc: '9:16 (Status/Stories)' },
+                    ].map((fmt) => (
                       <button
+                        key={fmt.id}
                         type="button"
-                        onClick={() => setQrCardFormat('story')}
-                        className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
-                          qrCardFormat === 'story' ? 'bg-amber-600 text-white' : 'text-zinc-600 hover:text-zinc-900'
+                        onClick={() => setQrCardFormat(fmt.id as any)}
+                        className={`p-2 rounded-xl border text-left transition cursor-pointer ${
+                          qrCardFormat === fmt.id
+                            ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                            : 'bg-white hover:bg-zinc-50 text-zinc-700 border-zinc-200'
                         }`}
                       >
-                        Stories (9:16)
+                        <span className="text-xs font-bold block">{fmt.label}</span>
+                        <span className={`text-[10px] block ${qrCardFormat === fmt.id ? 'text-amber-100' : 'text-zinc-400'}`}>
+                          {fmt.desc}
+                        </span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setQrCardFormat('feed')}
-                        className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
-                          qrCardFormat === 'feed' ? 'bg-amber-600 text-white' : 'text-zinc-600 hover:text-zinc-900'
-                        }`}
-                      >
-                        Feed (1:1)
-                      </button>
-                    </div>
+                    ))}
                   </div>
 
                   <button
@@ -3114,8 +3238,42 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                     className="w-full py-3 bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50"
                   >
                     <Download size={15} className="text-amber-400" />
-                    <span>{generatingCard ? 'Gerando Imagem...' : `Baixar Card ${qrCardFormat === 'story' ? 'Stories (9:16)' : 'Feed (1:1)'} em Alta Definição (PNG)`}</span>
+                    <span>{generatingCard ? 'Gerando Banner...' : `Baixar Imagem do Banner (PNG)`}</span>
                   </button>
+                </div>
+
+                {/* Bloco de Código HTML para WordPress */}
+                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-200 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h5 className="font-bold text-zinc-900 text-xs sm:text-sm">Código HTML para Blog WordPress</h5>
+                      <p className="text-[11px] text-zinc-500">Cole em um bloco de "HTML Personalizado" no WordPress:</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const prodImg = qrProduct && qrProduct.imageUrl ? resolveMediaUrl(qrProduct.imageUrl) : 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c';
+                        const prodTitle = qrProduct ? qrProduct.name : (themeStoreTitle || 'Visite Nosso Catálogo');
+                        const prodPrice = qrProduct ? formatCurrency(qrProduct.price) : '';
+                        const embedHtml = `<div style="max-width:320px;margin:16px auto;padding:16px;background:#ffffff;border:1px solid #e4e4e7;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,0.06);font-family:sans-serif;text-align:center;">\n  <a href="${targetUrl}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;display:block;">\n    <img src="${prodImg}" alt="${prodTitle}" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;margin-bottom:12px;" />\n    <span style="font-size:11px;font-weight:700;color:${themePrimaryColor};text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Recomendado</span>\n    <h4 style="font-size:14px;font-weight:700;color:#18181b;margin:0 0 8px;line-height:1.3;">${prodTitle}</h4>\n    ${prodPrice ? `<div style="font-size:18px;font-weight:900;color:${themePrimaryColor};margin-bottom:12px;">${prodPrice}</div>` : ''}\n    <div style="background:${themePrimaryColor};color:#ffffff;font-size:13px;font-weight:700;padding:10px 16px;border-radius:10px;display:inline-block;">Comprar Agora &rarr;</div>\n  </a>\n</div>`;
+                        navigator.clipboard.writeText(embedHtml);
+                        setCopiedEmbed(true);
+                        setTimeout(() => setCopiedEmbed(false), 2500);
+                      }}
+                      className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+                    >
+                      {copiedEmbed ? <CheckCircle2 size={13} className="text-green-400" /> : <Copy size={13} />}
+                      <span>{copiedEmbed ? 'Copiado!' : 'Copiar Código HTML'}</span>
+                    </button>
+                  </div>
+
+                  <div className="p-2.5 bg-zinc-900 text-zinc-300 rounded-xl font-mono text-[10px] overflow-x-auto max-h-24">
+                    <code>
+                      {qrProduct
+                        ? `<div style="max-width:320px;..."><a href="${targetUrl}" target="_blank">...<img src="${qrProduct.imageUrl ? resolveMediaUrl(qrProduct.imageUrl) : ''}" /><h4>${qrProduct.name}</h4><div>${formatCurrency(qrProduct.price)}</div><span>Comprar Agora →</span></a></div>`
+                        : `<div style="max-width:320px;..."><a href="${targetUrl}" target="_blank"><h4>Catálogo de ${stats?.affiliate?.displayName}</h4><span>Ver Produtos →</span></a></div>`}
+                    </code>
+                  </div>
                 </div>
               </div>
             </div>
