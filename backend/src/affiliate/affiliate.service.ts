@@ -204,6 +204,10 @@ export class AffiliateService {
     if (dto.status !== undefined) updateData.status = dto.status;
     if (dto.defaultCommissionPercent !== undefined)
       updateData.defaultCommissionPercent = dto.defaultCommissionPercent;
+    if (dto.cpf !== undefined) updateData.cpf = dto.cpf;
+    if (dto.whatsapp !== undefined) updateData.whatsapp = dto.whatsapp;
+    if (dto.pixKey !== undefined) updateData.pixKey = dto.pixKey;
+    if (dto.themeConfig !== undefined) updateData.themeConfig = dto.themeConfig;
 
     if (dto.code !== undefined) {
       const cleanCode = dto.code
@@ -1062,6 +1066,7 @@ export class AffiliateService {
         displayName: affiliate.displayName,
         code: affiliate.code,
         whatsapp: affiliate.whatsapp,
+        themeConfig: affiliate.themeConfig || null,
       },
       collections: affiliate.ownedCollections.map((col) => ({
         id: col.id,

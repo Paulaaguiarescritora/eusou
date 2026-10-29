@@ -711,16 +711,19 @@ export function App() {
   }
 
   // 3. PUBLIC STORE ROUTE
+  const isAffiliateCatalog = route.startsWith('/catalogo/') || route.startsWith('/afiliado/');
   const publicBrand = activeNicheName || storeContext?.brandName || 'Loja Especializada';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50/50 text-slate-800 font-sans antialiased">
-      <Header
-        totalItems={totalItems}
-        onNavigate={navigateTo}
-        currentRoute={route}
-        brandTitle={publicBrand}
-      />
+      {!isAffiliateCatalog && (
+        <Header
+          totalItems={totalItems}
+          onNavigate={navigateTo}
+          currentRoute={route}
+          brandTitle={publicBrand}
+        />
+      )}
 
       {showLoginModal && (
         <Suspense fallback={null}>
@@ -1041,9 +1044,14 @@ export function App() {
         )}
 
         {/* ROUTE: PÁGINA DE CATÁLOGO / VITRINE DO AFILIADO */}
-        {(route.startsWith('/catalogo/') || route.startsWith('/afiliado/')) && (
+        {isAffiliateCatalog && (
           <AffiliateCatalogView
             code={route.replace(/^\/(catalogo|afiliado)\//, '').split('?')[0]}
+            cartCount={totalItems}
+            onAddToCart={(item) => {
+              handleAddToCart(item);
+              navigateTo('/carrinho');
+            }}
             onNavigate={navigateTo}
           />
         )}
@@ -1109,7 +1117,7 @@ export function App() {
         )}
       </main>
 
-      <Footer onNavigate={navigateTo} brandTitle={publicBrand} />
+      {!isAffiliateCatalog && <Footer onNavigate={navigateTo} brandTitle={publicBrand} />}
     </div>
   );
 }

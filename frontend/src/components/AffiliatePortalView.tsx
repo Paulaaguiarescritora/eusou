@@ -33,7 +33,9 @@ import {
   KeyRound,
   Search,
   Trash2,
-  Edit
+  Edit,
+  Palette,
+  Download
 } from 'lucide-react';
 
 interface AffiliatePortalViewProps {
@@ -157,6 +159,21 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
   const [shareProductSearch, setShareProductSearch] = useState('');
   const [shareCategoryFilter, setShareCategoryFilter] = useState<string | null>(null);
 
+  // Theme Customization States
+  const [showThemeModal, setShowThemeModal] = useState(false);
+  const [themePrimaryColor, setThemePrimaryColor] = useState('#d97706');
+  const [themeBannerStyle, setThemeBannerStyle] = useState<'gradient' | 'minimal' | 'dark'>('gradient');
+  const [themeStoreTitle, setThemeStoreTitle] = useState('');
+  const [themeCustomBio, setThemeCustomBio] = useState('');
+  const [savingTheme, setSavingTheme] = useState(false);
+  const [themeSavedSuccess, setThemeSavedSuccess] = useState(false);
+
+  // Card & QR Code Generator States
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrProduct, setQrProduct] = useState<any | null>(null);
+  const [qrCardFormat, setQrCardFormat] = useState<'story' | 'feed'>('story');
+  const [generatingCard, setGeneratingCard] = useState(false);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -192,6 +209,13 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
         setEditPixKey(affMe.pixKey || '');
         setEditNewPassword('');
         setEditConfirmPassword('');
+
+        if (affMe.themeConfig) {
+          setThemePrimaryColor(affMe.themeConfig.primaryColor || '#d97706');
+          setThemeBannerStyle(affMe.themeConfig.bannerStyle || 'gradient');
+          setThemeStoreTitle(affMe.themeConfig.storeTitle || '');
+          setThemeCustomBio(affMe.themeConfig.customBio || '');
+        }
 
         // Carregar métricas, links, conversões, coleções, catálogos e produtos em paralelo para máxima velocidade
         const [dashRes, linksRes, convRes, colRes, homeRes, prodsRes, catsRes] = await Promise.allSettled([
@@ -432,6 +456,168 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
       setJoinError(err.message || 'E-mail ou senha incorretos.');
     } finally {
       setSubmittingJoin(false);
+    }
+  };
+
+  const handleSaveTheme = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingTheme(true);
+    setThemeSavedSuccess(false);
+    try {
+      const themeConfig = {
+        primaryColor: themePrimaryColor,
+        bannerStyle: themeBannerStyle,
+        storeTitle: themeStoreTitle.trim(),
+        customBio: themeCustomBio.trim(),
+      };
+      await fetchApi('/affiliate/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ themeConfig }),
+      });
+      setThemeSavedSuccess(true);
+      setTimeout(() => setThemeSavedSuccess(false), 3000);
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao salvar tema do catálogo');
+    } finally {
+      setSavingTheme(false);
+    }
+  };
+
+  const downloadQrOnly = async (targetUrl: string, filename: string) => {
+    try {
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(targetUrl)}`;
+      const res = await fetch(qrUrl);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `qrcode-${filename}.png`;
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('Erro ao baixar QR code:', err);
+    }
+  };
+
+  const downloadPromoCard = async (item: any | null, format: 'story' | 'feed') => {
+    setGeneratingCard(true);
+    try {
+      const isStory = format === 'story';
+      const width = 1080;
+      const height = isStory ? 1920 : 1080;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const color = themePrimaryColor || '#d97706';
+
+      // 1. Background
+      const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+      bgGrad.addColorStop(0, '#09090b');
+      bgGrad.addColorStop(0.5, '#18181b');
+      bgGrad.addColorStop(1, color);
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      // Top Header / Badge
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.roundRect(80, 70, 360, 50, 25);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText('CURADORIA EXCLUSIVA', 105, 104);
+
+      const affName = (stats?.affiliate?.displayName || 'AFILIADO').toUpperCase();
+      ctx.fillStyle = '#d4d4d8';
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText(`POR ${affName}`, 80, 160);
+
+      const targetUrl = item
+        ? `${baseOrigin}/produtos/${item.slug}?ref=${stats?.affiliate?.code}`
+        : `${baseOrigin}/catalogo/${stats?.affiliate?.code}`;
+
+      // 2. Product Image
+      const imgY = isStory ? 220 : 160;
+      const imgSize = isStory ? 760 : 460;
+      const imgX = (width - imgSize) / 2;
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.roundRect(imgX, imgY, imgSize, imgSize, 36);
+      ctx.fill();
+
+      if (item && item.imageUrl) {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.src = resolveMediaUrl(item.imageUrl);
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(imgX + 16, imgY + 16, imgSize - 32, imgSize - 32, 28);
+          ctx.clip();
+          ctx.drawImage(img, imgX + 16, imgY + 16, imgSize - 32, imgSize - 32);
+          ctx.restore();
+        } catch {}
+      }
+
+      // 3. Title & Price
+      const textY = isStory ? imgY + imgSize + 70 : imgY + 70;
+      const title = item ? item.name : (themeStoreTitle || `Catálogo Oficial de ${stats?.affiliate?.displayName}`);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 40px sans-serif';
+      const cleanTitle = title.length > 38 ? title.slice(0, 38) + '...' : title;
+      ctx.fillText(cleanTitle, 80, textY);
+
+      if (item) {
+        ctx.fillStyle = '#fde047';
+        ctx.font = 'bold 54px sans-serif';
+        ctx.fillText(formatCurrency(item.price), 80, textY + 70);
+      }
+
+      // 4. QR Code
+      const qrSize = isStory ? 280 : 200;
+      const qrX = width - qrSize - 80;
+      const qrY = height - qrSize - 70;
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.roundRect(qrX - 12, qrY - 12, qrSize + 24, qrSize + 24, 20);
+      ctx.fill();
+
+      const qrImg = new Image();
+      qrImg.crossOrigin = 'anonymous';
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize * 2}x${qrSize * 2}&data=${encodeURIComponent(targetUrl)}`;
+      await new Promise((resolve) => {
+        qrImg.onload = resolve;
+        qrImg.onerror = resolve;
+      });
+      ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText('APONTE A CÂMERA', 80, height - 110);
+      ctx.fillStyle = '#a1a1aa';
+      ctx.font = '20px sans-serif';
+      ctx.fillText('Para comprar direto pelo link exclusivo', 80, height - 75);
+
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = `card-${item ? item.slug : 'catalogo'}-${format}.png`;
+      a.click();
+    } catch (err) {
+      console.error('Erro ao gerar card:', err);
+    } finally {
+      setGeneratingCard(false);
     }
   };
 
@@ -1681,26 +1867,48 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                 </div>
               </div>
 
-              <div className="flex flex-row lg:flex-col gap-3 w-full lg:w-auto shrink-0">
+              <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 w-full lg:w-auto shrink-0">
                 <a
                   href={affiliatePageLink}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex-1 lg:flex-initial px-5 py-3 rounded-xl bg-white hover:bg-amber-50 text-amber-950 text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm text-center"
+                  className="px-4 py-2.5 rounded-xl bg-white hover:bg-amber-50 text-amber-950 text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm text-center"
                 >
-                  <ExternalLink size={15} />
+                  <ExternalLink size={14} />
                   Visualizar Minha Página
                 </a>
+
+                <button
+                  type="button"
+                  onClick={() => setShowThemeModal(true)}
+                  className="px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+                >
+                  <Palette size={14} className="text-amber-400" />
+                  Personalizar Tema do Catálogo
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQrProduct(null);
+                    setShowQrModal(true);
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm cursor-pointer backdrop-blur-xs border border-white/20"
+                >
+                  <QrCode size={14} />
+                  QR Code & Card da Loja
+                </button>
+
                 <a
                   href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                    `Olá! Criei uma página com meu catálogo exclusivo de produtos da EuSou com itens colecionáveis e presentes incríveis. Dá uma olhada aqui: ${affiliatePageLink}`
+                    `Olá! Criei uma página com meu catálogo exclusivo de produtos colecionáveis e presentes incríveis. Dá uma olhada aqui: ${affiliatePageLink}`
                   )}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex-1 lg:flex-initial px-5 py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm text-center"
+                  className="px-4 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 text-white text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm text-center"
                 >
-                  <Share2 size={15} />
-                  Divulgar no WhatsApp
+                  <Share2 size={14} />
+                  WhatsApp
                 </a>
               </div>
             </div>
@@ -2154,14 +2362,28 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                         </div>
 
                         <div className="space-y-1.5 pt-2 border-t border-zinc-100">
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(prodLink, `prod_${prod.id}`)}
-                            className="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                          >
-                            {isCopied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
-                            {isCopied ? 'Link Copiado!' : 'Copiar Link Direto'}
-                          </button>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(prodLink, `prod_${prod.id}`)}
+                              className="py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                            >
+                              {isCopied ? <CheckCircle2 size={12} /> : <Copy size={12} />}
+                              <span>{isCopied ? 'Copiado!' : 'Copiar Link'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQrProduct(prod);
+                                setShowQrModal(true);
+                              }}
+                              className="py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                            >
+                              <QrCode size={12} className="text-amber-400" />
+                              <span>Card & QR</span>
+                            </button>
+                          </div>
 
                           <div className="flex items-center gap-1.5">
                             <a
@@ -2576,6 +2798,330 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
           </div>
         </div>
       )}
+
+      {/* Modal: Personalizar Tema do Catálogo */}
+      {showThemeModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl animate-in fade-in zoom-in-95 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                  <Palette size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-zinc-900">Personalizar Tema do Catálogo</h3>
+                  <p className="text-xs text-zinc-500">
+                    Defina as cores, estilo visual e apresentação da sua página de vendas
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowThemeModal(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTheme} className="space-y-5 pt-4 flex-1 overflow-y-auto pr-1">
+              {themeSavedSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-600" />
+                  <span>Tema salvo e aplicado com sucesso à sua página de catálogo!</span>
+                </div>
+              )}
+
+              {/* Cor Primária */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-800 uppercase tracking-wider mb-2">
+                  Cor Principal do Tema
+                </label>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
+                  {[
+                    { label: 'Dourado', hex: '#d97706' },
+                    { label: 'Esmeralda', hex: '#059669' },
+                    { label: 'Violeta', hex: '#7c3aed' },
+                    { label: 'Safira', hex: '#2563eb' },
+                    { label: 'Coral', hex: '#e11d48' },
+                    { label: 'Grafite', hex: '#18181b' },
+                  ].map((preset) => (
+                    <button
+                      key={preset.hex}
+                      type="button"
+                      onClick={() => setThemePrimaryColor(preset.hex)}
+                      className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center gap-1.5 cursor-pointer ${
+                        themePrimaryColor === preset.hex
+                          ? 'border-zinc-950 ring-2 ring-zinc-950/20 shadow-xs'
+                          : 'border-zinc-200 hover:border-zinc-400'
+                      }`}
+                    >
+                      <div className="w-6 h-6 rounded-full shadow-xs" style={{ backgroundColor: preset.hex }} />
+                      <span className="text-[11px] font-semibold text-zinc-700">{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-3 p-2 bg-zinc-50 rounded-xl border border-zinc-200">
+                  <input
+                    type="color"
+                    value={themePrimaryColor}
+                    onChange={(e) => setThemePrimaryColor(e.target.value)}
+                    className="w-9 h-9 rounded-lg border-0 cursor-pointer bg-transparent"
+                  />
+                  <div className="text-xs">
+                    <span className="text-zinc-500 block">Cor personalizada (Hex):</span>
+                    <span className="font-mono font-bold text-zinc-800">{themePrimaryColor}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Estilo do Banner */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-800 uppercase tracking-wider mb-2">
+                  Estilo Visual do Banner
+                </label>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {[
+                    { id: 'gradient', label: 'Gradiente Moderno', desc: 'Tons vibrantes e modernos' },
+                    { id: 'dark', label: 'Escuro Elegante', desc: 'Preto luxo cinematográfico' },
+                    { id: 'minimal', label: 'Minimalista Claro', desc: 'Fundo branco limpo' },
+                  ].map((style) => (
+                    <button
+                      key={style.id}
+                      type="button"
+                      onClick={() => setThemeBannerStyle(style.id as any)}
+                      className={`p-3 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
+                        themeBannerStyle === style.id
+                          ? 'border-zinc-950 ring-2 ring-zinc-950/20 bg-zinc-50'
+                          : 'border-zinc-200 hover:border-zinc-400 bg-white'
+                      }`}
+                    >
+                      <span className="text-xs font-bold text-zinc-900 block mb-1">{style.label}</span>
+                      <span className="text-[10px] text-zinc-500 leading-tight">{style.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Título da Loja */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-800 uppercase tracking-wider mb-1">
+                  Nome da Vitrine / Título da Loja
+                </label>
+                <input
+                  type="text"
+                  placeholder={stats?.affiliate?.displayName || 'Ex: Minha Loja Geek & Pets'}
+                  value={themeStoreTitle}
+                  onChange={(e) => setThemeStoreTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-zinc-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+
+              {/* Bio / Slogan */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-800 uppercase tracking-wider mb-1">
+                  Mensagem de Boas-Vindas / Slogan
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Ex: Sejam bem-vindos! Selecionei pessoalmente os melhores colecionáveis e presentes 3D com entrega garantida."
+                  value={themeCustomBio}
+                  onChange={(e) => setThemeCustomBio(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-zinc-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 outline-none resize-none"
+                />
+              </div>
+
+              {/* Preview Mini Box */}
+              <div className="p-3.5 rounded-2xl border border-zinc-200 bg-zinc-50">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 block mb-2">
+                  Pré-visualização do Topo do Catálogo:
+                </span>
+                <div
+                  style={{
+                    backgroundColor: themeBannerStyle === 'minimal' ? '#ffffff' : '#18181b',
+                    borderColor: themeBannerStyle === 'minimal' ? '#e4e4e7' : 'transparent',
+                  }}
+                  className="p-4 rounded-xl border shadow-inner flex items-center justify-between"
+                >
+                  <div>
+                    <span
+                      style={{ color: themePrimaryColor }}
+                      className="text-[10px] font-bold uppercase tracking-wider block mb-0.5"
+                    >
+                      ✦ Curadoria Verificada
+                    </span>
+                    <h5
+                      className={`text-sm font-black font-serif ${
+                        themeBannerStyle === 'minimal' ? 'text-zinc-900' : 'text-white'
+                      }`}
+                    >
+                      {themeStoreTitle.trim() || stats?.affiliate?.displayName || 'Minha Vitrine'}
+                    </h5>
+                  </div>
+                  <div
+                    style={{ backgroundColor: themePrimaryColor }}
+                    className="px-3 py-1 rounded-lg text-white text-[10px] font-bold shadow-xs"
+                  >
+                    Comprar
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-zinc-100">
+                <button
+                  type="button"
+                  onClick={() => setShowThemeModal(false)}
+                  className="px-4 py-2 border border-zinc-300 rounded-xl text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition cursor-pointer"
+                >
+                  Fechar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingTheme}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  {savingTheme ? 'Salvando...' : 'Salvar e Aplicar Tema'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Gerador de Card Promocional & QR Code */}
+      {showQrModal && (() => {
+        const targetUrl = qrProduct
+          ? `${baseOrigin}/produtos/${qrProduct.slug}?ref=${stats?.affiliate?.code}`
+          : affiliatePageLink;
+        const targetTitle = qrProduct ? qrProduct.name : (themeStoreTitle || `Catálogo Oficial de ${stats?.affiliate?.displayName}`);
+        const qrCodeApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=360x360&data=${encodeURIComponent(targetUrl)}`;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl animate-in fade-in zoom-in-95 max-h-[92vh] flex flex-col">
+              <div className="flex items-center justify-between pb-4 border-b border-zinc-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                    <QrCode size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-zinc-900">Card Promocional & QR Code</h3>
+                    <p className="text-xs text-zinc-500">
+                      Gere imagens prontas para Stories, WhatsApp e materiais impressos
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowQrModal(false)}
+                  className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-5 pt-4 flex-1 overflow-y-auto pr-1">
+                {/* Target Summary */}
+                <div className="p-3.5 bg-zinc-50 rounded-2xl border border-zinc-200 flex items-center gap-3">
+                  {qrProduct ? (
+                    <div className="w-14 h-14 rounded-xl bg-white border border-zinc-200 overflow-hidden shrink-0 flex items-center justify-center">
+                      {qrProduct.imageUrl ? (
+                        <img
+                          src={resolveMediaUrl(qrProduct.imageUrl)}
+                          alt={qrProduct.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <ShoppingBag size={24} className="text-zinc-300" />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-14 h-14 rounded-xl bg-amber-600 text-white font-black text-xl shrink-0 flex items-center justify-center shadow-xs">
+                      {stats?.affiliate?.displayName?.charAt(0) || 'L'}
+                    </div>
+                  )}
+
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full inline-block mb-1 uppercase">
+                      {qrProduct ? 'Produto Selecionado' : 'Loja Completa'}
+                    </span>
+                    <h5 className="font-bold text-zinc-900 text-xs sm:text-sm truncate">{targetTitle}</h5>
+                    {qrProduct && (
+                      <p className="text-xs font-extrabold text-amber-700">{formatCurrency(qrProduct.price)}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* QR Code Direct Box */}
+                <div className="p-4 bg-zinc-900 rounded-2xl text-white flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="w-32 h-32 bg-white rounded-xl p-2 shrink-0 flex items-center justify-center shadow-md">
+                    <img
+                      src={qrCodeApiUrl}
+                      alt="QR Code"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+                  <div className="space-y-2 text-center sm:text-left flex-1">
+                    <h5 className="font-bold text-sm text-white">QR Code Escaneável</h5>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                      Seus clientes podem apontar a câmera do celular para este código para acessar diretamente sua página ou produto com seu link de comissão.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => downloadQrOnly(targetUrl, qrProduct ? qrProduct.slug : 'catalogo')}
+                      className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer w-full sm:w-auto"
+                    >
+                      <Download size={14} />
+                      Baixar Somente o QR Code (PNG)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Card Promocional Generator */}
+                <div className="p-4 bg-gradient-to-br from-amber-50 to-white rounded-2xl border border-amber-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h5 className="font-bold text-zinc-900 text-sm">Card Promocional Pronto para Postar</h5>
+                      <p className="text-xs text-zinc-500">Gera imagem de alta resolução com foto, preço e QR Code integrado</p>
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-zinc-200 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setQrCardFormat('story')}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                          qrCardFormat === 'story' ? 'bg-amber-600 text-white' : 'text-zinc-600 hover:text-zinc-900'
+                        }`}
+                      >
+                        Stories (9:16)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setQrCardFormat('feed')}
+                        className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer ${
+                          qrCardFormat === 'feed' ? 'bg-amber-600 text-white' : 'text-zinc-600 hover:text-zinc-900'
+                        }`}
+                      >
+                        Feed (1:1)
+                      </button>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={generatingCard}
+                    onClick={() => downloadPromoCard(qrProduct, qrCardFormat)}
+                    className="w-full py-3 bg-zinc-950 hover:bg-zinc-800 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50"
+                  >
+                    <Download size={15} className="text-amber-400" />
+                    <span>{generatingCard ? 'Gerando Imagem...' : `Baixar Card ${qrCardFormat === 'story' ? 'Stories (9:16)' : 'Feed (1:1)'} em Alta Definição (PNG)`}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal: Create / Edit Collection with Product Picker */}
       {showCreateCollectionModal && (

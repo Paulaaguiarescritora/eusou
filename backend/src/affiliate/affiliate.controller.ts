@@ -177,6 +177,7 @@ export class AffiliateController {
       cpf: dto.cpf,
       whatsapp: dto.whatsapp,
       pixKey: dto.pixKey,
+      themeConfig: dto.themeConfig,
     };
     const updated = await this.affiliateService.update(affiliate.id, safeDto, userId);
 

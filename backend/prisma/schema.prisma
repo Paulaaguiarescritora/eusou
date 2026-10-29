@@ -647,6 +647,7 @@ model Affiliate {
   cpf         String?
   whatsapp    String?
   pixKey      String?
+  themeConfig Json?
   status      AffiliateStatus @default(ACTIVE)
   defaultCommissionPercent Decimal? @default(10.00) @db.Decimal(5, 2)
   createdAt   DateTime        @default(now())

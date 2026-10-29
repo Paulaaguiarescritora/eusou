@@ -42,6 +42,9 @@ export class CreateAffiliateDto {
   status?: AffiliateStatus;
 
   @IsOptional()
+  themeConfig?: any;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 }, { message: 'defaultCommissionPercent deve ser um número com até 2 casas decimais' })
   @Min(0, { message: 'defaultCommissionPercent não pode ser menor que 0' })
@@ -50,6 +53,9 @@ export class CreateAffiliateDto {
 }
 
 export class UpdateAffiliateDto {
+  @IsOptional()
+  themeConfig?: any;
+
   @IsString()
   @IsOptional()
   displayName?: string;
