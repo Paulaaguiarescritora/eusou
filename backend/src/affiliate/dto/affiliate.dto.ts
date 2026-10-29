@@ -70,6 +70,15 @@ export class UpdateAffiliateDto {
   @IsOptional()
   pixKey?: string;
 
+  @IsEmail()
+  @IsOptional()
+  email?: string;
+
+  @IsString()
+  @IsOptional()
+  @MinLength(6)
+  password?: string;
+
   @IsEnum(AffiliateStatus)
   @IsOptional()
   status?: AffiliateStatus;

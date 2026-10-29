@@ -27,7 +27,10 @@ import {
   Award,
   Phone,
   CreditCard,
-  FileText
+  FileText,
+  Eye,
+  EyeOff,
+  KeyRound
 } from 'lucide-react';
 
 interface AffiliatePortalViewProps {
@@ -92,9 +95,14 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
 
   // Edit Profile States
   const [editDisplayName, setEditDisplayName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [editWhatsapp, setEditWhatsapp] = useState('');
   const [editCpf, setEditCpf] = useState('');
   const [editPixKey, setEditPixKey] = useState('');
+  const [editNewPassword, setEditNewPassword] = useState('');
+  const [editConfirmPassword, setEditConfirmPassword] = useState('');
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [showPasswordText, setShowPasswordText] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -140,9 +148,12 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
 
       if (affMe && affMe.id) {
         setEditDisplayName(affMe.displayName || '');
+        setEditEmail(affMe.user?.email || currentUserEmail || '');
         setEditWhatsapp(affMe.whatsapp ? formatWhatsApp(affMe.whatsapp) : '');
         setEditCpf(affMe.cpf ? formatCPF(affMe.cpf) : '');
         setEditPixKey(affMe.pixKey || '');
+        setEditNewPassword('');
+        setEditConfirmPassword('');
 
         let dashData: any = null;
         try {
@@ -341,6 +352,10 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
       setProfileError('Informe o seu nome ou nome da sua marca/perfil.');
       return;
     }
+    if (!editEmail.trim() || !editEmail.includes('@') || !editEmail.includes('.')) {
+      setProfileError('Informe um e-mail de acesso válido.');
+      return;
+    }
     const cleanPhone = editWhatsapp.replace(/\D/g, '');
     if (cleanPhone.length < 10) {
       setProfileError('Informe um WhatsApp válido com DDD (ex: 11 98888-7777).');
@@ -352,20 +367,49 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
       return;
     }
 
+    if (editNewPassword.trim()) {
+      if (editNewPassword.length < 6) {
+        setProfileError('A nova senha deve ter no mínimo 6 caracteres.');
+        return;
+      }
+      if (editNewPassword !== editConfirmPassword) {
+        setProfileError('A confirmação da nova senha não confere.');
+        return;
+      }
+    }
+
     setSavingProfile(true);
     try {
-      const updated = await fetchApi<any>('/affiliate/me', {
+      const payload: any = {
+        displayName: editDisplayName.trim(),
+        email: editEmail.trim().toLowerCase(),
+        cpf: editCpf.trim(),
+        whatsapp: editWhatsapp.trim(),
+        pixKey: editPixKey.trim() || editCpf.trim(),
+      };
+      if (editNewPassword.trim()) {
+        payload.password = editNewPassword;
+      }
+
+      const res = await fetchApi<any>('/affiliate/me', {
         method: 'PATCH',
-        body: JSON.stringify({
-          displayName: editDisplayName.trim(),
-          cpf: editCpf.trim(),
-          whatsapp: editWhatsapp.trim(),
-          pixKey: editPixKey.trim() || editCpf.trim(),
-        }),
+        body: JSON.stringify(payload),
       });
 
-      setStats((prev) => (prev ? { ...prev, affiliate: { ...prev.affiliate, ...updated } } : prev));
-      setProfileSuccess('Informações cadastrais atualizadas com sucesso!');
+      if (res?.accessToken) {
+        localStorage.setItem('token', res.accessToken);
+      }
+
+      const updatedAff = res?.affiliate || res;
+      setStats((prev) => (prev ? { ...prev, affiliate: { ...prev.affiliate, ...updatedAff } } : prev));
+      if (updatedAff?.user?.email) {
+        setCurrentUserEmail(updatedAff.user.email);
+        setEditEmail(updatedAff.user.email);
+      }
+      setEditNewPassword('');
+      setEditConfirmPassword('');
+      setShowPasswordSection(false);
+      setProfileSuccess('Informações cadastrais, e-mail e senha atualizados com sucesso!');
       setTimeout(() => setProfileSuccess(null), 5000);
     } catch (err: any) {
       setProfileError(err.message || 'Erro ao atualizar informações do perfil.');
@@ -1402,7 +1446,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                 </div>
               )}
 
-              <form onSubmit={handleSaveProfile} className="space-y-5">
+              <form onSubmit={handleSaveProfile} className="space-y-6">
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
                     Nome Completo ou Razão Social / Marca *
@@ -1416,20 +1460,6 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                     className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                   <p className="text-xs text-zinc-400 mt-1">Este nome é exibido aos seus seguidores no topo das suas coleções.</p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                    <Mail size={14} className="text-zinc-400" />
-                    E-mail da Conta
-                  </label>
-                  <input
-                    type="email"
-                    disabled
-                    value={stats?.affiliate?.user?.email || currentUserEmail || ''}
-                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-500 text-sm outline-none cursor-not-allowed"
-                  />
-                  <p className="text-xs text-zinc-400 mt-1">O e-mail é vinculado à sua conta de acesso.</p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -1488,6 +1518,106 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                     className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
                   />
                   <p className="text-xs text-zinc-400 mt-1">Os pagamentos das vendas confirmadas são enviados diretamente para esta chave.</p>
+                </div>
+
+                {/* Login and Password section */}
+                <div className="pt-6 border-t border-zinc-200">
+                  <div className="mb-4">
+                    <h5 className="text-sm font-bold text-zinc-900 flex items-center gap-2">
+                      <Lock size={16} className="text-amber-600" />
+                      Credenciais de Acesso (Login & Senha)
+                    </h5>
+                    <p className="text-xs text-zinc-500">Mantenha seu e-mail e senha de login atualizados</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <Mail size={14} className="text-zinc-400" />
+                        E-mail de Login *
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                        placeholder="seuemail@exemplo.com"
+                        className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                      />
+                      <p className="text-xs text-zinc-400 mt-1">Este é o e-mail que você utiliza para fazer login no portal do afiliado.</p>
+                    </div>
+
+                    {!showPasswordSection ? (
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswordSection(true)}
+                          className="text-xs font-semibold text-amber-700 hover:text-amber-800 flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-amber-50 border border-amber-200 hover:bg-amber-100 transition"
+                        >
+                          <Lock size={13} />
+                          Alterar Minha Senha de Acesso
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-xl bg-zinc-50 border border-zinc-200 space-y-4 mt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-zinc-700 uppercase tracking-wider flex items-center gap-1.5">
+                            <KeyRound size={14} className="text-amber-600" />
+                            Redefinir Senha
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowPasswordSection(false);
+                              setEditNewPassword('');
+                              setEditConfirmPassword('');
+                            }}
+                            className="text-xs font-semibold text-zinc-500 hover:text-zinc-700 underline"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-zinc-600 mb-1">
+                              Nova Senha (mín. 6 dígitos)
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={showPasswordText ? "text" : "password"}
+                                value={editNewPassword}
+                                onChange={(e) => setEditNewPassword(e.target.value)}
+                                placeholder="••••••••"
+                                className="w-full px-4 py-2 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none pr-10"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPasswordText(!showPasswordText)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+                              >
+                                {showPasswordText ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-zinc-600 mb-1">
+                              Confirmar Nova Senha
+                            </label>
+                            <input
+                              type={showPasswordText ? "text" : "password"}
+                              value={editConfirmPassword}
+                              onChange={(e) => setEditConfirmPassword(e.target.value)}
+                              placeholder="••••••••"
+                              className="w-full px-4 py-2 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-xs text-zinc-500">Ao salvar, a senha será atualizada e sua conexão será mantida ativa.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="pt-4 border-t border-zinc-100 flex items-center justify-end">

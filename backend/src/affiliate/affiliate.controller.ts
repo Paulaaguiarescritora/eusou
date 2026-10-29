@@ -1,3 +1,4 @@
+import * as argon2 from 'argon2';
 import {
   Controller,
   Get,
@@ -10,6 +11,8 @@ import {
   UseGuards,
   Req,
   Res,
+  BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { AffiliateService } from './affiliate.service';
 import {
@@ -140,15 +143,44 @@ export class AffiliateController {
   @Patch('me')
   @Roles('affiliate', 'admin')
   async updateMe(@Body() dto: UpdateAffiliateDto, @Req() req: any) {
-    const affiliate = await this.affiliateService.findByUserId(req.user.sub);
+    const userId = req.user.sub;
+    const affiliate = await this.affiliateService.findByUserId(userId);
+
+    let userChanged = false;
+    if (dto.email && dto.email.trim()) {
+      const cleanEmail = dto.email.trim().toLowerCase();
+      const existing = await this.prisma.user.findUnique({ where: { email: cleanEmail } });
+      if (existing && existing.id !== userId) {
+        throw new ConflictException('Este e-mail já está em uso por outra conta.');
+      }
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { email: cleanEmail },
+      });
+      userChanged = true;
+    }
+
+    if (dto.password && dto.password.trim()) {
+      if (dto.password.length < 6) {
+        throw new BadRequestException('A senha deve ter no mínimo 6 caracteres.');
+      }
+      const passwordHash = await argon2.hash(dto.password, { type: argon2.argon2id });
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      });
+      userChanged = true;
+    }
+
     const safeDto: UpdateAffiliateDto = {
       displayName: dto.displayName,
       cpf: dto.cpf,
       whatsapp: dto.whatsapp,
       pixKey: dto.pixKey,
     };
-    const updated = await this.affiliateService.update(affiliate.id, safeDto, req.user.sub);
-    return this.prisma.affiliate.findUnique({
+    const updated = await this.affiliateService.update(affiliate.id, safeDto, userId);
+
+    const fullAffiliate = await this.prisma.affiliate.findUnique({
       where: { id: updated.id },
       include: {
         links: true,
@@ -160,6 +192,18 @@ export class AffiliateController {
         },
       },
     });
+
+    let accessToken = undefined;
+    if (userChanged) {
+      const freshUser = await this.prisma.user.findUnique({ where: { id: userId } });
+      const loginRes = await this.authService.login(freshUser);
+      accessToken = loginRes.accessToken;
+    }
+
+    return {
+      affiliate: fullAffiliate,
+      accessToken,
+    };
   }
 
   @Get('dashboard')
