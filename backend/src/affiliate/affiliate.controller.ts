@@ -252,6 +252,12 @@ export class AffiliateController {
     return this.affiliateService.getAffiliateConversions(affiliate.id);
   }
 
+  @Get('catalog-products')
+  @Roles('affiliate', 'admin')
+  async getCatalogProducts(@Query('search') search?: string) {
+    return this.affiliateService.getCatalogProducts(search);
+  }
+
   @Get('collections')
   @Roles('affiliate', 'admin')
   async getCollections(@Req() req: any) {
@@ -262,11 +268,32 @@ export class AffiliateController {
   @Post('collections')
   @Roles('affiliate', 'admin')
   async createCollection(
-    @Body() dto: { name: string; description?: string },
+    @Body() dto: { name: string; description?: string; productIds?: string[] },
     @Req() req: any,
   ) {
     const affiliate = await this.affiliateService.findByUserId(req.user.sub);
     return this.affiliateService.createAffiliateCollection(affiliate.id, dto);
+  }
+
+  @Patch('collections/:id')
+  @Roles('affiliate', 'admin')
+  async updateCollection(
+    @Param('id') id: string,
+    @Body() dto: { name?: string; description?: string; productIds?: string[] },
+    @Req() req: any,
+  ) {
+    const affiliate = await this.affiliateService.findByUserId(req.user.sub);
+    return this.affiliateService.updateAffiliateCollection(affiliate.id, id, dto);
+  }
+
+  @Delete('collections/:id')
+  @Roles('affiliate', 'admin')
+  async deleteCollection(
+    @Param('id') id: string,
+    @Req() req: any,
+  ) {
+    const affiliate = await this.affiliateService.findByUserId(req.user.sub);
+    return this.affiliateService.deleteAffiliateCollection(affiliate.id, id);
   }
 }
 

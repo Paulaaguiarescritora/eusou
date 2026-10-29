@@ -643,9 +643,45 @@ export class AffiliateService {
 
   // --- AFFILIATE COLLECTIONS ---
 
+  async getCatalogProducts(search?: string) {
+    const where: any = {
+      status: 'ACTIVE',
+    };
+    if (search && search.trim()) {
+      where.OR = [
+        { name: { contains: search.trim(), mode: 'insensitive' } },
+        { slug: { contains: search.trim(), mode: 'insensitive' } },
+      ];
+    }
+    const products = await this.prisma.product.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      take: 100,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        basePrice: true,
+        media: {
+          orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
+          take: 1,
+          select: { url: true },
+        },
+      },
+    });
+
+    return products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      slug: p.slug,
+      price: Number(p.basePrice) || 0,
+      imageUrl: p.media[0]?.url || null,
+    }));
+  }
+
   async createAffiliateCollection(
     affiliateId: string,
-    dto: { name: string; description?: string },
+    dto: { name: string; description?: string; productIds?: string[] },
   ) {
     const affiliate = await this.findById(affiliateId);
     if (affiliate.status !== AffiliateStatus.ACTIVE) {
@@ -667,14 +703,116 @@ export class AffiliateService {
       },
     });
 
+    if (Array.isArray(dto.productIds) && dto.productIds.length > 0) {
+      for (let i = 0; i < dto.productIds.length; i++) {
+        try {
+          await this.prisma.collectionItem.create({
+            data: {
+              collectionId: collection.id,
+              productId: dto.productIds[i],
+              position: i,
+            },
+          });
+        } catch {}
+      }
+    }
+
     await this.auditLog.log({
       action: 'AFFILIATE_COLLECTION_CREATED',
       entity: 'Collection',
       entityId: collection.id,
-      metadata: { affiliateId },
+      metadata: { affiliateId, productCount: dto.productIds?.length || 0 },
     });
 
-    return collection;
+    return this.prisma.collection.findUnique({
+      where: { id: collection.id },
+      include: {
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                basePrice: true,
+                media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 1 },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  async updateAffiliateCollection(
+    affiliateId: string,
+    collectionId: string,
+    dto: { name?: string; description?: string; productIds?: string[] },
+  ) {
+    const collection = await this.prisma.collection.findFirst({
+      where: { id: collectionId, ownerAffiliateId: affiliateId },
+    });
+    if (!collection) {
+      throw new NotFoundException('Coleção não encontrada.');
+    }
+
+    const data: any = {};
+    if (dto.name && dto.name.trim()) data.name = dto.name.trim();
+    if (dto.description !== undefined) data.description = dto.description?.trim() || null;
+
+    if (Object.keys(data).length > 0) {
+      await this.prisma.collection.update({
+        where: { id: collectionId },
+        data,
+      });
+    }
+
+    if (Array.isArray(dto.productIds)) {
+      await this.prisma.collectionItem.deleteMany({
+        where: { collectionId },
+      });
+      for (let i = 0; i < dto.productIds.length; i++) {
+        try {
+          await this.prisma.collectionItem.create({
+            data: {
+              collectionId,
+              productId: dto.productIds[i],
+              position: i,
+            },
+          });
+        } catch {}
+      }
+    }
+
+    return this.prisma.collection.findUnique({
+      where: { id: collectionId },
+      include: {
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                basePrice: true,
+                media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 1 },
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
+  async deleteAffiliateCollection(affiliateId: string, collectionId: string) {
+    const collection = await this.prisma.collection.findFirst({
+      where: { id: collectionId, ownerAffiliateId: affiliateId },
+    });
+    if (!collection) {
+      throw new NotFoundException('Coleção não encontrada.');
+    }
+    await this.prisma.collection.delete({
+      where: { id: collectionId },
+    });
+    return { success: true };
   }
 
   async getAffiliateCollections(affiliateId: string) {

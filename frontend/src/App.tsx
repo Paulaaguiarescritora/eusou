@@ -280,6 +280,22 @@ export function App() {
           }
         })
         .finally(() => setLoading(false));
+    } else if (route.startsWith('/colecoes/')) {
+      setSelectedProduct(null);
+      setLoading(true);
+      const slug = route.replace('/colecoes/', '').split('?')[0];
+      fetchApi<any>(`/public/store/collections/${encodeURIComponent(slug)}`)
+        .then((res) => {
+          if (res && Array.isArray(res.products)) {
+            setProductsList(res.products);
+          } else {
+            setProductsList([]);
+          }
+        })
+        .catch(() => {
+          setProductsList([]);
+        })
+        .finally(() => setLoading(false));
     } else if (route.startsWith('/produtos/')) {
       const rawSlug = route.replace('/produtos/', '').split('?')[0];
       let decodedSlug = rawSlug;
@@ -855,13 +871,24 @@ export function App() {
           </div>
         )}
 
-        {/* ROUTE: PRODUTOS (LISTAGEM) */}
-        {route.startsWith('/produtos') && !selectedProduct && (
+        {/* ROUTE: PRODUTOS OU COLEÇÕES (LISTAGEM) */}
+        {(route.startsWith('/produtos') || route.startsWith('/colecoes/')) && !selectedProduct && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-black text-slate-900">Catálogo de Produtos</h1>
-                <p className="text-xs text-slate-500">Explore itens disponíveis e curadorias prontas para compra</p>
+                {route.startsWith('/colecoes/') && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 mb-2">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" /> Vitrine Exclusiva de Afiliado
+                  </span>
+                )}
+                <h1 className="text-2xl font-black text-slate-900">
+                  {route.startsWith('/colecoes/') ? 'Vitrine de Produtos Selecionados' : 'Catálogo de Produtos'}
+                </h1>
+                <p className="text-xs text-slate-500">
+                  {route.startsWith('/colecoes/')
+                    ? 'Esta seleção de produtos foi montada especialmente pelo nosso parceiro'
+                    : 'Explore itens disponíveis e curadorias prontas para compra'}
+                </p>
               </div>
 
               {/* Botão para limpar filtros se algum estiver ativo */}

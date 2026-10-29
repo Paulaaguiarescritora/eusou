@@ -30,7 +30,10 @@ import {
   FileText,
   Eye,
   EyeOff,
-  KeyRound
+  KeyRound,
+  Search,
+  Trash2,
+  Edit
 } from 'lucide-react';
 
 interface AffiliatePortalViewProps {
@@ -118,6 +121,11 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
   const [newCollectionName, setNewCollectionName] = useState('');
   const [newCollectionSlug, setNewCollectionSlug] = useState('');
   const [newCollectionDesc, setNewCollectionDesc] = useState('');
+  const [availableProducts, setAvailableProducts] = useState<{ id: string; name: string; slug: string; price: number; imageUrl: string | null }[]>([]);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [productSearch, setProductSearch] = useState('');
+  const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
+  const [savingCollection, setSavingCollection] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -442,23 +450,99 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
     }
   };
 
-  const handleCreateCollection = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const loadCatalogProducts = async (search?: string) => {
     try {
-      await fetchApi('/affiliate/collections', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: newCollectionName,
-          description: newCollectionDesc || undefined,
-        }),
+      const q = search ? `?search=${encodeURIComponent(search)}` : '';
+      const res = await fetchApi<any[]>(`/affiliate/catalog-products${q}`);
+      if (Array.isArray(res)) {
+        setAvailableProducts(res);
+      }
+    } catch (err) {
+      console.error('Failed to load catalog products:', err);
+    }
+  };
+
+  const openCreateCollection = () => {
+    setEditingCollection(null);
+    setNewCollectionName('');
+    setNewCollectionSlug('');
+    setNewCollectionDesc('');
+    setSelectedProductIds([]);
+    setProductSearch('');
+    setShowCreateCollectionModal(true);
+    loadCatalogProducts();
+  };
+
+  const openEditCollection = (col: any) => {
+    setEditingCollection(col);
+    setNewCollectionName(col.name || '');
+    setNewCollectionSlug(col.slug || '');
+    setNewCollectionDesc(col.description || '');
+    const currentProductIds = Array.isArray(col.items)
+      ? col.items.map((it: any) => it.productId || it.product?.id).filter(Boolean)
+      : [];
+    setSelectedProductIds(currentProductIds);
+    setProductSearch('');
+    setShowCreateCollectionModal(true);
+    loadCatalogProducts();
+  };
+
+  const handleDeleteCollection = async (collectionId: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta vitrine de coleção?')) return;
+    try {
+      await fetchApi(`/affiliate/collections/${collectionId}`, {
+        method: 'DELETE',
       });
+      loadData();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir coleção');
+    }
+  };
+
+  const toggleProductSelection = (productId: string) => {
+    setSelectedProductIds((prev) =>
+      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
+    );
+  };
+
+  const handleSaveCollection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCollectionName.trim()) {
+      alert('Informe o nome da coleção.');
+      return;
+    }
+    setSavingCollection(true);
+    try {
+      if (editingCollection) {
+        await fetchApi(`/affiliate/collections/${editingCollection.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: newCollectionName.trim(),
+            description: newCollectionDesc.trim() || undefined,
+            productIds: selectedProductIds,
+          }),
+        });
+      } else {
+        await fetchApi('/affiliate/collections', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: newCollectionName.trim(),
+            description: newCollectionDesc.trim() || undefined,
+            productIds: selectedProductIds,
+          }),
+        });
+      }
       setShowCreateCollectionModal(false);
       setNewCollectionName('');
       setNewCollectionSlug('');
       setNewCollectionDesc('');
+      setSelectedProductIds([]);
+      setEditingCollection(null);
       loadData();
     } catch (err: any) {
-      alert(err.message || 'Erro ao criar coleção de afiliado');
+      alert(err.message || 'Erro ao salvar coleção de afiliado');
+    } finally {
+      setSavingCollection(false);
     }
   };
 
@@ -1221,14 +1305,14 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
       {/* Tab: Collections */}
       {activeTab === 'collections' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h3 className="text-lg font-bold text-zinc-900">Minhas Coleções de Vitrine</h3>
-              <p className="text-xs text-zinc-500">Agrupe produtos favoritos e divulgue sua vitrine personalizada</p>
+              <p className="text-xs text-zinc-500">Agrupe seus produtos favoritos e divulgue sua vitrine personalizada com comissão</p>
             </div>
             <button
-              onClick={() => setShowCreateCollectionModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-xl transition shadow-sm"
+              onClick={openCreateCollection}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-xl transition shadow-sm cursor-pointer"
             >
               <Plus size={16} /> Nova Coleção
             </button>
@@ -1237,43 +1321,96 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {collections.length === 0 ? (
               <div className="col-span-full bg-white rounded-2xl border border-zinc-200 p-8 text-center text-zinc-500 text-sm">
-                Nenhuma vitrine criada ainda. Crie uma coleção exclusiva para curar seus itens favoritos!
+                Nenhuma vitrine criada ainda. Clique em "Nova Coleção" para escolher produtos e montar sua vitrine!
               </div>
             ) : (
-              collections.map((col) => {
+              collections.map((col: any) => {
                 const colUrl = `${baseOrigin}/colecoes/${col.slug}?ref=${stats?.affiliate?.code}`;
+                const itemsCount = col.items?.length || 0;
+                const previewProducts = Array.isArray(col.items)
+                  ? col.items.slice(0, 4).map((it: any) => it.product).filter(Boolean)
+                  : [];
+
                 return (
                   <div key={col.id} className="bg-white rounded-2xl border border-zinc-200 p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <span className="px-2 py-0.5 bg-amber-50 text-amber-700 text-xs font-semibold rounded-md border border-amber-200">
-                          Coleção Pessoal
+                          {itemsCount} {itemsCount === 1 ? 'produto' : 'produtos'} na vitrine
                         </span>
                         <span className="text-xs text-zinc-400 font-mono">/{col.slug}</span>
                       </div>
                       <h4 className="font-bold text-zinc-900 text-base mb-1">{col.name}</h4>
-                      <p className="text-xs text-zinc-500 line-clamp-2 mb-4">
+                      <p className="text-xs text-zinc-500 line-clamp-2 mb-3">
                         {col.description || 'Sem descrição cadastrada.'}
                       </p>
+
+                      {/* Product Preview Thumbnails */}
+                      {previewProducts.length > 0 && (
+                        <div className="flex items-center gap-2 mb-4 py-2 border-y border-zinc-100">
+                          {previewProducts.map((p: any, idx: number) => {
+                            const imgUrl = p.media?.[0]?.url || p.imageUrl;
+                            return (
+                              <div
+                                key={p.id || idx}
+                                title={p.name}
+                                className="w-10 h-10 rounded-lg border border-zinc-200 overflow-hidden bg-zinc-50 shrink-0 flex items-center justify-center"
+                              >
+                                {imgUrl ? (
+                                  <img src={imgUrl} alt={p.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <ShoppingBag size={14} className="text-zinc-400" />
+                                )}
+                              </div>
+                            );
+                          })}
+                          {itemsCount > 4 && (
+                            <span className="text-xs font-semibold text-zinc-400 pl-1">
+                              +{itemsCount - 4} mais
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    <div className="pt-4 border-t border-zinc-100 flex items-center justify-between gap-2">
-                      <button
-                        onClick={() => copyToClipboard(colUrl, col.id)}
-                        className="flex-1 py-2 px-3 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition flex items-center justify-center gap-1.5"
-                      >
-                        {copiedLink === col.id ? <CheckCircle2 size={14} className="text-green-600" /> : <Copy size={14} />}
-                        {copiedLink === col.id ? 'Link Copiado!' : 'Copiar Vitrine'}
-                      </button>
-                      <a
-                        href={colUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2 rounded-xl bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition"
-                        title="Abrir Coleção"
-                      >
-                        <ExternalLink size={16} />
-                      </a>
+                    <div className="space-y-2 pt-2 border-t border-zinc-100">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => copyToClipboard(colUrl, col.id)}
+                          className="flex-1 py-2 px-3 rounded-xl border border-zinc-200 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          {copiedLink === col.id ? <CheckCircle2 size={14} className="text-green-600" /> : <Copy size={14} />}
+                          {copiedLink === col.id ? 'Link Copiado!' : 'Copiar Vitrine'}
+                        </button>
+                        <a
+                          href={colUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-2 rounded-xl bg-zinc-100 text-zinc-600 hover:text-zinc-900 transition cursor-pointer"
+                          title="Abrir Coleção"
+                        >
+                          <ExternalLink size={16} />
+                        </a>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => openEditCollection(col)}
+                          className="flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <Edit size={13} />
+                          Editar Produtos
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCollection(col.id)}
+                          className="p-1.5 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 transition cursor-pointer"
+                          title="Excluir Coleção"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -1753,65 +1890,178 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
         </div>
       )}
 
-      {/* Modal: Create Collection */}
+      {/* Modal: Create / Edit Collection with Product Picker */}
       {showCreateCollectionModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
-            <h3 className="text-lg font-bold text-zinc-900 mb-4">Criar Coleção Pessoal</h3>
-            <form onSubmit={handleCreateCollection} className="space-y-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl animate-in fade-in zoom-in-95 max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between pb-4 border-b border-zinc-100">
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">Nome da Coleção</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ex: Meus Favoritos de Luxo"
-                  value={newCollectionName}
-                  onChange={(e) => {
-                    setNewCollectionName(e.target.value);
-                    if (!newCollectionSlug) {
-                      setNewCollectionSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
-                    }
-                  }}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                />
+                <h3 className="text-lg font-bold text-zinc-900">
+                  {editingCollection ? 'Editar Coleção de Vitrine' : 'Criar Nova Coleção de Vitrine'}
+                </h3>
+                <p className="text-xs text-zinc-500">
+                  Selecione os produtos que você quer destacar para seus seguidores
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateCollectionModal(false)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCollection} className="space-y-4 pt-4 flex-1 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                    Nome da Coleção *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ex: Meus Favoritos de Decoração"
+                    value={newCollectionName}
+                    onChange={(e) => setNewCollectionName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1">
+                    Descrição Curta (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="ex: As peças que mais recomendo para colecionadores"
+                    value={newCollectionDesc}
+                    onChange={(e) => setNewCollectionDesc(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">Slug URL</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ex: meus-favoritos-de-luxo"
-                  value={newCollectionSlug}
-                  onChange={(e) => setNewCollectionSlug(e.target.value)}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                />
-              </div>
+              {/* Product Selector Section */}
+              <div className="pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold text-zinc-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <ShoppingBag size={14} className="text-amber-600" />
+                      Escolha os Produtos da Vitrine
+                    </label>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                      {selectedProductIds.length} {selectedProductIds.length === 1 ? 'selecionado' : 'selecionados'}
+                    </span>
+                  </div>
+                  {availableProducts.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProductIds(availableProducts.map((p) => p.id))}
+                        className="text-xs text-amber-700 hover:text-amber-800 font-semibold cursor-pointer"
+                      >
+                        Selecionar Todos
+                      </button>
+                      <span className="text-zinc-300">•</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProductIds([])}
+                        className="text-xs text-zinc-500 hover:text-zinc-700 font-semibold cursor-pointer"
+                      >
+                        Limpar
+                      </button>
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">Descrição</label>
-                <textarea
-                  rows={3}
-                  placeholder="Apresente aos seus seguidores o que torna esta seleção especial..."
-                  value={newCollectionDesc}
-                  onChange={(e) => setNewCollectionDesc(e.target.value)}
-                  className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                />
+                {/* Search Bar */}
+                <div className="relative mb-3">
+                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                  <input
+                    type="text"
+                    placeholder="Filtrar produtos por nome..."
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    className="w-full pl-9 pr-3.5 py-2 border border-zinc-200 rounded-xl text-xs bg-zinc-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none transition"
+                  />
+                </div>
+
+                {/* Products List / Grid */}
+                <div className="max-h-64 overflow-y-auto rounded-xl border border-zinc-200 divide-y divide-zinc-100 bg-zinc-50/50 p-1">
+                  {availableProducts.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-zinc-400">
+                      Carregando produtos do catálogo...
+                    </div>
+                  ) : (
+                    availableProducts
+                      .filter((p) => p.name.toLowerCase().includes(productSearch.toLowerCase()))
+                      .map((product) => {
+                        const isSelected = selectedProductIds.includes(product.id);
+                        return (
+                          <div
+                            key={product.id}
+                            onClick={() => toggleProductSelection(product.id)}
+                            className={`flex items-center justify-between p-2.5 rounded-xl transition cursor-pointer ${
+                              isSelected
+                                ? 'bg-amber-50/90 border border-amber-300 text-amber-950 font-medium'
+                                : 'bg-white hover:bg-zinc-50 text-zinc-700 border border-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-11 h-11 rounded-lg border border-zinc-200 overflow-hidden bg-white shrink-0 flex items-center justify-center">
+                                {product.imageUrl ? (
+                                  <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <ShoppingBag size={18} className="text-zinc-400" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold truncate text-zinc-900">{product.name}</p>
+                                <p className="text-xs text-amber-700 font-bold">{formatCurrency(product.price)}</p>
+                              </div>
+                            </div>
+
+                            <div className="shrink-0 pl-3">
+                              {isSelected ? (
+                                <div className="w-6 h-6 rounded-lg bg-amber-600 text-white flex items-center justify-center shadow-xs">
+                                  <Check size={14} />
+                                </div>
+                              ) : (
+                                <div className="w-6 h-6 rounded-lg border-2 border-zinc-300 bg-white" />
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                  )}
+                </div>
+                <p className="text-xs text-zinc-400 mt-1.5">
+                  Clique nos produtos para marcar ou desmarcar. Os itens marcados formarão a vitrine exclusiva do seu link.
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-100">
                 <button
                   type="button"
                   onClick={() => setShowCreateCollectionModal(false)}
-                  className="px-4 py-2 border border-zinc-300 rounded-xl text-sm text-zinc-700 hover:bg-zinc-50"
+                  className="px-4 py-2.5 border border-zinc-300 rounded-xl text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-semibold transition"
+                  disabled={savingCollection}
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition shadow-sm cursor-pointer flex items-center gap-2"
                 >
-                  Criar Coleção
+                  {savingCollection ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Check size={16} />
+                      <span>{editingCollection ? 'Salvar Alterações' : `Criar Coleção (${selectedProductIds.length})`}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
