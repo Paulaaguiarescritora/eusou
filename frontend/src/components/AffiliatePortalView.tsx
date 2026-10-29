@@ -67,7 +67,7 @@ const formatWhatsApp = (val: string) => {
 };
 
 export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavigate }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'links' | 'collections' | 'share' | 'reports'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'links' | 'collections' | 'share' | 'reports' | 'profile'>('dashboard');
   const [stats, setStats] = useState<AffiliateDashboardStats | null>(null);
   const [links, setLinks] = useState<AffiliateLink[]>([]);
   const [conversions, setConversions] = useState<AffiliateConversion[]>([]);
@@ -89,6 +89,15 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
   const [submittingJoin, setSubmittingJoin] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
+
+  // Edit Profile States
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editWhatsapp, setEditWhatsapp] = useState('');
+  const [editCpf, setEditCpf] = useState('');
+  const [editPixKey, setEditPixKey] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   // Modal / Form states
   const [showCreateLinkModal, setShowCreateLinkModal] = useState(false);
@@ -130,6 +139,11 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
       }
 
       if (affMe && affMe.id) {
+        setEditDisplayName(affMe.displayName || '');
+        setEditWhatsapp(affMe.whatsapp ? formatWhatsApp(affMe.whatsapp) : '');
+        setEditCpf(affMe.cpf ? formatCPF(affMe.cpf) : '');
+        setEditPixKey(affMe.pixKey || '');
+
         let dashData: any = null;
         try {
           dashData = await fetchApi<any>('/affiliate/dashboard');
@@ -315,6 +329,48 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
       setJoinError(err.message || 'E-mail ou senha incorretos.');
     } finally {
       setSubmittingJoin(false);
+    }
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileError(null);
+    setProfileSuccess(null);
+
+    if (!editDisplayName.trim()) {
+      setProfileError('Informe o seu nome ou nome da sua marca/perfil.');
+      return;
+    }
+    const cleanPhone = editWhatsapp.replace(/\D/g, '');
+    if (cleanPhone.length < 10) {
+      setProfileError('Informe um WhatsApp válido com DDD (ex: 11 98888-7777).');
+      return;
+    }
+    const cleanCpf = editCpf.replace(/\D/g, '');
+    if (!isValidCPF(cleanCpf)) {
+      setProfileError('Informe um CPF válido.');
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      const updated = await fetchApi<any>('/affiliate/me', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          displayName: editDisplayName.trim(),
+          cpf: editCpf.trim(),
+          whatsapp: editWhatsapp.trim(),
+          pixKey: editPixKey.trim() || editCpf.trim(),
+        }),
+      });
+
+      setStats((prev) => (prev ? { ...prev, affiliate: { ...prev.affiliate, ...updated } } : prev));
+      setProfileSuccess('Informações cadastrais atualizadas com sucesso!');
+      setTimeout(() => setProfileSuccess(null), 5000);
+    } catch (err: any) {
+      setProfileError(err.message || 'Erro ao atualizar informações do perfil.');
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -913,6 +969,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
           { id: 'collections', label: 'Minhas Coleções', icon: Layers },
           { id: 'reports', label: 'Conversões e Vendas', icon: ShoppingBag },
           { id: 'share', label: 'Materiais de Divulgação', icon: Sparkles },
+          { id: 'profile', label: 'Meu Perfil', icon: User },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -1302,6 +1359,199 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                 {copiedLink === 'copy_msg' ? <CheckCircle2 size={14} className="text-green-600" /> : <Copy size={14} />}
                 {copiedLink === 'copy_msg' ? 'Mensagem Copiada!' : 'Copiar Texto Pronto'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Profile & Settings */}
+      {activeTab === 'profile' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-bold text-zinc-900">Meu Perfil de Afiliado</h3>
+              <p className="text-sm text-zinc-500">Mantenha seus dados cadastrais e de pagamento sempre atualizados</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
+                <CheckCircle2 size={14} className="text-emerald-600" />
+                Conta Ativa • {stats?.affiliate?.defaultCommissionPercent || 10}% de Comissão
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Form Column */}
+            <div className="lg:col-span-2 bg-white rounded-2xl border border-zinc-200 p-6 sm:p-8 shadow-sm">
+              <h4 className="font-bold text-zinc-900 text-base mb-6 flex items-center gap-2">
+                <User size={18} className="text-amber-600" />
+                Dados Cadastrais & Recebimento
+              </h4>
+
+              {profileSuccess && (
+                <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex items-start gap-3 text-sm">
+                  <CheckCircle2 size={18} className="shrink-0 mt-0.5 text-emerald-600" />
+                  <span>{profileSuccess}</span>
+                </div>
+              )}
+
+              {profileError && (
+                <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 flex items-start gap-3 text-sm">
+                  <AlertCircle size={18} className="shrink-0 mt-0.5 text-red-600" />
+                  <span>{profileError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveProfile} className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5">
+                    Nome Completo ou Razão Social / Marca *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="ex: Felinodelia Blog ou Paula Aguiar"
+                    value={editDisplayName}
+                    onChange={(e) => setEditDisplayName(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                  <p className="text-xs text-zinc-400 mt-1">Este nome é exibido aos seus seguidores no topo das suas coleções.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <Mail size={14} className="text-zinc-400" />
+                    E-mail da Conta
+                  </label>
+                  <input
+                    type="email"
+                    disabled
+                    value={stats?.affiliate?.user?.email || currentUserEmail || ''}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-500 text-sm outline-none cursor-not-allowed"
+                  />
+                  <p className="text-xs text-zinc-400 mt-1">O e-mail é vinculado à sua conta de acesso.</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <Phone size={14} className="text-zinc-400" />
+                      WhatsApp (com DDD) *
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="(11) 98888-7777"
+                      value={editWhatsapp}
+                      onChange={(e) => setEditWhatsapp(formatWhatsApp(e.target.value))}
+                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 text-sm font-mono focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <FileText size={14} className="text-zinc-400" />
+                      CPF *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="000.000.000-00"
+                      value={editCpf}
+                      onChange={(e) => setEditCpf(formatCPF(e.target.value))}
+                      className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 text-sm font-mono focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <CreditCard size={14} className="text-zinc-400" />
+                      Chave PIX para Depósito de Comissões
+                    </label>
+                    {editCpf && (
+                      <button
+                        type="button"
+                        onClick={() => setEditPixKey(editCpf)}
+                        className="text-xs text-amber-700 hover:text-amber-800 font-semibold"
+                      >
+                        Usar meu CPF
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Chave PIX (CPF, Celular, E-mail ou Aleatória)"
+                    value={editPixKey}
+                    onChange={(e) => setEditPixKey(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-zinc-300 text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                  />
+                  <p className="text-xs text-zinc-400 mt-1">Os pagamentos das vendas confirmadas são enviados diretamente para esta chave.</p>
+                </div>
+
+                <div className="pt-4 border-t border-zinc-100 flex items-center justify-end">
+                  <button
+                    type="submit"
+                    disabled={savingProfile}
+                    className="py-3 px-6 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-sm shadow-md active:scale-98 transition disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {savingProfile ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <>
+                        <Check size={16} />
+                        <span>Salvar Alterações</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Side Card: Summary */}
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-zinc-900 to-zinc-800 rounded-2xl p-6 text-white shadow-md">
+                <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold text-xl mb-4">
+                  {(stats?.affiliate?.displayName || 'A').slice(0, 2).toUpperCase()}
+                </div>
+                <h4 className="font-serif font-bold text-lg mb-1">{stats?.affiliate?.displayName}</h4>
+                <div className="inline-block px-2.5 py-0.5 rounded-md text-xs font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 mb-4">
+                  Código: {stats?.affiliate?.code}
+                </div>
+
+                <div className="space-y-2 text-xs text-zinc-300 pt-3 border-t border-zinc-700/60">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Comissão por Venda:</span>
+                    <strong className="text-amber-400">{stats?.affiliate?.defaultCommissionPercent || 10}%</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Status:</span>
+                    <strong className="text-emerald-400">Ativo</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Membro desde:</span>
+                    <span>{stats?.affiliate?.createdAt ? new Date(stats.affiliate.createdAt).toLocaleDateString() : '-'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+                <h5 className="font-bold text-zinc-900 text-sm mb-2">Precisa de Ajuda?</h5>
+                <p className="text-xs text-zinc-500 leading-relaxed mb-4">
+                  Dúvidas sobre regras de repasses, pedidos ou suporte ao afiliado, nossa equipe está pronta para te atender.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.removeItem('token');
+                    window.location.reload();
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl border border-zinc-200 text-zinc-600 hover:text-red-600 hover:bg-red-50 text-xs font-semibold transition"
+                >
+                  Sair da Conta (Logout)
+                </button>
+              </div>
             </div>
           </div>
         </div>

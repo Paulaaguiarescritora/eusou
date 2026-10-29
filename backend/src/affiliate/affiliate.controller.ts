@@ -127,6 +127,37 @@ export class AffiliateController {
       where: { userId: req.user.sub },
       include: {
         links: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+      },
+    });
+  }
+
+  @Patch('me')
+  @Roles('affiliate', 'admin')
+  async updateMe(@Body() dto: UpdateAffiliateDto, @Req() req: any) {
+    const affiliate = await this.affiliateService.findByUserId(req.user.sub);
+    const safeDto: UpdateAffiliateDto = {
+      displayName: dto.displayName,
+      cpf: dto.cpf,
+      whatsapp: dto.whatsapp,
+      pixKey: dto.pixKey,
+    };
+    const updated = await this.affiliateService.update(affiliate.id, safeDto, req.user.sub);
+    return this.prisma.affiliate.findUnique({
+      where: { id: updated.id },
+      include: {
+        links: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
       },
     });
   }
