@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AffiliateDashboardStats, AffiliateLink, AffiliateConversion, Collection } from '../types';
-import { fetchApi } from '../api';
+import { fetchApi, resolveMediaUrl } from '../api';
 import { 
   TrendingUp, 
   MousePointerClick, 
@@ -1357,7 +1357,14 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                                 className="w-10 h-10 rounded-lg border border-zinc-200 overflow-hidden bg-zinc-50 shrink-0 flex items-center justify-center"
                               >
                                 {imgUrl ? (
-                                  <img src={imgUrl} alt={p.name} className="w-full h-full object-cover" />
+                                  <img
+                                    src={resolveMediaUrl(imgUrl)}
+                                    alt={p.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
                                 ) : (
                                   <ShoppingBag size={14} className="text-zinc-400" />
                                 )}
@@ -2011,7 +2018,14 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                             <div className="flex items-center gap-3 min-w-0">
                               <div className="w-11 h-11 rounded-lg border border-zinc-200 overflow-hidden bg-white shrink-0 flex items-center justify-center">
                                 {product.imageUrl ? (
-                                  <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                                  <img
+                                    src={resolveMediaUrl(product.imageUrl)}
+                                    alt={product.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.currentTarget as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
                                 ) : (
                                   <ShoppingBag size={18} className="text-zinc-400" />
                                 )}

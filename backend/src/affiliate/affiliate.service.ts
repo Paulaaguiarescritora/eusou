@@ -653,30 +653,44 @@ export class AffiliateService {
         { slug: { contains: search.trim(), mode: 'insensitive' } },
       ];
     }
+
+    const ownStore = await this.prisma.channel.findFirst({
+      where: { type: 'OWN_STORE', isActive: true },
+    });
+
     const products = await this.prisma.product.findMany({
       where,
       orderBy: { name: 'asc' },
       take: 100,
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        basePrice: true,
+      include: {
         media: {
           orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
           take: 1,
-          select: { url: true },
         },
+        productChannelPrices: ownStore
+          ? { where: { channelId: ownStore.id } }
+          : true,
       },
     });
 
-    return products.map((p) => ({
-      id: p.id,
-      name: p.name,
-      slug: p.slug,
-      price: Number(p.basePrice) || 0,
-      imageUrl: p.media[0]?.url || null,
-    }));
+    return products.map((p) => {
+      let price = Number(p.basePrice) || 0;
+      if (!price && p.productChannelPrices && p.productChannelPrices.length > 0) {
+        const cp = p.productChannelPrices[0];
+        price = Number(cp.effectivePrice || cp.calculatedPrice || cp.manualPrice) || 0;
+      }
+      if (!price && p.wholesalePrice) {
+        price = Number(p.wholesalePrice) || 0;
+      }
+
+      return {
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        price,
+        imageUrl: p.media[0]?.url || null,
+      };
+    });
   }
 
   async createAffiliateCollection(
