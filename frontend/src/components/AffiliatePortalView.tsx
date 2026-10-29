@@ -153,6 +153,9 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
   const [productSearch, setProductSearch] = useState('');
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
   const [savingCollection, setSavingCollection] = useState(false);
+  const [publicCatalogs, setPublicCatalogs] = useState<any[]>([]);
+  const [shareProductSearch, setShareProductSearch] = useState('');
+  const [shareCategoryFilter, setShareCategoryFilter] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -190,12 +193,15 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
         setEditNewPassword('');
         setEditConfirmPassword('');
 
-        // Carregar métricas, links, conversões e coleções em paralelo para máxima velocidade
-        const [dashRes, linksRes, convRes, colRes] = await Promise.allSettled([
+        // Carregar métricas, links, conversões, coleções, catálogos e produtos em paralelo para máxima velocidade
+        const [dashRes, linksRes, convRes, colRes, homeRes, prodsRes, catsRes] = await Promise.allSettled([
           fetchApi<any>('/affiliate/dashboard'),
           fetchApi<any[]>('/affiliate/links'),
           fetchApi<any[]>('/affiliate/conversions'),
           fetchApi<any[]>('/affiliate/collections'),
+          fetchApi<any>('/public/home'),
+          fetchApi<any[]>('/affiliate/catalog-products'),
+          fetchApi<any[]>('/affiliate/categories'),
         ]);
 
         const dashData = dashRes.status === 'fulfilled' ? dashRes.value : null;
@@ -215,6 +221,16 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
         setLinks(fetchedLinks);
         setConversions(fetchedConversions);
         setCollections(fetchedCollections);
+
+        if (homeRes.status === 'fulfilled' && Array.isArray(homeRes.value?.catalogs)) {
+          setPublicCatalogs(homeRes.value.catalogs);
+        }
+        if (prodsRes.status === 'fulfilled' && Array.isArray(prodsRes.value)) {
+          setAvailableProducts(prodsRes.value);
+        }
+        if (catsRes.status === 'fulfilled' && Array.isArray(catsRes.value)) {
+          setCategoriesTree(catsRes.value);
+        }
       } else {
         setStats(null);
       }
@@ -1092,6 +1108,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
   // RENDER: PORTAL ATIVO DO AFILIADO CREDENCIADO
   // ==========================================
   const storeRefLink = stats?.affiliate?.code ? `${baseOrigin}?ref=${stats.affiliate.code}` : '';
+  const catalogRefLink = stats?.affiliate?.code ? `${baseOrigin}/produtos?ref=${stats.affiliate.code}` : '';
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1564,50 +1581,556 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
 
       {/* Tab: Marketing & Share Materials */}
       {activeTab === 'share' && (
-        <div className="space-y-6">
-          <h3 className="text-lg font-bold text-zinc-900">Recursos de Divulgação</h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
-              <h4 className="font-bold text-zinc-900 text-base mb-2">Seu Link Principal de Indicação</h4>
-              <p className="text-xs text-zinc-500 mb-4">
-                Coloque na biografia do seu Instagram, canal do YouTube, TikTok ou envie diretamente para seus clientes.
+        <div className="space-y-8">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-bold text-zinc-900">Materiais de Divulgação & Catálogos</h3>
+              <p className="text-xs sm:text-sm text-zinc-500">
+                Divulgue o catálogo completo da loja, suas vitrines exclusivas e produtos com seu link de comissão rastreado.
               </p>
-              <div className="flex items-center gap-2 p-3 bg-zinc-50 rounded-xl border border-zinc-200">
-                <input
-                  type="text"
-                  readOnly
-                  value={storeRefLink}
-                  className="bg-transparent border-none text-xs font-mono text-zinc-800 flex-1 outline-none"
-                />
-                <button
-                  onClick={() => copyToClipboard(storeRefLink, 'ref_input')}
-                  className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold transition"
-                >
-                  {copiedLink === 'ref_input' ? 'Copiado!' : 'Copiar'}
-                </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-200 shadow-xs flex items-center gap-1.5">
+                <Sparkles size={14} className="text-amber-600" />
+                Sua comissão: {stats?.affiliate?.defaultCommissionPercent || 10}% por venda
+              </span>
+            </div>
+          </div>
+
+          {/* Section 1: Main Catalog & Store Links */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Full Product Catalog */}
+            <div className="bg-gradient-to-br from-white to-amber-50/40 rounded-2xl border-2 border-amber-200 p-6 shadow-sm flex flex-col justify-between relative overflow-hidden">
+              <div className="absolute top-0 right-0 px-3 py-1 bg-amber-600 text-white text-[10px] font-bold uppercase rounded-bl-xl tracking-wider">
+                Recomendado
+              </div>
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-zinc-950 flex items-center justify-center font-bold shadow-xs">
+                    <ShoppingBag size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-zinc-900 text-base">Catálogo Completo de Produtos</h4>
+                    <span className="text-[11px] font-semibold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-full">
+                      Todas as Categorias • Link Rastreado
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-zinc-600 mb-4 leading-relaxed">
+                  Leva o cliente diretamente para a página de catálogo com todos os produtos. Qualquer compra realizada nos próximos 30 dias comissiona você automaticamente.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-2 border-t border-amber-100">
+                <div className="flex items-center gap-2 p-2.5 bg-white rounded-xl border border-zinc-200 shadow-xs">
+                  <input
+                    type="text"
+                    readOnly
+                    value={catalogRefLink}
+                    className="bg-transparent border-none text-xs font-mono text-zinc-800 flex-1 outline-none"
+                  />
+                  <button
+                    onClick={() => copyToClipboard(catalogRefLink, 'catalog_input')}
+                    className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    {copiedLink === 'catalog_input' ? <CheckCircle2 size={13} /> : <Copy size={13} />}
+                    {copiedLink === 'catalog_input' ? 'Copiado!' : 'Copiar Link'}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <a
+                    href={catalogRefLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 py-2 rounded-xl border border-zinc-300 hover:bg-zinc-50 text-xs font-semibold text-zinc-700 transition flex items-center justify-center gap-1.5"
+                  >
+                    <ExternalLink size={14} />
+                    Abrir Catálogo
+                  </a>
+                  <a
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                      `Olá! Dá uma olhada no catálogo de produtos e impressões 3D incríveis da EuSou que selecionei para você: ${catalogRefLink}`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-xs"
+                  >
+                    <Share2 size={14} />
+                    Divulgar no WhatsApp
+                  </a>
+                </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
-              <h4 className="font-bold text-zinc-900 text-base mb-2">Mensagem Pronta para Redes Sociais</h4>
-              <p className="text-xs text-zinc-500 mb-4">
-                Copie um texto engajador pronto para colar nos seus stories, feed ou grupos.
-              </p>
-              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs text-zinc-700 italic mb-3">
-                "Galera, confiram os colecionáveis e decorações em impressão 3D incríveis na loja EuSou! Use meu link para garantir os melhores lançamentos: {storeRefLink}"
+            {/* Store Home Link */}
+            <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-zinc-100 text-zinc-800 flex items-center justify-center font-bold">
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-zinc-900 text-base">Página Inicial da Loja</h4>
+                    <span className="text-[11px] font-semibold text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded-full">
+                      Home Store • Apresentação Geral
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-zinc-600 mb-4 leading-relaxed">
+                  Ideal para colocar na biografia do Instagram, TikTok ou YouTube. O visitante conhece a marca e todos os destaques da EuSou com seu cookie de indicação.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-2 border-t border-zinc-100">
+                <div className="flex items-center gap-2 p-2.5 bg-zinc-50 rounded-xl border border-zinc-200">
+                  <input
+                    type="text"
+                    readOnly
+                    value={storeRefLink}
+                    className="bg-transparent border-none text-xs font-mono text-zinc-800 flex-1 outline-none"
+                  />
+                  <button
+                    onClick={() => copyToClipboard(storeRefLink, 'ref_input')}
+                    className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
+                  >
+                    {copiedLink === 'ref_input' ? <CheckCircle2 size={13} /> : <Copy size={13} />}
+                    {copiedLink === 'ref_input' ? 'Copiado!' : 'Copiar'}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <a
+                    href={storeRefLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 py-2 rounded-xl border border-zinc-300 hover:bg-zinc-50 text-xs font-semibold text-zinc-700 transition flex items-center justify-center gap-1.5"
+                  >
+                    <ExternalLink size={14} />
+                    Abrir Loja
+                  </a>
+                  <a
+                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                      `Oi! Conheça as peças colecionáveis e decorações exclusivas da EuSou: ${storeRefLink}`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-xs"
+                  >
+                    <Share2 size={14} />
+                    Divulgar no WhatsApp
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 2: Minhas Vitrines & Coleções Personalizadas */}
+          <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-zinc-100">
+              <div>
+                <h4 className="font-bold text-zinc-900 text-base flex items-center gap-2">
+                  <Layers size={18} className="text-amber-600" />
+                  Minhas Vitrines Personalizadas
+                </h4>
+                <p className="text-xs text-zinc-500">
+                  Vitrines exclusivas montadas por você com os produtos que você mais recomenda.
+                </p>
               </div>
               <button
+                type="button"
+                onClick={openCreateCollection}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition shadow-xs flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+              >
+                <Plus size={14} />
+                Nova Vitrine
+              </button>
+            </div>
+
+            {collections.length === 0 ? (
+              <div className="p-8 text-center bg-zinc-50 rounded-xl border border-dashed border-zinc-200">
+                <p className="text-xs font-semibold text-zinc-700 mb-1">Você ainda não criou nenhuma vitrine personalizada</p>
+                <p className="text-xs text-zinc-500 mb-3 max-w-md mx-auto">
+                  Crie coleções temáticas como "Acessórios Pet" ou "Favoritos para Gatos" para aumentar em até 3x suas conversões!
+                </p>
+                <button
+                  type="button"
+                  onClick={openCreateCollection}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <Plus size={14} />
+                  Criar Minha Primeira Vitrine
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {collections.map((col) => {
+                  const colLink = `${baseOrigin}/colecoes/${col.slug}?ref=${stats?.affiliate?.code}`;
+                  const isCopied = copiedLink === `col_${col.id}`;
+                  const countItems = col.items?.length || 0;
+
+                  return (
+                    <div
+                      key={col.id}
+                      className="p-4 rounded-xl border border-zinc-200 bg-zinc-50/60 hover:bg-white hover:border-amber-300 hover:shadow-sm transition flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <h5 className="font-bold text-zinc-900 text-sm truncate">{col.name}</h5>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 shrink-0">
+                            {countItems} {countItems === 1 ? 'item' : 'itens'}
+                          </span>
+                        </div>
+                        {col.description && (
+                          <p className="text-xs text-zinc-500 line-clamp-2 mb-3">{col.description}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 pt-3 border-t border-zinc-200/60 mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            readOnly
+                            value={colLink}
+                            className="bg-white border border-zinc-200 rounded-lg px-2 py-1 text-[11px] font-mono text-zinc-700 flex-1 outline-none truncate"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(colLink, `col_${col.id}`)}
+                            className="p-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold hover:bg-amber-500 transition cursor-pointer"
+                            title="Copiar Link"
+                          >
+                            {isCopied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={colLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex-1 py-1 rounded-lg border border-zinc-300 hover:bg-zinc-100 text-[11px] font-semibold text-zinc-700 text-center flex items-center justify-center gap-1"
+                          >
+                            <ExternalLink size={12} />
+                            Ver Vitrine
+                          </a>
+                          <a
+                            href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                              `Oi! Dá uma olhada nessa seleção exclusiva de "${col.name}" que preparei para você: ${colLink}`
+                            )}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex-1 py-1 rounded-lg bg-green-600 hover:bg-green-500 text-white text-[11px] font-semibold text-center flex items-center justify-center gap-1 shadow-xs"
+                          >
+                            <Share2 size={12} />
+                            WhatsApp
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Section 3: Catálogos Oficiais da Loja (se cadastrados) */}
+          {publicCatalogs.length > 0 && (
+            <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+              <div className="mb-4 pb-3 border-b border-zinc-100">
+                <h4 className="font-bold text-zinc-900 text-base flex items-center gap-2">
+                  <ShoppingBag size={18} className="text-amber-600" />
+                  Catálogos Oficiais da Loja
+                </h4>
+                <p className="text-xs text-zinc-500">
+                  Catálogos temáticos preparados pela equipe da EuSou prontos para você compartilhar com seus clientes.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {publicCatalogs.map((cat) => {
+                  const catLink = `${baseOrigin}/catalogos/${cat.slug}?ref=${stats?.affiliate?.code}`;
+                  const isCopied = copiedLink === `pubcat_${cat.id}`;
+
+                  return (
+                    <div
+                      key={cat.id}
+                      className="p-4 rounded-xl border border-zinc-200 bg-zinc-50/60 hover:bg-white hover:border-amber-300 transition flex flex-col justify-between"
+                    >
+                      <div>
+                        <h5 className="font-bold text-zinc-900 text-sm mb-1">{cat.name}</h5>
+                        {cat.description && (
+                          <p className="text-xs text-zinc-500 line-clamp-2 mb-3">{cat.description}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2 pt-3 border-t border-zinc-200/60 mt-2">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            readOnly
+                            value={catLink}
+                            className="bg-white border border-zinc-200 rounded-lg px-2 py-1 text-[11px] font-mono text-zinc-700 flex-1 outline-none truncate"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(catLink, `pubcat_${cat.id}`)}
+                            className="p-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold hover:bg-amber-500 transition cursor-pointer"
+                            title="Copiar Link"
+                          >
+                            {isCopied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={catLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex-1 py-1 rounded-lg border border-zinc-300 hover:bg-zinc-100 text-[11px] font-semibold text-zinc-700 text-center flex items-center justify-center gap-1"
+                          >
+                            <ExternalLink size={12} />
+                            Abrir
+                          </a>
+                          <a
+                            href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                              `Olá! Confira o catálogo especial "${cat.name}" da loja EuSou: ${catLink}`
+                            )}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex-1 py-1 rounded-lg bg-green-600 hover:bg-green-500 text-white text-[11px] font-semibold text-center flex items-center justify-center gap-1 shadow-xs"
+                          >
+                            <Share2 size={12} />
+                            WhatsApp
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Section 4: Produtos do Catálogo para Divulgação Individual */}
+          <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4 pb-3 border-b border-zinc-100">
+              <div>
+                <h4 className="font-bold text-zinc-900 text-base flex items-center gap-2">
+                  <Sparkles size={18} className="text-amber-600" />
+                  Divulgação de Produtos Individuais
+                </h4>
+                <p className="text-xs text-zinc-500">
+                  Gere o link comissionado direto de qualquer produto com 1 clique para mandar ao seu seguidor ou cliente.
+                </p>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="space-y-3 mb-5">
+              <div className="relative">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar produto pelo nome..."
+                  value={shareProductSearch}
+                  onChange={(e) => setShareProductSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-zinc-200 rounded-xl text-xs bg-zinc-50 focus:bg-white focus:ring-2 focus:ring-amber-500 outline-none transition"
+                />
+              </div>
+
+              {categoriesTree.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-zinc-500 uppercase mr-1">Filtrar:</span>
+                  <button
+                    type="button"
+                    onClick={() => setShareCategoryFilter(null)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      shareCategoryFilter === null
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
+                    }`}
+                  >
+                    Todos ({availableProducts.length})
+                  </button>
+                  {categoriesTree.map((cat) => {
+                    const isActive = shareCategoryFilter === cat.id;
+                    const catCount = availableProducts.filter((p) => p.categoryIds?.includes(cat.id)).length;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setShareCategoryFilter(cat.id)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                          isActive
+                            ? 'bg-amber-600 text-white shadow-xs'
+                            : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
+                        }`}
+                      >
+                        {cat.name} ({catCount})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Product Cards Grid */}
+            {availableProducts.length === 0 ? (
+              <div className="p-8 text-center text-xs text-zinc-400">
+                Carregando catálogo de produtos...
+              </div>
+            ) : (() => {
+              const filteredProds = availableProducts.filter((p) => {
+                if (shareCategoryFilter && !p.categoryIds?.includes(shareCategoryFilter)) return false;
+                if (shareProductSearch && !p.name.toLowerCase().includes(shareProductSearch.toLowerCase())) return false;
+                return true;
+              });
+
+              if (filteredProds.length === 0) {
+                return (
+                  <div className="p-8 text-center text-xs text-zinc-500 bg-zinc-50 rounded-xl">
+                    Nenhum produto encontrado com este filtro ou busca.
+                  </div>
+                );
+              }
+
+              const commPercent = (Number(stats?.affiliate?.defaultCommissionPercent) || 10) / 100;
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[600px] overflow-y-auto pr-1">
+                  {filteredProds.map((prod) => {
+                    const prodLink = `${baseOrigin}/produtos/${prod.slug}?ref=${stats?.affiliate?.code}`;
+                    const isCopied = copiedLink === `prod_${prod.id}`;
+                    const estComm = prod.price * commPercent;
+
+                    return (
+                      <div
+                        key={prod.id}
+                        className="bg-white border border-zinc-200 rounded-xl p-3 shadow-xs hover:border-amber-400 hover:shadow-md transition flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="w-full h-32 rounded-lg bg-zinc-100 border border-zinc-100 overflow-hidden mb-2.5 flex items-center justify-center">
+                            {prod.imageUrl ? (
+                              <img
+                                src={resolveMediaUrl(prod.imageUrl)}
+                                alt={prod.name}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <ShoppingBag size={24} className="text-zinc-300" />
+                            )}
+                          </div>
+
+                          <h5 className="font-bold text-zinc-900 text-xs line-clamp-2 mb-1" title={prod.name}>
+                            {prod.name}
+                          </h5>
+
+                          <div className="flex items-center justify-between gap-1 mb-2">
+                            <span className="text-xs font-bold text-amber-700">{formatCurrency(prod.price)}</span>
+                            {prod.categoryLabel && (
+                              <span className="text-[10px] bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded truncate max-w-[110px]">
+                                {prod.categoryLabel}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="mb-3 px-2 py-1 rounded-md bg-emerald-50 border border-emerald-200/60 text-[11px] font-bold text-emerald-800 flex items-center justify-between">
+                            <span>Sua comissão:</span>
+                            <span>~{formatCurrency(estComm)}</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5 pt-2 border-t border-zinc-100">
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(prodLink, `prod_${prod.id}`)}
+                            className="w-full py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                          >
+                            {isCopied ? <CheckCircle2 size={13} /> : <Copy size={13} />}
+                            {isCopied ? 'Link Copiado!' : 'Copiar Link Direto'}
+                          </button>
+
+                          <div className="flex items-center gap-1.5">
+                            <a
+                              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                                `Oi! Olha que incrível esse ${prod.name} por apenas ${formatCurrency(prod.price)} na loja EuSou: ${prodLink}`
+                              )}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex-1 py-1 rounded-lg bg-green-600 hover:bg-green-500 text-white text-[11px] font-semibold text-center flex items-center justify-center gap-1 shadow-xs"
+                            >
+                              <Share2 size={12} />
+                              WhatsApp
+                            </a>
+                            <a
+                              href={prodLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1 rounded-lg border border-zinc-300 hover:bg-zinc-100 text-zinc-700 transition"
+                              title="Visualizar produto na loja"
+                            >
+                              <ExternalLink size={13} />
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Section 5: Textos Prontos para Redes Sociais */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+              <h4 className="font-bold text-zinc-900 text-base mb-2">Texto para Feed & Stories</h4>
+              <p className="text-xs text-zinc-500 mb-3">
+                Copie um texto pronto e engajador para postar no Instagram, Threads ou TikTok:
+              </p>
+              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs text-zinc-700 italic mb-3">
+                "Galera, confiram os colecionáveis e decorações em impressão 3D incríveis na loja EuSou! Use meu link para garantir os melhores lançamentos: {catalogRefLink}"
+              </div>
+              <button
+                type="button"
                 onClick={() =>
                   copyToClipboard(
-                    `Galera, confiram os colecionáveis e decorações em impressão 3D incríveis na loja EuSou! Use meu link para garantir os melhores lançamentos: ${storeRefLink}`,
+                    `Galera, confiram os colecionáveis e decorações em impressão 3D incríveis na loja EuSou! Use meu link para garantir os melhores lançamentos: ${catalogRefLink}`,
                     'copy_msg'
                   )
                 }
-                className="w-full py-2.5 rounded-xl border border-zinc-300 hover:bg-zinc-50 text-xs font-semibold text-zinc-800 transition flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-xl border border-zinc-300 hover:bg-zinc-50 text-xs font-semibold text-zinc-800 transition flex items-center justify-center gap-2 cursor-pointer"
               >
                 {copiedLink === 'copy_msg' ? <CheckCircle2 size={14} className="text-green-600" /> : <Copy size={14} />}
                 {copiedLink === 'copy_msg' ? 'Mensagem Copiada!' : 'Copiar Texto Pronto'}
+              </button>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+              <h4 className="font-bold text-zinc-900 text-base mb-2">Mensagem Direta 1-a-1</h4>
+              <p className="text-xs text-zinc-500 mb-3">
+                Para enviar no privado quando alguém perguntar sobre presentes, pets ou decoração:
+              </p>
+              <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs text-zinc-700 italic mb-3">
+                "Oi! Eu sou parceiro oficial da EuSou, uma loja incrível com produtos temáticos de altíssima qualidade. Separei o catálogo com todas as peças aqui para você dar uma olhada: {catalogRefLink}"
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  copyToClipboard(
+                    `Oi! Eu sou parceiro oficial da EuSou, uma loja incrível com produtos temáticos de altíssima qualidade. Separei o catálogo com todas as peças aqui para você dar uma olhada: ${catalogRefLink}`,
+                    'copy_msg_direct'
+                  )
+                }
+                className="w-full py-2.5 rounded-xl border border-zinc-300 hover:bg-zinc-50 text-xs font-semibold text-zinc-800 transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {copiedLink === 'copy_msg_direct' ? <CheckCircle2 size={14} className="text-green-600" /> : <Copy size={14} />}
+                {copiedLink === 'copy_msg_direct' ? 'Mensagem Copiada!' : 'Copiar Texto Direto'}
               </button>
             </div>
           </div>
