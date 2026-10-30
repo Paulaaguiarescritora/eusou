@@ -155,8 +155,17 @@ export class ProductService {
       where.niches = { some: { nicheId: query.nicheId } };
     }
 
-    if (query.categoryId) {
-      where.categories = { some: { categoryId: query.categoryId } };
+    const catFilter = query.categoryId || query.category;
+    if (catFilter) {
+      where.categories = {
+        some: {
+          OR: [
+            { categoryId: catFilter },
+            { category: { id: catFilter } },
+            { category: { slug: catFilter } },
+          ],
+        },
+      };
     }
 
     if (query.tagId) {

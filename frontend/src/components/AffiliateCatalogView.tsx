@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { fetchApi, resolveMediaUrl } from '../api';
+import { Pagination } from './Pagination';
 import {
   Sparkles,
   ShoppingBag,
@@ -62,6 +63,12 @@ export const AffiliateCatalogView: React.FC<AffiliateCatalogViewProps> = ({
   const [activeTab, setActiveTab] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [copied, setCopied] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(12);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, search]);
 
   useEffect(() => {
     if (code) {
@@ -160,6 +167,12 @@ export const AffiliateCatalogView: React.FC<AffiliateCatalogViewProps> = ({
       p.name.toLowerCase().includes(search.toLowerCase())
     );
   }
+
+  const totalPages = Math.ceil(visibleProducts.length / itemsPerPage) || 1;
+  const paginatedProducts = visibleProducts.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
 
   const cleanPhone = affiliate.whatsapp ? affiliate.whatsapp.replace(/\D/g, '') : '';
 
@@ -406,7 +419,7 @@ export const AffiliateCatalogView: React.FC<AffiliateCatalogViewProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-              {visibleProducts.map((product) => {
+              {paginatedProducts.map((product) => {
                 return (
                   <div
                     key={product.id}
@@ -476,6 +489,25 @@ export const AffiliateCatalogView: React.FC<AffiliateCatalogViewProps> = ({
                 );
               })}
             </div>
+          )}
+
+          {/* Paginação da Vitrine do Afiliado */}
+          {!loading && visibleProducts.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={visibleProducts.length}
+              itemsPerPage={itemsPerPage}
+              onPageChange={(p) => setCurrentPage(p)}
+              onItemsPerPageChange={(l) => {
+                setItemsPerPage(l);
+                setCurrentPage(1);
+              }}
+              itemsPerPageOptions={[12, 24, 48]}
+              itemLabel="produtos na vitrine"
+              className="mt-8"
+              onScrollToTop={() => window.scrollTo({ top: 300, behavior: 'smooth' })}
+            />
           )}
         </main>
       </div>

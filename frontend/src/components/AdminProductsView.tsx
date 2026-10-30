@@ -17,6 +17,7 @@ import {
   ArrowRight,
   ExternalLink,
 } from 'lucide-react';
+import { Pagination } from './Pagination';
 
 interface AdminProductsViewProps {
   onNavigate: (route: string) => void;
@@ -32,6 +33,10 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(15);
 
   // Archive Confirmation Modal State
   const [productToArchive, setProductToArchive] = useState<Product | null>(null);
@@ -89,6 +94,16 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
 
     return matchesSearch && matchesStatus && matchesCategory;
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, categoryFilter]);
+
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage) || 1;
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
 
   return (
     <div className="p-6 sm:p-10 max-w-7xl mx-auto space-y-6">
@@ -184,7 +199,7 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredProducts.map((p) => {
+                {paginatedProducts.map((p) => {
                   const primaryImg =
                     p.media?.find((m) => m.isPrimary)?.url ||
                     (p.media && p.media.length > 0 ? p.media[0].url : null);
@@ -397,6 +412,23 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
               </tbody>
             </table>
           </div>
+        )}
+
+        {/* Paginação do Catálogo Administrativo */}
+        {!loading && filteredProducts.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredProducts.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(page) => setCurrentPage(page)}
+            onItemsPerPageChange={(limit) => {
+              setItemsPerPage(limit);
+              setCurrentPage(1);
+            }}
+            itemsPerPageOptions={[10, 15, 25, 50]}
+            itemLabel="produtos cadastrados"
+          />
         )}
       </div>
 

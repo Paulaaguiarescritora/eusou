@@ -7,6 +7,7 @@ import { CheckoutView } from './components/CheckoutView';
 import { OrderConfirmation } from './components/OrderConfirmation';
 import { CatalogView } from './components/CatalogView';
 import { AffiliateCatalogView } from './components/AffiliateCatalogView';
+import { Pagination } from './components/Pagination';
 
 // Lazy load backoffice and auxiliary components to drastically reduce initial bundle size for shoppers
 const AdminOrdersView = lazy(() => import('./components/AdminOrdersView').then((m) => ({ default: m.AdminOrdersView })));
@@ -95,6 +96,7 @@ export function App() {
   });
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const catalogSectionRef = React.useRef<HTMLDivElement>(null);
   const [selectedCatalog, setSelectedCatalog] = useState<Catalog | null>(null);
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
 
@@ -383,6 +385,20 @@ export function App() {
     const currentParams = new URLSearchParams(searchPart);
     currentParams.set('page', String(newPage));
     navigateTo(`/produtos?${currentParams.toString()}`);
+    if (catalogSectionRef.current) {
+      catalogSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleLimitChange = (newLimit: number) => {
+    const searchPart = route.includes('?') ? route.substring(route.indexOf('?')) : '';
+    const currentParams = new URLSearchParams(searchPart);
+    currentParams.set('limit', String(newLimit));
+    currentParams.set('page', '1');
+    navigateTo(`/produtos?${currentParams.toString()}`);
+    if (catalogSectionRef.current) {
+      catalogSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   };
 
   const handleLoginSuccess = (user: { id: string; email: string; roles: string[] }) => {
@@ -875,7 +891,7 @@ export function App() {
 
         {/* ROUTE: PRODUTOS OU COLEÇÕES (LISTAGEM) */}
         {(route.startsWith('/produtos') || route.startsWith('/colecoes/')) && !selectedProduct && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
+          <div ref={catalogSectionRef} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 {route.startsWith('/colecoes/') && (
@@ -927,7 +943,14 @@ export function App() {
                   return (
                     <button
                       key={cat.id}
-                      onClick={() => navigateTo(`/produtos?categoryId=${cat.id}`)}
+                      onClick={() => {
+                        const searchPart = route.includes('?') ? route.substring(route.indexOf('?')) : '';
+                        const currentParams = new URLSearchParams(searchPart);
+                        currentParams.set('categoryId', cat.id);
+                        currentParams.delete('category');
+                        currentParams.set('page', '1');
+                        navigateTo(`/produtos?${currentParams.toString()}`);
+                      }}
                       className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition cursor-pointer ${
                         isActive
                           ? 'bg-indigo-600 text-white shadow-xs'
@@ -970,63 +993,56 @@ export function App() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-                {productsList.map((p) => (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    onSelect={handleSelectProduct}
-                    onQuickAdd={(prod) =>
-                      handleAddToCart({
-                        productId: prod.id,
-                        name: prod.name,
-                        unitPrice: prod.basePrice ? Number(prod.basePrice) : 0,
-                        quantity: 1,
-                        imageUrl: prod.media?.find((m) => m.isPrimary)?.url || prod.media?.[0]?.url || null,
-                        nicheName: extractProductNiche(prod),
-                      })
-                    }
-                  />
-                ))}
+              <div className="relative">
+                {loading && (
+                  <div className="absolute inset-0 bg-white/60 backdrop-blur-2xs z-10 flex flex-col items-center justify-center rounded-2xl min-h-[300px]">
+                    <div className="w-8 h-8 border-3 border-slate-900 border-t-transparent rounded-full animate-spin mb-2"></div>
+                    <span className="text-xs font-semibold text-slate-700">Atualizando produtos...</span>
+                  </div>
+                )}
+                <div
+                  className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 transition-opacity duration-200 ${
+                    loading ? 'opacity-40' : 'opacity-100'
+                  }`}
+                >
+                  {productsList.map((p) => (
+                    <ProductCard
+                      key={p.id}
+                      product={p}
+                      onSelect={handleSelectProduct}
+                      onQuickAdd={(prod) =>
+                        handleAddToCart({
+                          productId: prod.id,
+                          name: prod.name,
+                          unitPrice: prod.basePrice ? Number(prod.basePrice) : 0,
+                          quantity: 1,
+                          imageUrl: prod.media?.find((m) => m.isPrimary)?.url || prod.media?.[0]?.url || null,
+                          nicheName: extractProductNiche(prod),
+                        })
+                      }
+                    />
+                  ))}
+                </div>
               </div>
             )}
 
             {/* Paginação do Catálogo Público da Loja */}
-            {productsMeta && productsMeta.totalPages > 1 && (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-gray-100">
-                <span className="text-xs text-slate-500 font-medium">
-                  Página <strong className="text-slate-800">{productsMeta.page}</strong> de <strong className="text-slate-800">{productsMeta.totalPages}</strong> ({productsMeta.total} produtos na loja)
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => handlePageChange(productsMeta.page - 1)}
-                    disabled={productsMeta.page <= 1}
-                    className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
-                  >
-                    Anterior
-                  </button>
-                  {Array.from({ length: productsMeta.totalPages }, (_, i) => i + 1).map((pageNum) => (
-                    <button
-                      key={pageNum}
-                      onClick={() => handlePageChange(pageNum)}
-                      className={`w-8 h-8 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        pageNum === productsMeta.page
-                          ? 'bg-slate-900 text-white shadow-xs'
-                          : 'border border-gray-200 text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => handlePageChange(productsMeta.page + 1)}
-                    disabled={productsMeta.page >= productsMeta.totalPages}
-                    className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
-                  >
-                    Próxima
-                  </button>
-                </div>
-              </div>
+            {productsMeta && (
+              <Pagination
+                currentPage={productsMeta.page}
+                totalPages={productsMeta.totalPages}
+                totalItems={productsMeta.total}
+                itemsPerPage={productsMeta.limit}
+                onPageChange={handlePageChange}
+                onItemsPerPageChange={handleLimitChange}
+                itemsPerPageOptions={[12, 24, 48]}
+                itemLabel="produtos na loja"
+                onScrollToTop={() => {
+                  if (catalogSectionRef.current) {
+                    catalogSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }}
+              />
             )}
           </div>
         )}

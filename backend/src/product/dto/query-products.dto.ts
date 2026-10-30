@@ -42,6 +42,10 @@ export class QueryProductsDto {
 
   @IsOptional()
   @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
   tagId?: string;
 
   @IsOptional()
