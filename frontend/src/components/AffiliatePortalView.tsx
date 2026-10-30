@@ -996,7 +996,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
             <span>Programa Oficial de Parceiros & Criadores</span>
           </div>
           <h1 className="text-3xl sm:text-5xl font-serif font-bold text-zinc-950 tracking-tight mb-4">
-            Monetize sua audiência com os melhores produtos em impressão 3D
+            Monetize sua audiência com os melhores produtos e curadorias exclusivas
           </h1>
           <p className="text-base sm:text-lg text-zinc-600 leading-relaxed">
             Seja um parceiro oficial EuSou. Divulgue decorações exclusivas, colecionáveis e utilidades de alto valor percebido e receba <strong className="text-amber-700">10% de comissão</strong> sobre cada venda aprovada.
@@ -1872,7 +1872,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
-                    {conversions.map((conv: any) => {
+                    {conversions.map((conv: any, idx: number) => {
                       const orderIdStr = String(conv.orderId || conv.orderNumber || conv.order?.id || conv.id || '').trim();
                       const displayOrderId = orderIdStr ? `#${orderIdStr.slice(0, 8)}` : '-';
                       const rawDate = conv.createdAt || conv.date || (conv.order && conv.order.createdAt);
@@ -1890,7 +1890,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                       const convStatus = String(conv.status || conv.conversionStatus || 'PENDING').toUpperCase();
 
                       return (
-                        <tr key={conv.id || Math.random()} className="hover:bg-zinc-50/50">
+                        <tr key={conv.id || `conv-${idx}`} className="hover:bg-zinc-50/50">
                           <td className="px-6 py-4 text-xs text-zinc-600">
                             {dateStr}
                           </td>
@@ -2085,7 +2085,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                   </a>
                   <a
                     href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                      `Olá! Dá uma olhada no catálogo de produtos e impressões 3D incríveis da EuSou que selecionei para você: ${catalogRefLink}`
+                      `Olá! Dá uma olhada no catálogo de produtos incríveis e exclusivos da EuSou que selecionei para você: ${catalogRefLink}`
                     )}`}
                     target="_blank"
                     rel="noreferrer"
@@ -2542,13 +2542,13 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                 Copie um texto pronto e engajador para postar no Instagram, Threads ou TikTok:
               </p>
               <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs text-zinc-700 italic mb-3">
-                "Galera, confiram os colecionáveis e decorações em impressão 3D incríveis na loja EuSou! Use meu link para garantir os melhores lançamentos: {catalogRefLink}"
+                "Galera, confiram os colecionáveis e decorações exclusivas e incríveis na loja EuSou! Use meu link para garantir os melhores lançamentos: {catalogRefLink}"
               </div>
               <button
                 type="button"
                 onClick={() =>
                   copyToClipboard(
-                    `Galera, confiram os colecionáveis e decorações em impressão 3D incríveis na loja EuSou! Use meu link para garantir os melhores lançamentos: ${catalogRefLink}`,
+                    `Galera, confiram os colecionáveis e decorações exclusivas e incríveis na loja EuSou! Use meu link para garantir os melhores lançamentos: ${catalogRefLink}`,
                     'copy_msg'
                   )
                 }
@@ -3043,7 +3043,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="Ex: Sejam bem-vindos! Selecionei pessoalmente os melhores colecionáveis e presentes 3D com entrega garantida."
+                  placeholder="Ex: Sejam bem-vindos! Selecionei pessoalmente os melhores colecionáveis e presentes exclusivos com entrega garantida."
                   value={themeCustomBio}
                   onChange={(e) => setThemeCustomBio(e.target.value)}
                   className="w-full px-3.5 py-2.5 border border-zinc-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 outline-none resize-none"
@@ -3126,7 +3126,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                   <div>
                     <h3 className="text-lg font-bold text-zinc-900">Card Promocional & QR Code</h3>
                     <p className="text-xs text-zinc-500">
-                      Gere imagens prontas para Stories, WhatsApp e materiais impressos
+                      Gere imagens prontas para Stories, WhatsApp e materiais de divulgação
                     </p>
                   </div>
                 </div>

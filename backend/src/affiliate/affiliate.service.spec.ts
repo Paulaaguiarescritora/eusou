@@ -48,6 +48,7 @@ describe('AffiliateService', () => {
       collection: {
         create: jest.fn(),
         findMany: jest.fn(),
+        findUnique: jest.fn(),
       },
       order: {
         findUnique: jest.fn(),
@@ -289,11 +290,17 @@ describe('AffiliateService', () => {
         name: 'Meus Favoritos',
         ownerAffiliateId: 'aff-1',
       });
+      prisma.collection.findUnique.mockResolvedValue({
+        id: 'col-1',
+        name: 'Meus Favoritos',
+        ownerAffiliateId: 'aff-1',
+        items: [],
+      });
 
       const col = await service.createAffiliateCollection('aff-1', {
         name: 'Meus Favoritos',
       });
-      expect(col.ownerAffiliateId).toBe('aff-1');
+      expect(col?.ownerAffiliateId).toBe('aff-1');
       expect(auditLog.log).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'AFFILIATE_COLLECTION_CREATED' }),
       );

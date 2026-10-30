@@ -156,7 +156,10 @@ describe('CatalogService', () => {
           OR: [{ niches: { some: { nicheId: 'niche-1' } } }],
         },
         include: {
-          media: { orderBy: { sortOrder: 'asc' }, take: 1 },
+          media: {
+            orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
+            take: 1,
+          },
         },
       });
     });

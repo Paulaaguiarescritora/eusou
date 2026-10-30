@@ -1426,7 +1426,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Porta-Chaves Gatinho 3D"
+                placeholder="Ex: Porta-Chaves Gatinho Minimalista"
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-slate-900"
               />
             </div>
@@ -1452,7 +1452,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                 type="text"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
-                placeholder="Ex: porta-chaves-gatinho-3d"
+                placeholder="Ex: porta-chaves-gatinho-minimalista"
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:border-slate-900"
               />
             </div>
