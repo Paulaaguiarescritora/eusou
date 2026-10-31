@@ -1,18 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { InventoryItem, StockMovement, Product } from '../types';
 import { fetchApi } from '../api';
-import { 
-  Package, 
-  ArrowDownRight, 
-  ArrowUpRight, 
-  RotateCcw, 
-  Sliders, 
-  AlertTriangle, 
-  Search, 
-  Plus, 
-  CheckCircle2, 
-  Layers,
-  TrendingDown
+import {
+  Package,
+  ArrowDownRight,
+  ArrowUpRight,
+  RotateCcw,
+  Sliders,
+  AlertTriangle,
+  Search,
+  Plus,
+  CheckCircle2,
+  Check,
+  X,
+  RefreshCw,
 } from 'lucide-react';
 
 export const InventoryView: React.FC = () => {
@@ -25,7 +26,7 @@ export const InventoryView: React.FC = () => {
   const [search, setSearch] = useState('');
   const [lowStockOnly, setLowStockOnly] = useState(false);
 
-  // Manual Adjust Modal
+  // Manual Adjust Modal Geral (Top Button)
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedVariantId, setSelectedVariantId] = useState('');
@@ -33,11 +34,28 @@ export const InventoryView: React.FC = () => {
   const [adjustMode, setAdjustMode] = useState<'DELTA' | 'SET'>('DELTA');
   const [adjustReason, setAdjustReason] = useState('');
 
+  // Ajuste Direto na Linha (No Local)
+  const [inlineAdjustItem, setInlineAdjustItem] = useState<InventoryItem | null>(null);
+  const [inlineNewQuantity, setInlineNewQuantity] = useState<number>(0);
+  const [inlineAdjustMode, setInlineAdjustMode] = useState<'SET' | 'DELTA'>('SET');
+  const [inlineMinimumQuantity, setInlineMinimumQuantity] = useState<number>(0);
+  const [inlineReason, setInlineReason] = useState<string>('Reposição de estoque');
+  const [inlineSubmitting, setInlineSubmitting] = useState<boolean>(false);
+  const [quickPlusLoadingId, setQuickPlusLoadingId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
       const [invRes, movRes, prodRes] = await Promise.all([
-        fetchApi<{ data: InventoryItem[]; summary?: any }>(`/admin/inventory?limit=200&lowStockOnly=${lowStockOnly}`),
+        fetchApi<{ data: InventoryItem[]; summary?: any }>(
+          `/admin/inventory?limit=200&lowStockOnly=${lowStockOnly}`,
+        ),
         fetchApi<{ data: StockMovement[] }>('/admin/inventory/movements'),
         fetchApi<{ data: Product[] }>('/products?limit=100'),
       ]);
@@ -73,9 +91,70 @@ export const InventoryView: React.FC = () => {
       setAdjustReason('');
       setAdjustQuantity(0);
       setSelectedVariantId('');
+      showToast('Ajuste de estoque concluído com sucesso!');
       loadData();
     } catch (err: any) {
       alert(err.message || 'Erro ao realizar ajuste de estoque');
+    }
+  };
+
+  // Abre o ajuste rápido com o item específico pré-carregado
+  const handleOpenInlineAdjust = (item: InventoryItem) => {
+    setInlineAdjustItem(item);
+    setInlineNewQuantity(item.quantity);
+    setInlineAdjustMode('SET');
+    setInlineMinimumQuantity(item.minimumQuantity || 0);
+    setInlineReason(item.isLowStock ? 'Reposição de estoque baixo' : 'Ajuste físico de rotina');
+  };
+
+  // Entrada rápida de +1 com 1 clique direto na linha
+  const handleQuickAddOne = async (item: InventoryItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setQuickPlusLoadingId(item.id);
+    try {
+      await fetchApi('/admin/inventory/adjust', {
+        method: 'POST',
+        body: JSON.stringify({
+          productId: item.productId || item.product?.id,
+          variantId: item.variantId || item.variant?.id || undefined,
+          quantity: 1,
+          mode: 'DELTA',
+          reason: 'Entrada rápida (+1 unidade no estoque físico)',
+        }),
+      });
+      showToast(`+1 unidade adicionada ao saldo de "${item.product?.name}"!`);
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao adicionar unidade');
+    } finally {
+      setQuickPlusLoadingId(null);
+    }
+  };
+
+  // Salva o ajuste do modal direto no local
+  const handleInlineAdjustSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inlineAdjustItem) return;
+    setInlineSubmitting(true);
+    try {
+      await fetchApi('/admin/inventory/adjust', {
+        method: 'POST',
+        body: JSON.stringify({
+          productId: inlineAdjustItem.productId || inlineAdjustItem.product?.id,
+          variantId: inlineAdjustItem.variantId || inlineAdjustItem.variant?.id || undefined,
+          quantity: Number(inlineNewQuantity),
+          mode: inlineAdjustMode,
+          minimumQuantity: Number(inlineMinimumQuantity),
+          reason: inlineReason || 'Ajuste de estoque direto na linha',
+        }),
+      });
+      showToast(`Estoque de "${inlineAdjustItem.product?.name}" atualizado com sucesso!`);
+      setInlineAdjustItem(null);
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao ajustar estoque');
+    } finally {
+      setInlineSubmitting(false);
     }
   };
 
@@ -86,8 +165,18 @@ export const InventoryView: React.FC = () => {
       i.variant?.name?.toLowerCase().includes(search.toLowerCase()),
   );
 
+  const lowStockCount = items.filter((i) => i.isLowStock).length;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-zinc-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in slide-in-from-bottom-5">
+          <CheckCircle2 size={16} className="text-emerald-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
         <div>
@@ -100,16 +189,28 @@ export const InventoryView: React.FC = () => {
             Controle de Estoque & Movimentações
           </h1>
           <p className="text-sm text-zinc-500 mt-1">
-            Acompanhe o saldo físico em tempo real, saídas por vendas, entradas da fabricação e rastreabilidade total
+            Acompanhe o saldo físico em tempo real, saídas por vendas, entradas da fabricação e
+            faça ajustes no local
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAdjustModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold rounded-xl transition shadow-sm"
-        >
-          <Sliders size={16} /> Ajuste Manual de Estoque
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => loadData()}
+            className="p-2.5 border border-zinc-200 rounded-xl hover:bg-zinc-50 text-zinc-600 cursor-pointer flex items-center gap-1.5 text-xs font-semibold transition"
+            title="Recarregar saldos"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            <span>Atualizar</span>
+          </button>
+          <button
+            onClick={() => setShowAdjustModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold rounded-xl transition shadow-sm cursor-pointer"
+          >
+            <Sliders size={15} />
+            <span>Ajuste Manual Geral</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI CARDS: VALORAÇÃO PATRIMONIAL E CUSTO REAL DO ESTOQUE */}
@@ -118,14 +219,30 @@ export const InventoryView: React.FC = () => {
           <div>
             <div className="flex items-center justify-between text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1">
               <span>Patrimônio Total</span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px]">Total Geral</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px]">
+                Total Geral
+              </span>
             </div>
             <div className="text-2xl font-black text-zinc-900 mt-1">
-              R$ {Number(summary?.totalValuation || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              R${' '}
+              {Number(summary?.totalValuation || 0).toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </div>
           </div>
           <p className="text-xs text-zinc-500 mt-2">
-            Produtos Acabados (R$ {Number(summary?.totalCostValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) + Insumos/Filamentos (R$ {Number(summary?.materialsCostValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+            Produtos Acabados (R${' '}
+            {Number(summary?.totalCostValue || 0).toLocaleString('pt-BR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+            ) + Insumos/Filamentos (R${' '}
+            {Number(summary?.materialsCostValue || 0).toLocaleString('pt-BR', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+            )
           </p>
         </div>
 
@@ -133,10 +250,18 @@ export const InventoryView: React.FC = () => {
           <div>
             <div className="flex items-center justify-between text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1">
               <span>Produtos a Custo</span>
-              <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold text-[10px]">{summary?.totalAvailableQuantity || items.reduce((acc, i) => acc + (i.availableQuantity || 0), 0)} peças</span>
+              <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold text-[10px]">
+                {summary?.totalAvailableQuantity ||
+                  items.reduce((acc, i) => acc + (i.availableQuantity || 0), 0)}{' '}
+                peças
+              </span>
             </div>
             <div className="text-2xl font-black text-amber-600 mt-1">
-              R$ {Number(summary?.totalCostValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              R${' '}
+              {Number(summary?.totalCostValue || 0).toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </div>
           </div>
           <p className="text-xs text-zinc-500 mt-2">
@@ -148,10 +273,16 @@ export const InventoryView: React.FC = () => {
           <div>
             <div className="flex items-center justify-between text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1">
               <span>Insumos & Filamentos</span>
-              <span className="px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 font-bold text-[10px]">Matéria-Prima</span>
+              <span className="px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 font-bold text-[10px]">
+                Matéria-Prima
+              </span>
             </div>
             <div className="text-2xl font-black text-cyan-700 mt-1">
-              R$ {Number(summary?.materialsCostValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              R${' '}
+              {Number(summary?.materialsCostValue || 0).toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </div>
           </div>
           <p className="text-xs text-zinc-500 mt-2">
@@ -163,10 +294,16 @@ export const InventoryView: React.FC = () => {
           <div>
             <div className="flex items-center justify-between text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1">
               <span>Potencial de Venda</span>
-              <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[10px]">Varejo</span>
+              <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[10px]">
+                Varejo
+              </span>
             </div>
             <div className="text-2xl font-black text-indigo-700 mt-1">
-              R$ {Number(summary?.totalRetailValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              R${' '}
+              {Number(summary?.totalRetailValue || 0).toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
             </div>
           </div>
           <p className="text-xs text-zinc-500 mt-2">
@@ -179,25 +316,25 @@ export const InventoryView: React.FC = () => {
       <div className="flex border-b border-zinc-200 gap-6 mb-6">
         <button
           onClick={() => setActiveTab('stock')}
-          className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition ${
+          className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition cursor-pointer ${
             activeTab === 'stock'
               ? 'border-zinc-900 text-zinc-900'
               : 'border-transparent text-zinc-500 hover:text-zinc-800'
           }`}
         >
           <Package size={18} />
-          Saldos de Produtos ({items.length})
+          <span>Saldos de Produtos ({items.length})</span>
         </button>
         <button
           onClick={() => setActiveTab('movements')}
-          className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition ${
+          className={`flex items-center gap-2 pb-3 text-sm font-semibold border-b-2 transition cursor-pointer ${
             activeTab === 'movements'
               ? 'border-zinc-900 text-zinc-900'
               : 'border-transparent text-zinc-500 hover:text-zinc-800'
           }`}
         >
           <RotateCcw size={18} />
-          Histórico de Movimentações ({movements.length})
+          <span>Histórico de Movimentações ({movements.length})</span>
         </button>
       </div>
 
@@ -223,9 +360,33 @@ export const InventoryView: React.FC = () => {
                 onChange={(e) => setLowStockOnly(e.target.checked)}
                 className="rounded text-amber-600 focus:ring-amber-500"
               />
-              Apenas Estoque Baixo (Alerta)
+              <span>Apenas Estoque Baixo (Alerta)</span>
+              {lowStockCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                  {lowStockCount}
+                </span>
+              )}
             </label>
           </div>
+
+          {/* Banner de Ajuda Rápida quando há itens com estoque baixo */}
+          {lowStockCount > 0 && (
+            <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-950">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-800 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={15} />
+                </div>
+                <div>
+                  <strong>{lowStockCount} itens necessitam de reposição</strong>
+                  <p className="text-[11px] text-amber-900 mt-0.5">
+                    Você pode clicar em <strong>"Repor Estoque"</strong> ou no botão{' '}
+                    <strong>"+1"</strong> diretamente na linha do produto para atualizar o saldo
+                    físico imediatamente.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-sm">
             <table className="w-full text-left text-sm">
@@ -233,16 +394,22 @@ export const InventoryView: React.FC = () => {
                 <tr>
                   <th className="px-6 py-3.5">Produto / Variante</th>
                   <th className="px-6 py-3.5">SKU</th>
-                  <th className="px-6 py-3.5">Físico</th>
-                  <th className="px-6 py-3.5">Reservado</th>
-                  <th className="px-6 py-3.5">Disponível</th>
-                  <th className="px-6 py-3.5">Mínimo</th>
-                  <th className="px-6 py-3.5 text-right">Status</th>
+                  <th className="px-6 py-3.5 text-center">Físico</th>
+                  <th className="px-6 py-3.5 text-center">Reservado</th>
+                  <th className="px-6 py-3.5 text-center">Disponível</th>
+                  <th className="px-6 py-3.5 text-center">Mínimo</th>
+                  <th className="px-6 py-3.5 text-center">Status</th>
+                  <th className="px-6 py-3.5 text-right">Ações no Local</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {filteredItems.map((item) => (
-                  <tr key={item.id} className="hover:bg-zinc-50/60 transition">
+                  <tr
+                    key={item.id}
+                    className={`transition ${
+                      item.isLowStock ? 'bg-amber-50/20 hover:bg-amber-50/40' : 'hover:bg-zinc-50/60'
+                    }`}
+                  >
                     <td className="px-6 py-4">
                       <div className="font-semibold text-zinc-900">{item.product?.name}</div>
                       {item.variant && (
@@ -252,15 +419,27 @@ export const InventoryView: React.FC = () => {
                     <td className="px-6 py-4 font-mono text-xs text-zinc-600">
                       {item.variant?.sku || item.product?.sku || '-'}
                     </td>
-                    <td className="px-6 py-4 font-medium text-zinc-900">{item.quantity}</td>
-                    <td className="px-6 py-4 text-zinc-500">{item.reservedQuantity}</td>
-                    <td className="px-6 py-4">
-                      <span className={`font-bold ${item.availableQuantity === 0 ? 'text-red-600' : 'text-zinc-900'}`}>
+                    <td className="px-6 py-4 font-medium text-zinc-900 text-center">
+                      {item.quantity}
+                    </td>
+                    <td className="px-6 py-4 text-zinc-500 text-center">
+                      {item.reservedQuantity}
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span
+                        className={`font-bold px-2 py-0.5 rounded-full text-xs ${
+                          item.availableQuantity === 0
+                            ? 'bg-red-100 text-red-700'
+                            : 'text-zinc-900'
+                        }`}
+                      >
                         {item.availableQuantity}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-zinc-500">{item.minimumQuantity}</td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-zinc-500 text-center">
+                      {item.minimumQuantity}
+                    </td>
+                    <td className="px-6 py-4 text-center">
                       {item.isLowStock ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">
                           <AlertTriangle size={12} /> Estoque Baixo
@@ -270,6 +449,41 @@ export const InventoryView: React.FC = () => {
                           <CheckCircle2 size={12} /> Regular
                         </span>
                       )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {/* Entrada Rápida de +1 */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleQuickAddOne(item, e)}
+                          disabled={quickPlusLoadingId === item.id}
+                          title="Entrada Rápida: +1 unidade no estoque físico"
+                          className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200 transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          {quickPlusLoadingId === item.id ? (
+                            <span className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <Plus size={13} />
+                              <span>1</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* Botão de Ajustar / Repor Direto */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenInlineAdjust(item)}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                            item.isLowStock
+                              ? 'bg-amber-500 hover:bg-amber-600 text-zinc-950 shadow-xs'
+                              : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800'
+                          }`}
+                        >
+                          <Sliders size={13} />
+                          <span>{item.isLowStock ? 'Repor Estoque' : 'Ajustar'}</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -343,17 +557,270 @@ export const InventoryView: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: AJUSTE MANUAL */}
+      {/* ========================================================================= */}
+      {/* MODAL: AJUSTE DIRETO NO LOCAL (ACIONADO DIRETO NA LINHA DO PRODUTO)       */}
+      {/* ========================================================================= */}
+      {inlineAdjustItem && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl animate-in fade-in zoom-in-95 border border-zinc-100">
+            <div className="flex items-start justify-between pb-4 border-b border-zinc-100 mb-5">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800">
+                    Ajuste Direto no Local
+                  </span>
+                  {inlineAdjustItem.isLowStock && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-800 flex items-center gap-1">
+                      <AlertTriangle size={10} /> Estoque Baixo
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-lg font-bold text-zinc-900">
+                  {inlineAdjustItem.product?.name}
+                </h3>
+                {inlineAdjustItem.variant && (
+                  <p className="text-xs text-zinc-500 font-medium">
+                    Variante:{' '}
+                    <span className="text-zinc-800 font-semibold">
+                      {inlineAdjustItem.variant.name}
+                    </span>
+                    {inlineAdjustItem.variant.sku && (
+                      <span className="ml-2 font-mono text-zinc-400">
+                        SKU: {inlineAdjustItem.variant.sku}
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setInlineAdjustItem(null)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Saldos Atuais */}
+            <div className="grid grid-cols-4 gap-2.5 mb-5 p-3.5 bg-zinc-50 rounded-2xl border border-zinc-100 text-center">
+              <div>
+                <span className="block text-[10px] uppercase font-bold text-zinc-400">Físico</span>
+                <span className="text-base font-extrabold text-zinc-800">
+                  {inlineAdjustItem.quantity}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[10px] uppercase font-bold text-zinc-400">
+                  Reservado
+                </span>
+                <span className="text-base font-extrabold text-zinc-500">
+                  {inlineAdjustItem.reservedQuantity}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[10px] uppercase font-bold text-zinc-400">
+                  Disponível
+                </span>
+                <span
+                  className={`text-base font-extrabold ${
+                    inlineAdjustItem.availableQuantity === 0 ? 'text-red-600' : 'text-emerald-600'
+                  }`}
+                >
+                  {inlineAdjustItem.availableQuantity}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[10px] uppercase font-bold text-zinc-400">Mínimo</span>
+                <span className="text-base font-extrabold text-zinc-700">
+                  {inlineAdjustItem.minimumQuantity}
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleInlineAdjustSubmit} className="space-y-4">
+              {/* Modo de Ajuste */}
+              <div className="flex rounded-xl bg-zinc-100 p-1 border border-zinc-200/80">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInlineAdjustMode('SET');
+                    setInlineNewQuantity(inlineAdjustItem.quantity);
+                  }}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    inlineAdjustMode === 'SET'
+                      ? 'bg-white text-zinc-900 shadow-xs'
+                      : 'text-zinc-500 hover:text-zinc-900'
+                  }`}
+                >
+                  Definir Saldo Físico Exato
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInlineAdjustMode('DELTA');
+                    setInlineNewQuantity(1);
+                  }}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    inlineAdjustMode === 'DELTA'
+                      ? 'bg-white text-zinc-900 shadow-xs'
+                      : 'text-zinc-500 hover:text-zinc-900'
+                  }`}
+                >
+                  Somar / Subtrair (+/-)
+                </button>
+              </div>
+
+              {/* Quantidade */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase mb-1">
+                  {inlineAdjustMode === 'SET'
+                    ? 'Novo Saldo Físico Total'
+                    : 'Quantidade a Adicionar / Remover'}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    required
+                    value={inlineNewQuantity}
+                    onChange={(e) => setInlineNewQuantity(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 border border-zinc-300 rounded-xl text-base font-black text-zinc-900 focus:ring-2 focus:ring-amber-500 outline-none bg-white"
+                  />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setInlineNewQuantity((prev) => prev + 1)}
+                      className="px-2.5 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-lg text-xs font-bold cursor-pointer"
+                    >
+                      +1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInlineNewQuantity((prev) => prev + 5)}
+                      className="px-2.5 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-lg text-xs font-bold cursor-pointer"
+                    >
+                      +5
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInlineNewQuantity((prev) => prev + 10)}
+                      className="px-2.5 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-lg text-xs font-bold cursor-pointer"
+                    >
+                      +10
+                    </button>
+                  </div>
+                </div>
+                {inlineAdjustMode === 'SET' && (
+                  <p className="text-[11px] text-zinc-500 mt-1">
+                    Saldo disponível resultante:{' '}
+                    <strong>
+                      {Math.max(0, inlineNewQuantity - inlineAdjustItem.reservedQuantity)}
+                    </strong>{' '}
+                    un.
+                  </p>
+                )}
+              </div>
+
+              {/* Estoque Mínimo (Alerta) */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase mb-1">
+                  Estoque Mínimo de Alerta
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={inlineMinimumQuantity}
+                  onChange={(e) => setInlineMinimumQuantity(Number(e.target.value))}
+                  placeholder="Ex: 1"
+                  className="w-full px-3.5 py-2 border border-zinc-300 rounded-xl text-xs font-semibold text-zinc-800 focus:ring-2 focus:ring-amber-500 outline-none bg-white"
+                />
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  Se o disponível ficar abaixo deste valor, o status indicará "Estoque Baixo". (0
+                  desativa o alerta).
+                </p>
+              </div>
+
+              {/* Motivo do Ajuste com botões rápidos */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 uppercase mb-1">
+                  Motivo do Registro
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[
+                    'Reposição de produção',
+                    'Contagem física de inventário',
+                    'Devolução de cliente',
+                    'Descarte / Avaria',
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setInlineReason(preset)}
+                      className={`px-2 py-0.5 rounded-md text-[11px] transition cursor-pointer border ${
+                        inlineReason === preset
+                          ? 'bg-amber-100 text-amber-900 border-amber-300 font-bold'
+                          : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={inlineReason}
+                  onChange={(e) => setInlineReason(e.target.value)}
+                  className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-xs text-zinc-800 focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+              </div>
+
+              {/* Botões do Modal */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-100">
+                <button
+                  type="button"
+                  onClick={() => setInlineAdjustItem(null)}
+                  className="px-4 py-2.5 border border-zinc-200 rounded-xl text-xs font-semibold text-zinc-600 hover:bg-zinc-50 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={inlineSubmitting}
+                  className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+                >
+                  {inlineSubmitting ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Salvando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={14} />
+                      <span>Salvar Ajuste Imediato</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: AJUSTE MANUAL GERAL                                                */}
+      {/* ========================================================================= */}
       {showAdjustModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95">
-            <h3 className="text-lg font-bold text-zinc-900 mb-2">Ajuste Manual de Estoque</h3>
+            <h3 className="text-lg font-bold text-zinc-900 mb-2">Ajuste Manual Geral</h3>
             <p className="text-xs text-zinc-500 mb-4">
               Qualquer alteração física exige declaração formal do motivo para auditoria.
             </p>
             <form onSubmit={handleAdjustSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">Produto</label>
+                <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">
+                  Produto
+                </label>
                 <select
                   required
                   value={selectedProductId}
@@ -372,31 +839,35 @@ export const InventoryView: React.FC = () => {
                 </select>
               </div>
 
-              {selectedProductId && products.find((p) => p.id === selectedProductId)?.variants && (products.find((p) => p.id === selectedProductId)!.variants || []).length > 0 && (
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">
-                    Variante / Cor Específica
-                  </label>
-                  <select
-                    value={selectedVariantId}
-                    onChange={(e) => setSelectedVariantId(e.target.value)}
-                    className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none"
-                  >
-                    <option value="">Estoque Geral do Produto (sem variante)</option>
-                    {products
-                      .find((p) => p.id === selectedProductId)!
-                      .variants!.map((v) => (
-                        <option key={v.id} value={v.id}>
-                          {v.name || 'Variante'} ({v.sku || v.id.slice(0, 8)})
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              )}
+              {selectedProductId &&
+                products.find((p) => p.id === selectedProductId)?.variants &&
+                (products.find((p) => p.id === selectedProductId)!.variants || []).length > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">
+                      Variante / Cor Específica
+                    </label>
+                    <select
+                      value={selectedVariantId}
+                      onChange={(e) => setSelectedVariantId(e.target.value)}
+                      className="w-full px-3 py-2 border border-zinc-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+                    >
+                      <option value="">Estoque Geral do Produto (sem variante)</option>
+                      {products
+                        .find((p) => p.id === selectedProductId)!
+                        .variants!.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name || 'Variante'} ({v.sku || v.id.slice(0, 8)})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">Modo</label>
+                  <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">
+                    Modo
+                  </label>
                   <select
                     value={adjustMode}
                     onChange={(e) => setAdjustMode(e.target.value as any)}
@@ -407,7 +878,9 @@ export const InventoryView: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">Quantidade</label>
+                  <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">
+                    Quantidade
+                  </label>
                   <input
                     type="number"
                     required
@@ -419,7 +892,9 @@ export const InventoryView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">Motivo do Ajuste</label>
+                <label className="block text-xs font-semibold text-zinc-700 uppercase mb-1">
+                  Motivo do Ajuste
+                </label>
                 <textarea
                   required
                   rows={2}
@@ -434,13 +909,13 @@ export const InventoryView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowAdjustModal(false)}
-                  className="px-4 py-2 border border-zinc-300 rounded-xl text-sm text-zinc-700 hover:bg-zinc-50"
+                  className="px-4 py-2 border border-zinc-300 rounded-xl text-sm text-zinc-700 hover:bg-zinc-50 cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-sm font-semibold transition"
+                  className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-sm font-semibold transition cursor-pointer"
                 >
                   Confirmar Ajuste
                 </button>

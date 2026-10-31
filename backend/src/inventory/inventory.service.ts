@@ -8,7 +8,8 @@ export interface AdjustStockDto {
   variantId?: string;
   quantity: number; // Delta (ex: +5, -3) or target
   mode?: 'DELTA' | 'SET';
-  reason: string;
+  reason?: string;
+  minimumQuantity?: number;
 }
 
 @Injectable()
@@ -282,9 +283,7 @@ export class InventoryService {
     if (!dto.productId && !dto.variantId) {
       throw new BadRequestException('Informe productId ou variantId');
     }
-    if (!dto.reason || !dto.reason.trim()) {
-      throw new BadRequestException('Motivo do ajuste é obrigatório');
-    }
+    const effectiveReason = dto.reason && dto.reason.trim() ? dto.reason.trim() : 'Ajuste manual de estoque';
 
     const mode = dto.mode || 'DELTA';
 
@@ -331,7 +330,10 @@ export class InventoryService {
 
       const updated = await tx.inventory.update({
         where: { id: inventory.id },
-        data: { quantity: newQuantity },
+        data: {
+        quantity: newQuantity,
+        ...(dto.minimumQuantity !== undefined && dto.minimumQuantity !== null ? { minimumQuantity: Math.max(0, Number(dto.minimumQuantity)) } : {}),
+      },
       });
 
       const movement = await tx.stockMovement.create({
@@ -341,7 +343,7 @@ export class InventoryService {
           type: StockMovementType.ADJUSTMENT,
           quantity: delta,
           referenceType: 'MANUAL_ADJUSTMENT',
-          reason: dto.reason.trim(),
+          reason: effectiveReason,
           createdBy: userId || null,
         },
       });
@@ -355,7 +357,7 @@ export class InventoryService {
           previousQuantity: inventory.quantity,
           newQuantity: updated.quantity,
           delta,
-          reason: dto.reason,
+          reason: effectiveReason,
           movementId: movement.id,
         },
       });
