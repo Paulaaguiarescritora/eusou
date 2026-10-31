@@ -621,6 +621,11 @@ export class OrderService {
         }
       }
 
+      await tx.payment.deleteMany({ where: { orderId: id } });
+      await tx.orderItem.deleteMany({ where: { orderId: id } });
+      await tx.affiliateConversion.deleteMany({ where: { orderId: id } });
+      await tx.channelOrder.deleteMany({ where: { orderId: id } });
+
       await tx.order.delete({
         where: { id },
       });
