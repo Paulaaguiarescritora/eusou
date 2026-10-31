@@ -379,9 +379,7 @@ export const InventoryView: React.FC = () => {
                 <div>
                   <strong>{lowStockCount} itens necessitam de reposição</strong>
                   <p className="text-[11px] text-amber-900 mt-0.5">
-                    Você pode clicar em <strong>"Repor Estoque"</strong> ou no botão{' '}
-                    <strong>"+1"</strong> diretamente na linha do produto para atualizar o saldo
-                    físico imediatamente.
+                    Você pode clicar no botão <strong>"Corrigir"</strong> diretamente na linha do produto para atualizar o saldo físico e estoque mínimo imediatamente.
                   </p>
                 </div>
               </div>
@@ -451,39 +449,19 @@ export const InventoryView: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {/* Entrada Rápida de +1 */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleQuickAddOne(item, e)}
-                          disabled={quickPlusLoadingId === item.id}
-                          title="Entrada Rápida: +1 unidade no estoque físico"
-                          className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200 transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                        >
-                          {quickPlusLoadingId === item.id ? (
-                            <span className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <>
-                              <Plus size={13} />
-                              <span>1</span>
-                            </>
-                          )}
-                        </button>
-
-                        {/* Botão de Ajustar / Repor Direto */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenInlineAdjust(item)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                            item.isLowStock
-                              ? 'bg-amber-500 hover:bg-amber-600 text-zinc-950 shadow-xs'
-                              : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800'
-                          }`}
-                        >
-                          <Sliders size={13} />
-                          <span>{item.isLowStock ? 'Repor Estoque' : 'Ajustar'}</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenInlineAdjust(item)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-xs ${
+                          item.isLowStock
+                            ? 'bg-amber-500 hover:bg-amber-600 text-zinc-950 font-black'
+                            : 'bg-zinc-900 hover:bg-zinc-800 text-white'
+                        }`}
+                        title="Corrigir saldo físico e estoque mínimo deste item no local"
+                      >
+                        <Sliders size={13} />
+                        <span>Corrigir</span>
+                      </button>
                     </td>
                   </tr>
                 ))}
