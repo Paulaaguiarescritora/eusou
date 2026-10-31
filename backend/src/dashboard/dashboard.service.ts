@@ -67,58 +67,183 @@ export class DashboardService {
   async getCommercialSummary(filter: CommercialDashboardFilter = {}) {
     const dates = this.resolveDateRanges(filter);
 
-    // 1. Vendas e Pedidos (F5) - Período Atual vs Anterior
+    // Executa todas as 6 frentes do dashboard em paralelo no banco de dados para resposta ultra-rápida
+    const [
+      salesData,
+      alerts,
+      catalogCounts,
+      stockAndJobs,
+      marketplaceData,
+      affiliateData,
+    ] = await Promise.all([
+      // 1. Vendas e Pedidos (F5)
+      Promise.all([
+        this.prisma.order.findMany({
+          where: {
+            createdAt: { gte: dates.current.start, lte: dates.current.end },
+            status: { not: OrderStatus.CANCELLED },
+          },
+          include: {
+            items: true,
+            channelOrder: { include: { channel: true } },
+          },
+        }),
+        this.prisma.order.findMany({
+          where: {
+            createdAt: { gte: dates.previous.start, lte: dates.previous.end },
+            status: { not: OrderStatus.CANCELLED },
+          },
+        }),
+        this.prisma.order.findMany({
+          where: {
+            createdAt: {
+              gte: new Date(new Date().setHours(0, 0, 0, 0)),
+            },
+            status: { not: OrderStatus.CANCELLED },
+          },
+        }),
+        this.prisma.order.findMany({
+          where: {
+            createdAt: {
+              gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+            },
+            status: { not: OrderStatus.CANCELLED },
+          },
+        }),
+        this.prisma.order.findMany({
+          where: {
+            createdAt: {
+              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+            },
+            status: { not: OrderStatus.CANCELLED },
+          },
+        }),
+      ]),
+      // 2. Alertas & Saúde Operacional
+      this.alertService.getAlerts(),
+      // 3. Catálogo & Produtos
+      Promise.all([
+        this.prisma.product.count(),
+        this.prisma.product.count({ where: { status: 'ACTIVE' } }),
+        this.prisma.product.count({ where: { status: 'ACTIVE', categories: { none: {} } } }),
+        this.prisma.product.count({ where: { status: 'ACTIVE', OR: [{ basePrice: null }, { basePrice: 0 }] } }),
+        this.prisma.channelProduct.count({ where: { status: ChannelProductStatus.ERROR } }),
+      ]),
+      // 4. Estoque & Produção
+      Promise.all([
+        this.prisma.product.findMany({
+          where: { status: { not: 'ARCHIVED' } },
+          include: {
+            variants: {
+              where: { isActive: true },
+              include: { inventories: true },
+            },
+            inventories: {
+              where: { variantId: null },
+            },
+            productChannelPrices: true,
+            productionProfiles: {
+              where: { isActive: true },
+              include: {
+                materials: { include: { material: true } },
+                printer: true,
+              },
+            },
+          },
+        }),
+        this.prisma.productionJob.findMany({
+          where: { status: { in: ['QUEUED', 'PRINTING'] } },
+          include: { product: true, printer: true },
+          take: 5,
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.productionJob.count({
+          where: { status: 'COMPLETED' },
+        }),
+        this.prisma.material.findMany({
+          where: { isActive: true },
+        }),
+      ]),
+      // 5. Marketplaces & Canais
+      Promise.all([
+        this.prisma.channel.findMany({
+          include: { _count: { select: { accounts: true, channelOrders: true } } },
+        }),
+        this.prisma.channelAccount.findMany({
+          include: {
+            channel: true,
+            _count: { select: { channelProducts: true, channelOrders: true } },
+          },
+        }),
+        this.prisma.channelProduct.count({ where: { status: ChannelProductStatus.PUBLISHED } }),
+        this.prisma.marketplaceEvent.count({ where: { status: MarketplaceEventStatus.RECEIVED } }),
+        this.prisma.marketplaceEvent.count({ where: { status: MarketplaceEventStatus.FAILED } }),
+        this.prisma.order.findMany({
+          take: 8,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            items: true,
+            channelOrder: { include: { channel: true } },
+          },
+        }),
+      ]),
+      // 6. Afiliados
+      Promise.all([
+        this.prisma.affiliate.count(),
+        this.prisma.affiliate.count({ where: { status: 'ACTIVE' } }),
+        this.prisma.affiliateClick.count({
+          where: { createdAt: { gte: dates.current.start, lte: dates.current.end } },
+        }),
+        this.prisma.affiliateConversion.findMany({
+          where: { createdAt: { gte: dates.current.start, lte: dates.current.end } },
+        }),
+      ]),
+    ]);
+
+    // Desempacota resultados de vendas
     const [
       currentOrders,
       previousOrders,
       todayOrders,
       orders7d,
       orders30d,
-    ] = await Promise.all([
-      this.prisma.order.findMany({
-        where: {
-          createdAt: { gte: dates.current.start, lte: dates.current.end },
-          status: { not: OrderStatus.CANCELLED },
-        },
-        include: {
-          items: true,
-          channelOrder: { include: { channel: true } },
-        },
-      }),
-      this.prisma.order.findMany({
-        where: {
-          createdAt: { gte: dates.previous.start, lte: dates.previous.end },
-          status: { not: OrderStatus.CANCELLED },
-        },
-      }),
-      // Hoje
-      this.prisma.order.findMany({
-        where: {
-          createdAt: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          },
-          status: { not: OrderStatus.CANCELLED },
-        },
-      }),
-      // 7 dias
-      this.prisma.order.findMany({
-        where: {
-          createdAt: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          },
-          status: { not: OrderStatus.CANCELLED },
-        },
-      }),
-      // 30 dias
-      this.prisma.order.findMany({
-        where: {
-          createdAt: {
-            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          },
-          status: { not: OrderStatus.CANCELLED },
-        },
-      }),
-    ]);
+    ] = salesData;
+
+    // Desempacota saúde e catálogo
+    const operationHealth = this.alertService.deriveOperationHealth(alerts);
+    const [
+      totalProducts,
+      activeProducts,
+      productsWithoutCategory,
+      productsWithoutBasePrice,
+      productsWithPublishError,
+    ] = catalogCounts;
+
+    // Desempacota estoque e produção
+    const [
+      productsWithStock,
+      activeJobs,
+      completedJobs,
+      rawMaterials,
+    ] = stockAndJobs;
+
+    // Desempacota marketplaces
+    const [
+      channels,
+      channelAccounts,
+      publishedChannelProducts,
+      pendingEvents,
+      failedEvents,
+      recentOrders,
+    ] = marketplaceData;
+
+    // Desempacota afiliados
+    const [
+      totalAffiliates,
+      activeAffiliates,
+      affiliateClicks,
+      affiliateConversions,
+    ] = affiliateData;
 
     // Métricas financeiras com Prisma.Decimal
     const currentRevenue = currentOrders.reduce(
@@ -175,61 +300,7 @@ export class DashboardService {
       }
     }
 
-    // 2. Saúde Operacional & Alertas (F14 Core) - busca alertas uma única vez e deriva saúde
-    const alerts = await this.alertService.getAlerts();
-    const operationHealth = this.alertService.deriveOperationHealth(alerts);
 
-    // 3. Produtos & Catálogo (F2A, F3, F11)
-    const [
-      totalProducts,
-      activeProducts,
-      productsWithoutCategory,
-      productsWithoutBasePrice,
-      productsWithPublishError,
-    ] = await Promise.all([
-      this.prisma.product.count(),
-      this.prisma.product.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.product.count({ where: { status: 'ACTIVE', categories: { none: {} } } }),
-      this.prisma.product.count({ where: { status: 'ACTIVE', OR: [{ basePrice: null }, { basePrice: 0 }] } }),
-      this.prisma.channelProduct.count({ where: { status: ChannelProductStatus.ERROR } }),
-    ]);
-
-    // 4. Estoque & Produção (F7)
-    const [
-      productsWithStock,
-      activeJobs,
-      completedJobs,
-    ] = await Promise.all([
-      this.prisma.product.findMany({
-        where: { status: { not: 'ARCHIVED' } },
-        include: {
-          variants: {
-            where: { isActive: true },
-            include: { inventories: true },
-          },
-          inventories: {
-            where: { variantId: null },
-          },
-          productChannelPrices: true,
-          productionProfiles: {
-            where: { isActive: true },
-            include: {
-              materials: { include: { material: true } },
-              printer: true,
-            },
-          },
-        },
-      }),
-      this.prisma.productionJob.findMany({
-        where: { status: { in: ['QUEUED', 'PRINTING'] } },
-        include: { product: true, printer: true },
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.productionJob.count({
-        where: { status: 'COMPLETED' },
-      }),
-    ]);
 
     let totalStockAvailable = 0;
     let totalStockReserved = 0;
@@ -239,24 +310,17 @@ export class DashboardService {
     let totalStockRetailValue = new Prisma.Decimal(0);
     let totalMaterialsCostValue = new Prisma.Decimal(0);
 
-    // Consulta e valoração de matéria-prima e insumos (Filamentos, Componentes e Embalagens)
-    try {
-      if (this.prisma.material?.findMany) {
-        const rawMaterials = await this.prisma.material.findMany({
-          where: { isActive: true },
-        });
-        for (const m of rawMaterials) {
-          const q = Number(m.currentQuantity || 0);
-          const c = Number(m.costPerUnit || 0);
-          if (q > 0 && c > 0) {
-            totalMaterialsCostValue = totalMaterialsCostValue.add(
-              new Prisma.Decimal((q * c).toFixed(2)),
-            );
-          }
+    // Valoração de matéria-prima e insumos (Filamentos, Componentes e Embalagens)
+    if (rawMaterials && rawMaterials.length > 0) {
+      for (const m of rawMaterials) {
+        const q = Number(m.currentQuantity || 0);
+        const c = Number(m.costPerUnit || 0);
+        if (q > 0 && c > 0) {
+          totalMaterialsCostValue = totalMaterialsCostValue.add(
+            new Prisma.Decimal((q * c).toFixed(2)),
+          );
         }
       }
-    } catch (err: any) {
-      this.logger.warn(`Erro ao calcular valoração de matérias-primas: ${err?.message}`);
     }
 
     const criticalItems: any[] = [];
@@ -435,36 +499,7 @@ export class DashboardService {
       }
     }
 
-    // 5. Marketplaces & Canais (F9, F10, F13)
-    const [
-      channels,
-      channelAccounts,
-      publishedChannelProducts,
-      pendingEvents,
-      failedEvents,
-      recentOrders,
-    ] = await Promise.all([
-      this.prisma.channel.findMany({
-        include: { _count: { select: { accounts: true, channelOrders: true } } },
-      }),
-      this.prisma.channelAccount.findMany({
-        include: {
-          channel: true,
-          _count: { select: { channelProducts: true, channelOrders: true } },
-        },
-      }),
-      this.prisma.channelProduct.count({ where: { status: ChannelProductStatus.PUBLISHED } }),
-      this.prisma.marketplaceEvent.count({ where: { status: MarketplaceEventStatus.RECEIVED } }),
-      this.prisma.marketplaceEvent.count({ where: { status: MarketplaceEventStatus.FAILED } }),
-      this.prisma.order.findMany({
-        take: 8,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          items: true,
-          channelOrder: { include: { channel: true } },
-        },
-      }),
-    ]);
+
 
     // Saúde detalhada por conta de canal
     const marketplaceHealth = channelAccounts.map((acc) => ({
@@ -478,22 +513,7 @@ export class DashboardService {
       recentOrdersCount: acc._count.channelOrders,
     }));
 
-    // 6. Afiliados (F6)
-    const [
-      totalAffiliates,
-      activeAffiliates,
-      affiliateClicks,
-      affiliateConversions,
-    ] = await Promise.all([
-      this.prisma.affiliate.count(),
-      this.prisma.affiliate.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.affiliateClick.count({
-        where: { createdAt: { gte: dates.current.start, lte: dates.current.end } },
-      }),
-      this.prisma.affiliateConversion.findMany({
-        where: { createdAt: { gte: dates.current.start, lte: dates.current.end } },
-      }),
-    ]);
+
 
     let affiliatePendingCommission = new Prisma.Decimal(0);
     let affiliateApprovedCommission = new Prisma.Decimal(0);

@@ -48,10 +48,67 @@ export class CommercialAlertService {
   async getAlerts(): Promise<CommercialAlert[]> {
     const alerts: CommercialAlert[] = [];
 
-    // 1. ALERTAS CRÍTICOS & ATENÇÃO: Contas de canais / Marketplaces desconectadas ou com erro
-    const accounts = await this.prisma.channelAccount.findMany({
-      include: { channel: true },
-    });
+    // Busca todas as 6 frentes de alertas em paralelo no banco
+    const [
+      accounts,
+      failedEvents,
+      problematicOrders,
+      productsWithStock,
+      errorChannelProducts,
+      productsNoCat,
+    ] = await Promise.all([
+      // 1. Contas de canais / Marketplaces desconectadas ou com erro
+      this.prisma.channelAccount.findMany({
+        include: { channel: true },
+      }),
+      // 2. Eventos webhook falhos após retentativas
+      this.prisma.marketplaceEvent.findMany({
+        where: {
+          status: MarketplaceEventStatus.FAILED,
+        },
+        include: { channel: true },
+        take: 10,
+        orderBy: { receivedAt: 'desc' },
+      }),
+      // 3. Pedidos de Marketplace com inconsistência ou erro
+      this.prisma.channelOrder.findMany({
+        where: {
+          externalStatus: { in: ['failed', 'error', 'cancelled_by_marketplace'] },
+        },
+        take: 10,
+      }),
+      // 4. Estoque de produtos e variantes
+      this.prisma.product.findMany({
+        where: { status: { not: 'ARCHIVED' } },
+        include: {
+          variants: {
+            where: { isActive: true },
+            include: { inventories: true },
+          },
+          inventories: {
+            where: { variantId: null },
+          },
+        },
+      }),
+      // 5. Produtos de canal com erro
+      this.prisma.channelProduct.findMany({
+        where: {
+          status: ChannelProductStatus.ERROR,
+        },
+        include: { product: true, channelAccount: { include: { channel: true } } },
+        take: 10,
+      }),
+      // 6. Produtos sem categoria
+      this.prisma.product.findMany({
+        where: {
+          status: 'ACTIVE',
+          categories: { none: {} },
+        },
+        take: 10,
+      }),
+    ]);
+
+    // 1. Processa contas
     for (const acc of accounts) {
       if (acc.status === ChannelAccountStatus.ERROR) {
         alerts.push({
@@ -82,15 +139,7 @@ export class CommercialAlertService {
       }
     }
 
-    // 2. ALERTAS CRÍTICOS: Eventos webhook falhos após retentativas
-    const failedEvents = await this.prisma.marketplaceEvent.findMany({
-      where: {
-        status: MarketplaceEventStatus.FAILED,
-      },
-      include: { channel: true },
-      take: 10,
-      orderBy: { receivedAt: 'desc' },
-    });
+    // 2. Processa eventos webhook falhos
     for (const ev of failedEvents) {
       alerts.push({
         id: `ev-fail-${ev.id}`,
@@ -106,13 +155,7 @@ export class CommercialAlertService {
       });
     }
 
-    // 3. ALERTAS CRÍTICOS & ATENÇÃO: Pedidos de Marketplace com inconsistência ou erro
-    const problematicOrders = await this.prisma.channelOrder.findMany({
-      where: {
-        externalStatus: { in: ['failed', 'error', 'cancelled_by_marketplace'] },
-      },
-      take: 10,
-    });
+    // 3. Processa pedidos com inconsistência
     for (const co of problematicOrders) {
       alerts.push({
         id: `co-incon-${co.id}`,
@@ -128,31 +171,12 @@ export class CommercialAlertService {
       });
     }
 
-    // 4. ALERTAS DE ESTOQUE: Saldo crítico ou zerado (Inventory F7)
-    // Regra:
-    // - Produto sem variantes → usar estoque do produto.
-    // - Produto com variantes → ignorar estoque do produto-pai e alertar somente pelas variantes ativas.
-    // - Não misturar nem duplicar alertas de estoque do produto com suas variantes.
-    const productsWithStock = await this.prisma.product.findMany({
-      where: { status: { not: 'ARCHIVED' } },
-      include: {
-        variants: {
-          where: { isActive: true },
-          include: { inventories: true },
-        },
-        inventories: {
-          where: { variantId: null },
-        },
-      },
-    });
-
+    // 4. Processa estoque
     for (const prod of productsWithStock) {
       const activeVariants = prod.variants || [];
       const hasVariants = activeVariants.length > 0;
 
       if (hasVariants) {
-        // Produto com variantes:
-        // Avalia individualmente as variantes ativas. O estoque do produto-pai é ignorado.
         for (const variant of activeVariants) {
           const varInv = variant.inventories?.[0];
           if (!varInv) continue;
@@ -189,7 +213,6 @@ export class CommercialAlertService {
           }
         }
       } else {
-        // Produto sem variantes: usa o estoque próprio do produto
         const parentInv = prod.inventories?.[0];
         if (!parentInv) continue;
 
@@ -224,14 +247,7 @@ export class CommercialAlertService {
       }
     }
 
-    // 5. ALERTAS DE CANAL / PRODUTOS COM ERRO OU DIVERGÊNCIA
-    const errorChannelProducts = await this.prisma.channelProduct.findMany({
-      where: {
-        status: ChannelProductStatus.ERROR,
-      },
-      include: { product: true, channelAccount: { include: { channel: true } } },
-      take: 10,
-    });
+    // 5. Processa produtos do canal com erro
     for (const cp of errorChannelProducts) {
       alerts.push({
         id: `cp-err-${cp.id}`,
@@ -247,14 +263,7 @@ export class CommercialAlertService {
       });
     }
 
-    // 6. ALERTAS DE CATALOGO: Produtos ativos sem categoria ou sem preço base
-    const productsNoCat = await this.prisma.product.findMany({
-      where: {
-        status: 'ACTIVE',
-        categories: { none: {} },
-      },
-      take: 10,
-    });
+    // 6. Processa produtos sem categoria
     for (const p of productsNoCat) {
       alerts.push({
         id: `prod-nocat-${p.id}`,
