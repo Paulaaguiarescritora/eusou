@@ -75,7 +75,30 @@ export class ShippingService {
       };
     });
 
-    const token = this.configService.get<string>('MELHORENVIO_TOKEN');
+    let token = this.configService.get<string>('MELHORENVIO_TOKEN');
+    let effectiveOrigin = this.originPostalCode;
+
+    // Fallback: se não estiver na variável de ambiente (ex: deploy sem env manual no Render),
+    // busca automaticamente no banco de dados Supabase persistido
+    if (!token || token.trim().length < 10) {
+      try {
+        const meAccount = await this.prisma.channelAccount.findFirst({
+          where: { name: 'Melhor Envio', status: 'ACTIVE' },
+        });
+        if (meAccount && meAccount.configuration) {
+          const conf = meAccount.configuration as any;
+          if (conf.token && conf.token.trim().length > 10) {
+            token = conf.token.trim();
+          }
+          if (conf.originPostalCode) {
+            effectiveOrigin = String(conf.originPostalCode).replace(/\D/g, '');
+          }
+        }
+      } catch (err: any) {
+        this.logger.warn(`Erro ao consultar credenciais do Melhor Envio no banco: ${err.message}`);
+      }
+    }
+
     const isSandbox = (this.configService.get<string>('MELHORENVIO_ENVIRONMENT') || '').toUpperCase() === 'SANDBOX';
     const baseUrl = isSandbox
       ? 'https://sandbox.melhorenvio.com.br/api/v2/me/shipment/calculate'
@@ -92,7 +115,7 @@ export class ShippingService {
             'User-Agent': 'KUBOSTUDIO Store (contato@kubostudio.com.br)',
           },
           body: JSON.stringify({
-            from: { postal_code: this.originPostalCode },
+            from: { postal_code: effectiveOrigin },
             to: { postal_code: cleanDestination },
             products: melhorEnvioProducts,
           }),
