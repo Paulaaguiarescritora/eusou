@@ -96,7 +96,7 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
 
     setInlineSubmitting(true);
     try {
-      await fetchApi('/inventory/adjust', {
+      await fetchApi('/admin/inventory/adjust', {
         method: 'POST',
         body: JSON.stringify({
           productId: inlineAdjustItem.productId,

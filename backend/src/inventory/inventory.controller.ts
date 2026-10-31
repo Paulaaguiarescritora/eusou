@@ -13,7 +13,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { StockMovementType } from '@prisma/client';
 
-@Controller('admin/inventory')
+@Controller(['admin/inventory', 'inventory'])
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
 export class InventoryController {
