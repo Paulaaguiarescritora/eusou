@@ -1118,9 +1118,10 @@ export function App() {
         )}
 
         {/* ROUTE: CONFIRMAÇÃO DO PEDIDO */}
-        {completedOrder && route.startsWith('/pedido/') && (
+        {route.startsWith('/pedido/') && (
           <OrderConfirmation
             order={completedOrder}
+            orderId={route.replace('/pedido/', '')}
             onNavigate={navigateTo}
           />
         )}
