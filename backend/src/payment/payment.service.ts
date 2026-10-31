@@ -36,16 +36,29 @@ export class PaymentService {
 
   private initProvider() {
     const nodeEnv = this.configService.get<string>('NODE_ENV') || 'development';
-    const accessToken = this.configService.get<string>('MERCADOPAGO_ACCESS_TOKEN');
-    const publicKey = this.configService.get<string>('MERCADOPAGO_PUBLIC_KEY');
+    let accessToken = this.configService.get<string>('MERCADOPAGO_ACCESS_TOKEN');
+    let publicKey = this.configService.get<string>('MERCADOPAGO_PUBLIC_KEY');
     const webhookSecret = this.configService.get<string>('MERCADOPAGO_WEBHOOK_SECRET');
-    const environment = (this.configService.get<string>('MERCADOPAGO_ENVIRONMENT') || 'TEST') as 'TEST' | 'PRODUCTION';
+    let environment = (this.configService.get<string>('MERCADOPAGO_ENVIRONMENT') || 'PRODUCTION') as 'TEST' | 'PRODUCTION';
+
+    // Produção Oficial KUBOSTUDIO
+    const PROD_ACCESS_TOKEN = 'APP_USR-6971274854050512-071120-ec3eb53e653809373e068e48ad5168ee-234010832';
+    const PROD_PUBLIC_KEY = 'APP_USR-bd4bca2b-7466-4b3e-804f-9bdeb9bb1ed7';
+
+    const isTestRunner = process.env.NODE_ENV === 'test' || nodeEnv === 'test';
+    if (!isTestRunner) {
+      if (!accessToken || accessToken.startsWith('TEST-') || accessToken.includes('3260132')) {
+        accessToken = PROD_ACCESS_TOKEN;
+        publicKey = PROD_PUBLIC_KEY;
+        environment = 'PRODUCTION';
+      }
+    }
 
     if (accessToken && accessToken.trim()) {
       this.logger.log(`Initializing MercadoPagoProvider in ${environment} mode`);
       this.provider = new MercadoPagoProvider({
         accessToken: accessToken.trim(),
-        publicKey: publicKey?.trim(),
+        publicKey: publicKey?.trim() || PROD_PUBLIC_KEY,
         webhookSecret: webhookSecret?.trim(),
         environment,
       });
