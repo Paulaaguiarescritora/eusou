@@ -76,6 +76,34 @@ export function useCart() {
     0,
   );
 
+  const swapVariant = (
+    productId: string,
+    oldVariantId: string | null | undefined,
+    newVariant: {
+      variantId: string;
+      variantLabel: string;
+      sku?: string | null;
+      unitPrice?: number;
+      availableStock?: number;
+    },
+  ) => {
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.productId === productId && i.variantId === oldVariantId) {
+          return {
+            ...i,
+            variantId: newVariant.variantId,
+            variantLabel: newVariant.variantLabel,
+            sku: newVariant.sku !== undefined ? newVariant.sku : i.sku,
+            unitPrice: newVariant.unitPrice !== undefined ? newVariant.unitPrice : i.unitPrice,
+            availableStock: newVariant.availableStock !== undefined ? newVariant.availableStock : i.availableStock,
+          };
+        }
+        return i;
+      }),
+    );
+  };
+
   return {
     items,
     addItem,
@@ -83,6 +111,7 @@ export function useCart() {
     removeItem,
     clearCart,
     setCartItems,
+    swapVariant,
     totalItems,
     subtotal,
   };

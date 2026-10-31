@@ -158,6 +158,7 @@ export function App() {
     updateQuantity,
     removeItem,
     clearCart,
+    swapVariant,
     totalItems,
     subtotal,
   } = useCart();
@@ -1102,6 +1103,7 @@ export function App() {
             onUpdateQuantity={updateQuantity}
             onRemoveItem={removeItem}
             onClearCart={clearCart}
+            onSwapVariant={swapVariant}
             onNavigate={navigateTo}
           />
         )}

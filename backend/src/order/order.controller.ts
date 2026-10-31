@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Delete,
   Post,
   Patch,
   Body,
@@ -32,6 +33,11 @@ export class OrderController {
   @Get(':id')
   findById(@Param('id') id: string) {
     return this.orderService.findById(id);
+  }
+
+  @Delete(':id')
+  delete(@Param('id') id: string, @Req() req: any) {
+    return this.orderService.deleteOrder(id, req.user?.sub);
   }
 }
 

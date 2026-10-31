@@ -478,6 +478,37 @@ export class PublicStoreService {
           const reserved = inv?.reservedQuantity ?? 0;
           const availableStock = Math.max(0, qty - reserved);
 
+          // Buscar variantes alternativas com estoque para este produto
+          const otherVariants = activeVariants.filter((v) => v.id !== variant.id);
+          const availableAlternatives: Array<{
+            variantId: string;
+            name: string;
+            sku: string | null;
+            price: number;
+            availableStock: number;
+          }> = [];
+
+          for (const alt of otherVariants) {
+            const altInv = await this.prisma.inventory.findFirst({
+              where: {
+                productId: product.id,
+                variantId: alt.id,
+              },
+            });
+            const altQty = altInv?.quantity ?? 0;
+            const altReserved = altInv?.reservedQuantity ?? 0;
+            const altAvail = Math.max(0, altQty - altReserved);
+            if (altAvail > 0) {
+              availableAlternatives.push({
+                variantId: alt.id,
+                name: alt.name || alt.sku || "Opção",
+                sku: alt.sku || null,
+                price: alt.price ? Number(alt.price) : Number(product.basePrice),
+                availableStock: altAvail,
+              });
+            }
+          }
+
           if (availableStock <= 0) {
             isValid = false;
             return {
@@ -487,6 +518,7 @@ export class PublicStoreService {
               availableStock: 0,
               inStock: false,
               error: 'Esta variante está esgotada.',
+              availableAlternatives,
             };
           }
 
@@ -499,6 +531,7 @@ export class PublicStoreService {
               availableStock,
               inStock: false,
               error: 'Quantidade solicitada indisponível em estoque.',
+              availableAlternatives,
             };
           }
 

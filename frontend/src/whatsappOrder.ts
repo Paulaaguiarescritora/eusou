@@ -22,14 +22,14 @@ export function buildWhatsAppOrderMessage(order: Order, origin?: string): string
   const trackingUrl = `${baseUrl}/pedido/${order.id}`;
 
   const isPending = order.status === 'PENDING';
-  const statusText = isPending ? '⏳ Aguardando Pagamento' : '✅ Pagamento Confirmado';
+  const statusText = isPending ? 'Aguardando Pagamento' : 'Pagamento Confirmado';
 
   const itemsList = (order.items || [])
     .map((item) => {
       const variantInfo = item.skuSnapshot ? ` (${item.skuSnapshot})` : '';
       const unitVal = Number(item.unitPrice || 0).toFixed(2).replace('.', ',');
       const subVal = Number(item.subtotal || 0).toFixed(2).replace('.', ',');
-      return `• *${item.quantity}x ${item.productNameSnapshot}*${variantInfo}\n  Qtd: ${item.quantity} | Unit: R$ ${unitVal} | Subtotal: R$ ${subVal}`;
+      return `- *${item.quantity}x ${item.productNameSnapshot}*${variantInfo}\n  Qtd: ${item.quantity} | Unit: R$ ${unitVal} | Subtotal: R$ ${subVal}`;
     })
     .join('\n\n');
 
@@ -38,18 +38,17 @@ export function buildWhatsAppOrderMessage(order: Order, origin?: string): string
   const totalStr = Number(order.total || 0).toFixed(2).replace('.', ',');
 
   return (
-    `🛍️ *KUBOSTUDIO - Detalhes do Pedido*\n\n` +
+    `*KUBOSTUDIO - Detalhes do Pedido*\n\n` +
     `Olá, *${order.customerName}*!\n` +
     `Aqui está a cópia do seu pedido realizado em nossa loja:\n\n` +
-    `📋 *Pedido:* #${shortId} (ID: \`${order.id}\`)\n` +
-    `📌 *Status:* ${statusText}\n\n` +
-    `🛒 *Itens do Pedido:*\n` +
+    `*Pedido:* #${shortId} (ID: ${order.id})\n` +
+    `*Status:* ${statusText}\n\n` +
+    `*Itens do Pedido:*\n` +
     `${itemsList}\n\n` +
-    `📍 *Endereço de Entrega:*\n` +
+    `*Endereço de Entrega:*\n` +
     `${addressStr}\n\n` +
-    `💰 *Valor Total:* R$ ${totalStr}\n\n` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `🌐 *Acesse e acompanhe seu pedido no sistema:*\n` +
+    `*Valor Total:* R$ ${totalStr}\n\n` +
+    `*Acesse e acompanhe seu pedido no sistema:*\n` +
     `${trackingUrl}\n\n` +
     `Caso precise de suporte ou tenha dúvidas sobre sua entrega, basta responder a esta mensagem!`
   );

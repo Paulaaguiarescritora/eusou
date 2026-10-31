@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Order } from '../types';
 import { fetchApi } from '../api';
-import { Package, Clock, CheckCircle2, Truck, XCircle, RefreshCw, MessageCircle, Mail, Printer } from 'lucide-react';
+import { Package, Clock, CheckCircle2, Truck, XCircle, RefreshCw, MessageCircle, Mail, Printer, Trash2, AlertTriangle } from 'lucide-react';
 import { getWhatsAppOrderUrl } from '../whatsappOrder';
 import { ShippingLabelModal } from './ShippingLabelModal';
 
@@ -12,6 +12,41 @@ export const AdminOrdersView: React.FC = () => {
   const [labelOrder, setLabelOrder] = useState<Order | null>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleOpenDetails = async (order: Order) => {
+    setSelectedOrder(order);
+    try {
+      const full = await fetchApi<Order>(`/admin/orders/${order.id}`);
+      if (full && full.id) setSelectedOrder(full);
+    } catch {}
+  };
+
+  const handleOpenLabel = async (order: Order) => {
+    setLabelOrder(order);
+    try {
+      const full = await fetchApi<Order>(`/admin/orders/${order.id}`);
+      if (full && full.id) setLabelOrder(full);
+    } catch {}
+  };
+
+  const confirmDeleteOrder = async () => {
+    if (!orderToDelete) return;
+    setDeleting(true);
+    try {
+      await fetchApi(`/admin/orders/${orderToDelete.id}`, { method: 'DELETE' });
+      if (selectedOrder?.id === orderToDelete.id) {
+        setSelectedOrder(null);
+      }
+      setOrderToDelete(null);
+      loadOrders();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir pedido');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleSendEmail = async (orderId: string) => {
     setSendingEmail(true);
@@ -129,18 +164,27 @@ export const AdminOrdersView: React.FC = () => {
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         <button
-                          onClick={() => setSelectedOrder(o)}
+                          onClick={() => handleOpenDetails(o)}
                           className="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 rounded text-slate-800 cursor-pointer"
                         >
                           Ver Detalhes
                         </button>
                         <button
-                          onClick={() => setLabelOrder(o)}
+                          onClick={() => handleOpenLabel(o)}
                           className="px-2.5 py-1 text-[11px] font-bold bg-zinc-900 hover:bg-zinc-800 text-white rounded cursor-pointer inline-flex items-center gap-1 shadow-2xs"
                           title="Imprimir Etiqueta de Envio e Declaração de Conteúdo"
                         >
                           <Printer size={12} className="text-amber-400" />
                           <span>Etiqueta</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOrderToDelete(o)}
+                          className="px-2 py-1 text-[11px] font-semibold text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 rounded transition cursor-pointer inline-flex items-center gap-1"
+                          title="Excluir este pedido"
+                        >
+                          <Trash2 size={11} />
+                          <span>Excluir</span>
                         </button>
                       </div>
                     </td>
@@ -262,6 +306,16 @@ export const AdminOrdersView: React.FC = () => {
                   <Mail className="w-3.5 h-3.5" />
                   <span>{sendingEmail ? 'Enviando...' : 'Reenviar E-mail'}</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setOrderToDelete(selectedOrder)}
+                  className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-semibold cursor-pointer inline-flex items-center gap-1.5 transition"
+                  title="Excluir este pedido definitivamente"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Excluir Pedido</span>
+                </button>
               </div>
 
               <button
@@ -272,6 +326,48 @@ export const AdminOrdersView: React.FC = () => {
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold cursor-pointer"
               >
                 Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Pedido */}
+      {orderToDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-60 animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0 text-rose-600">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-slate-900">Excluir Pedido</h3>
+                <p className="text-xs text-slate-600 mt-1">
+                  Tem certeza que deseja excluir o pedido <strong>#{orderToDelete.id.slice(0, 8)}</strong> ({orderToDelete.customerName})?
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Esta ação é irreversível. Os pagamentos e registros vinculados serão excluídos e qualquer reserva de estoque será liberada.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setOrderToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={confirmDeleteOrder}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{deleting ? 'Excluindo...' : 'Sim, Excluir Pedido'}</span>
               </button>
             </div>
           </div>

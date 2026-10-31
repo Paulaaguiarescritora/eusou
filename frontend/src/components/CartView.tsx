@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { CartItem, ShippingQuote } from '../types';
 import { fetchApi, resolveMediaUrl } from '../api';
-import { Trash2, ArrowRight, ArrowLeft, ShoppingBag, AlertCircle, AlertTriangle, Truck, Loader2, CheckCircle2 } from 'lucide-react';
+import { Trash2, ArrowRight, ArrowLeft, ShoppingBag, AlertCircle, AlertTriangle, Truck, Loader2, CheckCircle2, Sparkles } from 'lucide-react';
+
+export interface AvailableAlternativeVariant {
+  variantId: string;
+  name: string;
+  sku: string | null;
+  price: number;
+  availableStock: number;
+}
 
 interface CartViewProps {
   items: CartItem[];
@@ -9,6 +17,17 @@ interface CartViewProps {
   onUpdateQuantity: (productId: string, variantId: string | null | undefined, quantity: number) => void;
   onRemoveItem: (productId: string, variantId: string | null | undefined) => void;
   onClearCart: () => void;
+  onSwapVariant?: (
+    productId: string,
+    oldVariantId: string | null | undefined,
+    newVariant: {
+      variantId: string;
+      variantLabel: string;
+      sku?: string | null;
+      unitPrice?: number;
+      availableStock?: number;
+    },
+  ) => void;
   onNavigate: (route: string) => void;
 }
 
@@ -19,6 +38,7 @@ interface ItemStockValidation {
   availableStock: number;
   inStock: boolean;
   error?: string | null;
+  availableAlternatives?: AvailableAlternativeVariant[];
 }
 
 export const CartView: React.FC<CartViewProps> = ({
@@ -27,6 +47,7 @@ export const CartView: React.FC<CartViewProps> = ({
   onUpdateQuantity,
   onRemoveItem,
   onClearCart,
+  onSwapVariant,
   onNavigate,
 }) => {
   const [stockValidation, setStockValidation] = useState<{
@@ -307,17 +328,56 @@ export const CartView: React.FC<CartViewProps> = ({
 
                 {/* Stock Alert on item */}
                 {isItemOutOfStock && (
-                  <div className="mt-3 pt-2.5 border-t border-rose-200 flex items-center justify-between text-xs text-rose-700">
-                    <div className="flex items-center gap-1.5 font-semibold">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      <span>{itemValidation?.error || 'Esta opção está esgotada.'}</span>
+                  <div className="mt-3 pt-2.5 border-t border-rose-200 space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-rose-700">
+                      <div className="flex items-center gap-1.5 font-semibold">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{itemValidation?.error || 'Esta opção está esgotada.'}</span>
+                      </div>
+                      <button
+                        onClick={() => onRemoveItem(item.productId, item.variantId)}
+                        className="text-xs text-rose-800 underline font-bold hover:text-rose-950 cursor-pointer"
+                      >
+                        Remover item
+                      </button>
                     </div>
-                    <button
-                      onClick={() => onRemoveItem(item.productId, item.variantId)}
-                      className="text-xs text-rose-800 underline font-bold hover:text-rose-950 cursor-pointer"
-                    >
-                      Remover item
-                    </button>
+
+                    {/* Sugestão de Variantes Disponíveis */}
+                    {itemValidation?.availableAlternatives && itemValidation.availableAlternatives.length > 0 && (
+                      <div className="p-2.5 bg-amber-50/90 border border-amber-200 rounded-xl space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>Opções disponíveis deste produto:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-0.5">
+                          {itemValidation.availableAlternatives.map((alt) => (
+                            <button
+                              key={alt.variantId}
+                              type="button"
+                              onClick={() => {
+                                if (onSwapVariant) {
+                                  onSwapVariant(item.productId, item.variantId, {
+                                    variantId: alt.variantId,
+                                    variantLabel: alt.name,
+                                    sku: alt.sku,
+                                    unitPrice: alt.price,
+                                    availableStock: alt.availableStock,
+                                  });
+                                }
+                              }}
+                              className="px-2.5 py-1.5 bg-white hover:bg-amber-100/70 border border-amber-300 rounded-lg text-xs font-medium text-amber-950 flex items-center gap-1.5 transition cursor-pointer shadow-2xs group"
+                            >
+                              <span>
+                                Trocar para <strong>{alt.name}</strong>
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.2 bg-emerald-100 text-emerald-800 rounded font-bold">
+                                {alt.availableStock} disp.
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

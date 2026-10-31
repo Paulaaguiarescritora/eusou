@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Order } from '../types';
+import { fetchApi } from '../api';
 import { Printer, X, FileText, CheckCircle2 } from 'lucide-react';
 
 interface ShippingLabelModalProps {
@@ -7,9 +8,22 @@ interface ShippingLabelModalProps {
   onClose: () => void;
 }
 
-export const ShippingLabelModal: React.FC<ShippingLabelModalProps> = ({ order, onClose }) => {
+export const ShippingLabelModal: React.FC<ShippingLabelModalProps> = ({ order: initialOrder, onClose }) => {
+  const [order, setOrder] = useState<Order>(initialOrder);
   const [format, setFormat] = useState<'a4' | 'thermal'>('a4');
   const [includeDeclaration, setIncludeDeclaration] = useState(true);
+
+  useEffect(() => {
+    if (!order.items || order.items.length === 0) {
+      fetchApi<Order>(`/admin/orders/${order.id}`)
+        .then((full) => {
+          if (full && full.items && full.items.length > 0) {
+            setOrder(full);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [order.id]);
 
   const handlePrint = () => {
     window.print();

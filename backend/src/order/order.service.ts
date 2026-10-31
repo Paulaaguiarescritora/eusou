@@ -389,6 +389,7 @@ export class OrderService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
+          items: true,
           _count: { select: { items: true } },
           payments: {
             orderBy: { createdAt: 'desc' },
@@ -597,6 +598,49 @@ export class OrderService {
       message: success
         ? `E-mail enviado com sucesso para ${order.customerEmail}`
         : `E-mail registrado em log (configure RESEND_API_KEY ou SMTP para envio real)`,
+    };
+  }
+
+  async deleteOrder(id: string, actorId?: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Pedido "${id}" não encontrado.`);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Se estava pendente, libera reservas de estoque idempotentemente
+      if (order.status === OrderStatus.PENDING) {
+        try {
+          await this.inventoryService.releaseStockForOrder(order.id, tx);
+        } catch (e) {
+          console.warn('Falha ao liberar reserva de estoque ao excluir pedido:', e);
+        }
+      }
+
+      await tx.order.delete({
+        where: { id },
+      });
+    });
+
+    await this.auditLog.log({
+      action: 'ORDER_DELETED',
+      entity: 'Order',
+      entityId: id,
+      userId: actorId ?? null,
+      metadata: {
+        orderId: id,
+        customerName: order.customerName,
+        total: order.total,
+      },
+    });
+
+    return {
+      success: true,
+      message: `Pedido #${id.slice(0, 8)} excluído com sucesso.`,
     };
   }
 }
