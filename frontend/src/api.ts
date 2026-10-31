@@ -29,8 +29,6 @@ export async function fetchApi<T>(endpoint: string, options?: RequestInit): Prom
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Pragma: 'no-cache',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options?.headers || {}),
     },

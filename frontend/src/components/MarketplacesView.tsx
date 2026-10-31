@@ -92,8 +92,6 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        Pragma: 'no-cache',
-        'Cache-Control': 'no-cache',
         ...(effectiveToken ? { Authorization: `Bearer ${effectiveToken}` } : {}),
         ...options.headers,
       },
