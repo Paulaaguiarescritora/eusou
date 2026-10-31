@@ -25,6 +25,7 @@ import { ProductionModule } from './production/production.module';
 import { MarketplaceModule } from './marketplace/marketplace.module';
 import { PricingModule } from './pricing/pricing.module';
 import { PaymentModule } from './payment/payment.module';
+import { ShippingModule } from './shipping/shipping.module';
 import { ImportModule } from './import/import.module';
 import { PrismaService } from './prisma.service';
 import { AuditLogService } from './audit-log.service';
@@ -55,6 +56,7 @@ import { AuditLogService } from './audit-log.service';
     ProductionModule,
     MarketplaceModule,
     PricingModule,
+    ShippingModule,
     ImportModule,
   ],
   controllers: [HealthController, InfoController],

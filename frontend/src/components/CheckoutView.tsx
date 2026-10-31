@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CartItem, Order, Payment, PaymentMethod } from '../types';
+import { CartItem, Order, Payment, PaymentMethod, ShippingQuote } from '../types';
 import { fetchApi, resolveMediaUrl } from '../api';
 import {
   ArrowLeft,
@@ -11,6 +11,7 @@ import {
   Copy,
   Clock,
   Loader2,
+  Truck,
 } from 'lucide-react';
 
 interface CheckoutViewProps {
@@ -59,6 +60,71 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
   const [copiedPix, setCopiedPix] = useState(false);
   const [stockBlocked, setStockBlocked] = useState(false);
+
+  // Melhor Envio & Frete
+  const [shippingQuotes, setShippingQuotes] = useState<ShippingQuote[]>([]);
+  const [selectedShippingQuote, setSelectedShippingQuote] = useState<ShippingQuote | null>(null);
+  const [loadingShipping, setLoadingShipping] = useState(false);
+  const [shippingError, setShippingError] = useState<string | null>(null);
+
+  const shippingFee = selectedShippingQuote ? Number(selectedShippingQuote.price) : 0;
+  const totalWithShipping = subtotal + shippingFee;
+
+  const handleZipCodeChange = async (newZip: string) => {
+    setFormData((prev) => ({ ...prev, zipCode: newZip }));
+    const cleanCep = newZip.replace(/\D/g, '');
+
+    if (cleanCep.length === 8) {
+      // 1. ViaCEP preenchimento automático
+      try {
+        const viaRes = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const viaData = await viaRes.json();
+        if (!viaData.erro) {
+          setFormData((prev) => ({
+            ...prev,
+            street: viaData.logradouro || prev.street,
+            neighborhood: viaData.bairro || prev.neighborhood,
+            city: viaData.localidade || prev.city,
+            state: viaData.uf || prev.state,
+          }));
+        }
+      } catch (e) {
+        console.warn('ViaCEP offline:', e);
+      }
+
+      // 2. Cotação Melhor Envio
+      setLoadingShipping(true);
+      setShippingError(null);
+      try {
+        const res = await fetchApi<{ quotes: ShippingQuote[] }>('/shipping/calculate', {
+          method: 'POST',
+          body: JSON.stringify({
+            destinationPostalCode: cleanCep,
+            items: items.map((i) => ({
+              productId: i.productId,
+              variantId: i.variantId || null,
+              quantity: i.quantity,
+            })),
+          }),
+        });
+
+        if (res.quotes && res.quotes.length > 0) {
+          setShippingQuotes(res.quotes);
+          setSelectedShippingQuote(res.quotes[0]);
+        } else {
+          setShippingQuotes([]);
+          setSelectedShippingQuote(null);
+        }
+      } catch (err: any) {
+        setShippingError(err.message || 'Erro ao cotar frete');
+      } finally {
+        setLoadingShipping(false);
+      }
+    } else {
+      setShippingQuotes([]);
+      setSelectedShippingQuote(null);
+    }
+  };
 
   // Validação real de estoque antes do checkout
   React.useEffect(() => {
@@ -138,6 +204,10 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         nicheId,
         originDomain,
         utmSource,
+        shippingAmount: shippingFee,
+        shippingService: selectedShippingQuote
+          ? `${selectedShippingQuote.company} - ${selectedShippingQuote.name}`
+          : undefined,
         items: items.map((i) => ({
           productId: i.productId,
           variantId: i.variantId || undefined,
@@ -433,7 +503,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   type="text"
                   required
                   value={formData.zipCode}
-                  onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
+                  onChange={(e) => handleZipCodeChange(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-slate-800"
                   placeholder="01001-000"
                 />
@@ -507,10 +577,88 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
             </div>
           </div>
 
+          {/* Opções de Envio (Melhor Envio) */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-indigo-600" />
+                <h2 className="text-base font-bold text-slate-900">
+                  3. Opções de Envio
+                </h2>
+              </div>
+              {loadingShipping && (
+                <span className="text-xs text-indigo-600 flex items-center gap-1 font-semibold">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Calculando frete...
+                </span>
+              )}
+            </div>
+
+            {shippingQuotes.length > 0 ? (
+              <div className="space-y-2.5">
+                {shippingQuotes.map((quote) => {
+                  const isSelected = selectedShippingQuote?.id === quote.id;
+                  return (
+                    <label
+                      key={quote.id}
+                      onClick={() => setSelectedShippingQuote(quote)}
+                      className={`p-3.5 rounded-xl border flex items-center justify-between gap-4 cursor-pointer transition ${
+                        isSelected
+                          ? 'border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-500/20'
+                          : 'border-gray-200 hover:border-slate-300 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name="shippingOption"
+                          checked={isSelected}
+                          onChange={() => setSelectedShippingQuote(quote)}
+                          className="text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        {quote.companyLogo ? (
+                          <img
+                            src={quote.companyLogo}
+                            alt={quote.company}
+                            className="h-6 w-auto max-w-[60px] object-contain"
+                          />
+                        ) : null}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900 text-xs">{quote.company}</span>
+                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                              {quote.name}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            Previsão de entrega: até {quote.deliveryDays}{' '}
+                            {quote.deliveryDays === 1 ? 'dia útil' : 'dias úteis'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-sm font-black text-slate-900">
+                          R$ {Number(quote.price).toFixed(2).replace('.', ',')}
+                        </span>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-4 text-center text-xs text-slate-500">
+                {formData.zipCode.replace(/\D/g, '').length < 8
+                  ? 'Digite o CEP de entrega acima para calcular opções e prazos de envio.'
+                  : loadingShipping
+                  ? 'Buscando melhores cotações nas transportadoras...'
+                  : shippingError || 'Nenhuma opção de envio encontrada para este CEP.'}
+              </div>
+            )}
+          </div>
+
           {/* Forma de Pagamento */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
             <h2 className="text-base font-bold text-slate-900 pb-2 border-b border-gray-100">
-              3. Forma de Pagamento
+              4. Forma de Pagamento
             </h2>
 
             <div className="grid grid-cols-2 gap-4">
@@ -605,9 +753,9 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                       onChange={(e) => setCardData({ ...cardData, installments: Number(e.target.value) })}
                       className="w-full px-3.5 py-2.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-slate-800"
                     >
-                      <option value={1}>1x de R$ {subtotal.toFixed(2).replace('.', ',')} sem juros</option>
-                      <option value={2}>2x de R$ {(subtotal / 2).toFixed(2).replace('.', ',')} sem juros</option>
-                      <option value={3}>3x de R$ {(subtotal / 3).toFixed(2).replace('.', ',')} sem juros</option>
+                      <option value={1}>1x de R$ {totalWithShipping.toFixed(2).replace('.', ',')} sem juros</option>
+                      <option value={2}>2x de R$ {(totalWithShipping / 2).toFixed(2).replace('.', ',')} sem juros</option>
+                      <option value={3}>3x de R$ {(totalWithShipping / 3).toFixed(2).replace('.', ',')} sem juros</option>
                     </select>
                   </div>
                 </div>
@@ -688,11 +836,17 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
             </div>
             <div className="flex justify-between text-slate-600">
               <span>Frete</span>
-              <span className="text-emerald-700 font-semibold">Grátis</span>
+              {selectedShippingQuote ? (
+                <span className="font-bold text-slate-900">
+                  R$ {Number(selectedShippingQuote.price).toFixed(2).replace('.', ',')}
+                </span>
+              ) : (
+                <span className="text-slate-400 text-xs">Informe o CEP</span>
+              )}
             </div>
             <div className="flex justify-between text-base font-black text-slate-900 pt-2 border-t border-gray-200">
               <span>Total Final</span>
-              <span>R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+              <span>R$ {totalWithShipping.toFixed(2).replace('.', ',')}</span>
             </div>
           </div>
 

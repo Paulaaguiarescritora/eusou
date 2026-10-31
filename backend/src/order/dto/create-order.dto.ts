@@ -8,6 +8,7 @@ import {
   IsInt,
   Min,
   IsOptional,
+  IsNumber,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -90,4 +91,12 @@ export class CreateOrderDto {
   @IsString()
   @IsOptional()
   utmSource?: string;
+
+  @IsNumber()
+  @IsOptional()
+  shippingAmount?: number;
+
+  @IsString()
+  @IsOptional()
+  shippingService?: string;
 }

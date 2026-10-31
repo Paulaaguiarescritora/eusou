@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { CartItem } from '../types';
+import { CartItem, ShippingQuote } from '../types';
 import { fetchApi, resolveMediaUrl } from '../api';
-import { Trash2, ArrowRight, ArrowLeft, ShoppingBag, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Trash2, ArrowRight, ArrowLeft, ShoppingBag, AlertCircle, AlertTriangle, Truck, Loader2 } from 'lucide-react';
 
 interface CartViewProps {
   items: CartItem[];
@@ -35,6 +35,51 @@ export const CartView: React.FC<CartViewProps> = ({
   } | null>(null);
   const [validating, setValidating] = useState(false);
   const [quantityError, setQuantityError] = useState<string | null>(null);
+
+  // Melhor Envio Shipping States
+  const [shippingCep, setShippingCep] = useState('');
+  const [shippingQuotes, setShippingQuotes] = useState<ShippingQuote[]>([]);
+  const [selectedShippingQuote, setSelectedShippingQuote] = useState<ShippingQuote | null>(null);
+  const [calculatingShipping, setCalculatingShipping] = useState(false);
+  const [shippingError, setShippingError] = useState<string | null>(null);
+
+  const handleCalculateShipping = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanCep = shippingCep.replace(/\D/g, '');
+    if (cleanCep.length !== 8) {
+      setShippingError('Digite um CEP válido com 8 dígitos.');
+      return;
+    }
+
+    setCalculatingShipping(true);
+    setShippingError(null);
+    try {
+      const res = await fetchApi<{ quotes: ShippingQuote[] }>('/shipping/calculate', {
+        method: 'POST',
+        body: JSON.stringify({
+          destinationPostalCode: cleanCep,
+          items: items.map((i) => ({
+            productId: i.productId,
+            variantId: i.variantId || null,
+            quantity: i.quantity,
+          })),
+        }),
+      });
+
+      if (res.quotes && res.quotes.length > 0) {
+        setShippingQuotes(res.quotes);
+        setSelectedShippingQuote(res.quotes[0]);
+      } else {
+        setShippingQuotes([]);
+        setSelectedShippingQuote(null);
+        setShippingError('Nenhuma opção de frete disponível para este CEP.');
+      }
+    } catch (err: any) {
+      setShippingError(err.message || 'Erro ao calcular frete.');
+    } finally {
+      setCalculatingShipping(false);
+    }
+  };
 
   useEffect(() => {
     if (items.length === 0) {
@@ -277,14 +322,85 @@ export const CartView: React.FC<CartViewProps> = ({
             </div>
             <div className="flex justify-between text-slate-600">
               <span>Frete</span>
-              <span className="text-emerald-700 font-medium">Grátis (Demonstração)</span>
+              {selectedShippingQuote ? (
+                <span className="font-bold text-slate-900">
+                  R$ {Number(selectedShippingQuote.price).toFixed(2).replace('.', ',')}
+                </span>
+              ) : (
+                <span className="text-slate-400 text-xs">Calcule abaixo</span>
+              )}
             </div>
+          </div>
+
+          {/* Calculadora de Frete no Carrinho */}
+          <div className="py-4 border-b border-gray-200 space-y-3">
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <Truck className="w-4 h-4 text-indigo-600" />
+              <span>Calcular Frete e Prazo</span>
+            </label>
+            <form onSubmit={handleCalculateShipping} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="00000-000"
+                value={shippingCep}
+                onChange={(e) => setShippingCep(e.target.value)}
+                maxLength={9}
+                className="w-full text-xs p-2.5 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-slate-800"
+              />
+              <button
+                type="submit"
+                disabled={calculatingShipping}
+                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shrink-0 transition disabled:opacity-50 cursor-pointer"
+              >
+                {calculatingShipping ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Calcular'}
+              </button>
+            </form>
+
+            {shippingError && (
+              <p className="text-[11px] text-rose-600 font-medium">{shippingError}</p>
+            )}
+
+            {shippingQuotes.length > 0 && (
+              <div className="space-y-1.5 pt-1 max-h-48 overflow-y-auto">
+                {shippingQuotes.map((q) => {
+                  const isSelected = selectedShippingQuote?.id === q.id;
+                  return (
+                    <label
+                      key={q.id}
+                      onClick={() => setSelectedShippingQuote(q)}
+                      className={`p-2 rounded-lg border text-xs flex items-center justify-between cursor-pointer transition ${
+                        isSelected
+                          ? 'border-indigo-600 bg-indigo-50/50 text-indigo-950 font-bold'
+                          : 'border-gray-200 bg-white text-slate-700 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="cartShippingQuote"
+                          checked={isSelected}
+                          onChange={() => setSelectedShippingQuote(q)}
+                          className="text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <span>
+                          {q.company} ({q.name})
+                        </span>
+                      </div>
+                      <span>R$ {Number(q.price).toFixed(2).replace('.', ',')}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-between items-center py-4 border-b border-gray-200 mb-6">
             <span className="font-bold text-slate-900">Total</span>
             <span className="text-xl font-black text-slate-900">
-              R$ {subtotal.toFixed(2).replace('.', ',')}
+              R${' '}
+              {(subtotal + (selectedShippingQuote ? Number(selectedShippingQuote.price) : 0))
+                .toFixed(2)
+                .replace('.', ',')}
             </span>
           </div>
 

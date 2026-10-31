@@ -252,7 +252,8 @@ export class OrderService {
       });
     }
 
-    const shippingAmount = 0.0; // Shipping calculation not mocked with arbitrary numbers
+    const shippingAmount =
+      dto.shippingAmount && Number(dto.shippingAmount) > 0 ? Number(dto.shippingAmount) : 0.0;
     const calculatedTotal = calculatedSubtotal + shippingAmount;
 
     // P0: Prazo de Pagamento rigoroso de 24 horas

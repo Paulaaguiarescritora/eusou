@@ -777,3 +777,13 @@ export interface CommercialDashboardData {
     itemCount: number;
   }[];
 }
+
+export interface ShippingQuote {
+  id: number | string;
+  name: string;
+  company: string;
+  companyLogo?: string;
+  price: number;
+  deliveryDays: number;
+  deliveryRange?: { min: number; max: number };
+}
