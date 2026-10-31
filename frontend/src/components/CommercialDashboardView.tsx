@@ -61,11 +61,18 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  const formatCurrency = (val?: string | number | null) => {
+    if (val === undefined || val === null || val === '') return '0,00';
+    const num = Number(val);
+    if (isNaN(num)) return String(val).replace('.', ',');
+    return num.toFixed(2).replace('.', ',');
+  };
+
   const loadDashboard = async () => {
     setLoading(true);
     setError(null);
     try {
-      const json = await fetchApi<CommercialDashboardData>(`/admin/dashboard/summary?period=${period}`);
+      const json = await fetchApi<CommercialDashboardData>(`/admin/dashboard/summary?period=${period}&_t=${Date.now()}`);
       setData(json);
     } catch (err: any) {
       setError(err.message || 'Erro inesperado ao consultar dados da operação.');
@@ -76,6 +83,12 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
 
   useEffect(() => {
     loadDashboard();
+
+    const handleFocus = () => {
+      loadDashboard();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [period]);
 
   const handleOpenInlineAdjust = (item: {
@@ -327,7 +340,7 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
                   ) : null}
                 </div>
                 <h2 className="text-xl sm:text-3xl font-black text-white tracking-tight mt-1">
-                  Faturamento: <span className="text-emerald-300">R$ {data?.sales.totalRevenue || '0,00'}</span>
+                  Faturamento: <span className="text-emerald-300">R$ {formatCurrency(data?.sales.totalRevenue)}</span>
                 </h2>
               </div>
             </div>
@@ -361,10 +374,10 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
                 </span>
               </div>
               <div className="text-2xl sm:text-3xl font-black text-emerald-300 tracking-tight my-1">
-                R$ {data?.sales.totalRevenue || '0,00'}
+                R$ {formatCurrency(data?.sales.totalRevenue)}
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                Hoje: <strong>R$ {data?.sales.periods.today.revenue || '0,00'}</strong> | 7d: <strong>R$ {data?.sales.periods.days7.revenue || '0,00'}</strong>
+                Hoje: <strong>R$ {formatCurrency(data?.sales.periods.today.revenue)}</strong> | 7d: <strong>R$ {formatCurrency(data?.sales.periods.days7.revenue)}</strong>
               </p>
             </div>
 
@@ -391,7 +404,7 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-black">Médio</span>
               </div>
               <div className="text-2xl sm:text-3xl font-black text-amber-300 tracking-tight my-1">
-                R$ {data?.sales.averageTicket || '0,00'}
+                R$ {formatCurrency(data?.sales.averageTicket)}
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
                 Receita média por pedido faturado em todos os canais de venda.
@@ -407,15 +420,15 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
               <div className="text-lg font-black text-white tracking-tight my-1 space-y-1">
                 <div className="flex justify-between text-xs font-bold">
                   <span className="text-slate-300">Loja Própria:</span>
-                  <span className="text-emerald-300">R$ {data?.sales.originBreakdown.ownStore || '0,00'}</span>
+                  <span className="text-emerald-300">R$ {formatCurrency(data?.sales.originBreakdown.ownStore)}</span>
                 </div>
                 <div className="flex justify-between text-xs font-bold">
                   <span className="text-slate-300">Marketplaces:</span>
-                  <span className="text-purple-300">R$ {data?.sales.originBreakdown.marketplace || '0,00'}</span>
+                  <span className="text-purple-300">R$ {formatCurrency(data?.sales.originBreakdown.marketplace)}</span>
                 </div>
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                Afiliados: R$ {data?.sales.originBreakdown.affiliate || '0,00'}
+                Afiliados: R$ {formatCurrency(data?.sales.originBreakdown.affiliate)}
               </p>
             </div>
           </div>

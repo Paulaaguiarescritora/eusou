@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, Query, UseGuards } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { CommercialAlertService } from './commercial-alert.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -19,6 +19,9 @@ export class DashboardController {
    * Suporta filtros de período: ?period=today | 7d | 30d | 90d ou ?startDate=...&endDate=...
    */
   @Get('summary')
+  @Header('Cache-Control', 'no-cache, no-store, must-revalidate')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   getCommercialSummary(
     @Query('period') period?: 'today' | '7d' | '30d' | '90d',
     @Query('startDate') startDate?: string,
