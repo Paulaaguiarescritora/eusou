@@ -62,6 +62,7 @@ export const CartView: React.FC<CartViewProps> = ({
   const handleSelectQuote = (quote: ShippingQuote) => {
     setSelectedShippingQuote(quote);
     localStorage.setItem('eusou_selected_shipping_quote', JSON.stringify(quote));
+    localStorage.setItem('eusou_selected_quote_id', String(quote.id));
   };
 
   const handleCalculateShipping = async (e?: React.FormEvent, cepToUse?: string) => {

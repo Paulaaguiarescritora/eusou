@@ -153,8 +153,40 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
         if (res.quotes && res.quotes.length > 0) {
           setShippingQuotes(res.quotes);
-          const savedQuoteId = localStorage.getItem('eusou_selected_quote_id');
-          const matched = res.quotes.find((q) => String(q.id) === savedQuoteId) || res.quotes[0];
+
+          let savedQuoteObj: ShippingQuote | null = selectedShippingQuote;
+          if (!savedQuoteObj) {
+            try {
+              const raw = localStorage.getItem('eusou_selected_shipping_quote');
+              if (raw) savedQuoteObj = JSON.parse(raw);
+            } catch {}
+          }
+
+          const savedQuoteId =
+            localStorage.getItem('eusou_selected_quote_id') ||
+            (savedQuoteObj ? String(savedQuoteObj.id) : null);
+
+          // Prioriza a correspondência exata do frete escolhido pelo cliente no carrinho:
+          const matched =
+            res.quotes.find((q) => savedQuoteId && String(q.id) === String(savedQuoteId)) ||
+            res.quotes.find(
+              (q) =>
+                savedQuoteObj &&
+                q.company.toLowerCase() === savedQuoteObj.company.toLowerCase() &&
+                q.name.toLowerCase() === savedQuoteObj.name.toLowerCase(),
+            ) ||
+            res.quotes.find(
+              (q) =>
+                savedQuoteObj &&
+                q.name.toLowerCase() === savedQuoteObj.name.toLowerCase(),
+            ) ||
+            res.quotes.find(
+              (q) =>
+                savedQuoteObj &&
+                q.company.toLowerCase() === savedQuoteObj.company.toLowerCase(),
+            ) ||
+            res.quotes[0];
+
           setSelectedShippingQuote(matched);
           localStorage.setItem('eusou_selected_shipping_quote', JSON.stringify(matched));
           localStorage.setItem('eusou_selected_quote_id', String(matched.id));
@@ -671,10 +703,31 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               )}
             </div>
 
+            {selectedShippingQuote && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-950">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div>
+                    <span className="font-bold">Frete selecionado no Carrinho:</span>
+                    <span className="ml-1 text-emerald-900 font-semibold">
+                      {selectedShippingQuote.company} ({selectedShippingQuote.name}) — R$ {Number(selectedShippingQuote.price).toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full shrink-0">
+                  Já Escolhido
+                </span>
+              </div>
+            )}
+
             {shippingQuotes.length > 0 ? (
               <div className="space-y-2.5">
                 {shippingQuotes.map((quote) => {
-                  const isSelected = selectedShippingQuote?.id === quote.id;
+                  const isSelected =
+                    String(selectedShippingQuote?.id) === String(quote.id) ||
+                    (selectedShippingQuote?.company === quote.company &&
+                      selectedShippingQuote?.name === quote.name);
+
                   return (
                     <label
                       key={quote.id}
@@ -706,6 +759,11 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                             <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
                               {quote.name}
                             </span>
+                            {isSelected && (
+                              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                Selecionado
+                              </span>
+                            )}
                           </div>
                           <p className="text-[11px] text-slate-500 mt-0.5">
                             Previsão de entrega: até {quote.deliveryDays}{' '}
