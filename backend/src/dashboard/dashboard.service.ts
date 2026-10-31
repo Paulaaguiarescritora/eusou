@@ -175,11 +175,9 @@ export class DashboardService {
       }
     }
 
-    // 2. Saúde Operacional & Alertas (F14 Core)
-    const [operationHealth, alerts] = await Promise.all([
-      this.alertService.getOperationHealth(),
-      this.alertService.getAlerts(),
-    ]);
+    // 2. Saúde Operacional & Alertas (F14 Core) - busca alertas uma única vez e deriva saúde
+    const alerts = await this.alertService.getAlerts();
+    const operationHealth = this.alertService.deriveOperationHealth(alerts);
 
     // 3. Produtos & Catálogo (F2A, F3, F11)
     const [

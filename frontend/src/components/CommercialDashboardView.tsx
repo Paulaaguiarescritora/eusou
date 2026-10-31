@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { fetchApi } from '../api';
 import {
   CommercialDashboardData,
@@ -68,7 +68,10 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
     return num.toFixed(2).replace('.', ',');
   };
 
+  const lastFetchedRef = useRef<number>(0);
+
   const loadDashboard = async () => {
+    lastFetchedRef.current = Date.now();
     setLoading(true);
     setError(null);
     try {
@@ -85,7 +88,10 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
     loadDashboard();
 
     const handleFocus = () => {
-      loadDashboard();
+      // Throttle de 60 segundos para evitar requisições repetitivas ao trocar de abas
+      if (Date.now() - lastFetchedRef.current > 60000) {
+        loadDashboard();
+      }
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);

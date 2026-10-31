@@ -287,10 +287,18 @@ export class CommercialAlertService {
   }
 
   /**
-   * Avalia a saúde global da operação com base nas regras de severidade
+   * Avalia a saúde global da operação com base nas regras de severidade.
+   * Se os alertas já tiverem sido calculados, deriva diretamente sem refazer consultas ao banco.
    */
-  async getOperationHealth(): Promise<OperationHealth> {
+  async getOperationHealth(existingAlerts?: CommercialAlert[]): Promise<OperationHealth> {
+    if (existingAlerts) {
+      return this.deriveOperationHealth(existingAlerts);
+    }
     const alerts = await this.getAlerts();
+    return this.deriveOperationHealth(alerts);
+  }
+
+  deriveOperationHealth(alerts: CommercialAlert[]): OperationHealth {
     const criticalCount = alerts.filter((a) => a.severity === 'CRITICAL').length;
     const warningCount = alerts.filter((a) => a.severity === 'WARNING').length;
     const infoCount = alerts.filter((a) => a.severity === 'INFO').length;
