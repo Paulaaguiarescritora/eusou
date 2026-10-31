@@ -36,21 +36,44 @@ export const CartView: React.FC<CartViewProps> = ({
   const [validating, setValidating] = useState(false);
   const [quantityError, setQuantityError] = useState<string | null>(null);
 
+  const formatCep = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 8);
+    if (digits.length <= 5) return digits;
+    return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+  };
+
   // Melhor Envio Shipping States
-  const [shippingCep, setShippingCep] = useState('');
+  const [shippingCep, setShippingCep] = useState(() => {
+    const saved = localStorage.getItem('eusou_customer_cep') || '';
+    return saved ? formatCep(saved) : '';
+  });
   const [shippingQuotes, setShippingQuotes] = useState<ShippingQuote[]>([]);
-  const [selectedShippingQuote, setSelectedShippingQuote] = useState<ShippingQuote | null>(null);
+  const [selectedShippingQuote, setSelectedShippingQuote] = useState<ShippingQuote | null>(() => {
+    try {
+      const savedQuote = localStorage.getItem('eusou_selected_shipping_quote');
+      return savedQuote ? JSON.parse(savedQuote) : null;
+    } catch {
+      return null;
+    }
+  });
   const [calculatingShipping, setCalculatingShipping] = useState(false);
   const [shippingError, setShippingError] = useState<string | null>(null);
 
-  const handleCalculateShipping = async (e?: React.FormEvent) => {
+  const handleSelectQuote = (quote: ShippingQuote) => {
+    setSelectedShippingQuote(quote);
+    localStorage.setItem('eusou_selected_shipping_quote', JSON.stringify(quote));
+  };
+
+  const handleCalculateShipping = async (e?: React.FormEvent, cepToUse?: string) => {
     if (e) e.preventDefault();
-    const cleanCep = shippingCep.replace(/\D/g, '');
+    const rawCep = cepToUse || shippingCep;
+    const cleanCep = rawCep.replace(/\D/g, '');
     if (cleanCep.length !== 8) {
       setShippingError('Digite um CEP válido com 8 dígitos.');
       return;
     }
 
+    localStorage.setItem('eusou_customer_cep', cleanCep);
     setCalculatingShipping(true);
     setShippingError(null);
     try {
@@ -68,7 +91,11 @@ export const CartView: React.FC<CartViewProps> = ({
 
       if (res.quotes && res.quotes.length > 0) {
         setShippingQuotes(res.quotes);
-        setSelectedShippingQuote(res.quotes[0]);
+        const previouslySavedId = localStorage.getItem('eusou_selected_quote_id');
+        const matched = res.quotes.find((q) => String(q.id) === previouslySavedId) || res.quotes[0];
+        setSelectedShippingQuote(matched);
+        localStorage.setItem('eusou_selected_shipping_quote', JSON.stringify(matched));
+        localStorage.setItem('eusou_selected_quote_id', String(matched.id));
       } else {
         setShippingQuotes([]);
         setSelectedShippingQuote(null);
@@ -80,6 +107,14 @@ export const CartView: React.FC<CartViewProps> = ({
       setCalculatingShipping(false);
     }
   };
+
+  // Se já houver CEP salvo e itens no carrinho, calcula automaticamente o frete
+  useEffect(() => {
+    const cleanCep = shippingCep.replace(/\D/g, '');
+    if (cleanCep.length === 8 && items.length > 0 && shippingQuotes.length === 0 && !calculatingShipping) {
+      handleCalculateShipping(undefined, cleanCep);
+    }
+  }, [items.length]);
 
   useEffect(() => {
     if (items.length === 0) {
@@ -343,7 +378,14 @@ export const CartView: React.FC<CartViewProps> = ({
                 type="text"
                 placeholder="00000-000"
                 value={shippingCep}
-                onChange={(e) => setShippingCep(e.target.value)}
+                onChange={(e) => {
+                  const formatted = formatCep(e.target.value);
+                  setShippingCep(formatted);
+                  const clean = formatted.replace(/\D/g, '');
+                  if (clean.length === 8) {
+                    handleCalculateShipping(undefined, clean);
+                  }
+                }}
                 maxLength={9}
                 className="w-full text-xs p-2.5 rounded-xl border border-gray-200 bg-white focus:outline-none focus:border-slate-800"
               />
@@ -367,7 +409,7 @@ export const CartView: React.FC<CartViewProps> = ({
                   return (
                     <label
                       key={q.id}
-                      onClick={() => setSelectedShippingQuote(q)}
+                      onClick={() => handleSelectQuote(q)}
                       className={`p-2 rounded-lg border text-xs flex items-center justify-between cursor-pointer transition ${
                         isSelected
                           ? 'border-indigo-600 bg-indigo-50/50 text-indigo-950 font-bold'

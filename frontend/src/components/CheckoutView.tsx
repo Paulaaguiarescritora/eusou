@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CartItem, Order, Payment, PaymentMethod, ShippingQuote } from '../types';
 import { fetchApi, resolveMediaUrl } from '../api';
 import {
@@ -29,19 +29,47 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   onNavigate,
   onOrderPlaced,
 }) => {
-  const [formData, setFormData] = useState({
-    customerName: '',
-    customerEmail: '',
-    customerPhone: '',
-    documentNumber: '',
-    street: '',
-    number: '',
-    complement: '',
-    neighborhood: '',
-    city: '',
-    state: 'SP',
-    zipCode: '',
+  const formatCep = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 8);
+    if (digits.length <= 5) return digits;
+    return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+  };
+
+  const [formData, setFormData] = useState(() => {
+    const saved = localStorage.getItem('eusou_checkout_form');
+    const savedCep = localStorage.getItem('eusou_customer_cep') || '';
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          ...parsed,
+          zipCode: parsed.zipCode || (savedCep ? formatCep(savedCep) : ''),
+        };
+      } catch {}
+    }
+    return {
+      customerName: '',
+      customerEmail: '',
+      customerPhone: '',
+      documentNumber: '',
+      street: '',
+      number: '',
+      complement: '',
+      neighborhood: '',
+      city: '',
+      state: 'SP',
+      zipCode: savedCep ? formatCep(savedCep) : '',
+    };
   });
+
+  // Salva dados de contato e endereço no localStorage para evitar redigitação
+  useEffect(() => {
+    localStorage.setItem('eusou_checkout_form', JSON.stringify(formData));
+    const clean = formData.zipCode.replace(/\D/g, '');
+    if (clean) {
+      localStorage.setItem('eusou_customer_cep', clean);
+    }
+  }, [formData]);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
   const [cardData, setCardData] = useState({
@@ -63,24 +91,39 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
   // Melhor Envio & Frete
   const [shippingQuotes, setShippingQuotes] = useState<ShippingQuote[]>([]);
-  const [selectedShippingQuote, setSelectedShippingQuote] = useState<ShippingQuote | null>(null);
+  const [selectedShippingQuote, setSelectedShippingQuote] = useState<ShippingQuote | null>(() => {
+    try {
+      const savedQuote = localStorage.getItem('eusou_selected_shipping_quote');
+      return savedQuote ? JSON.parse(savedQuote) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loadingShipping, setLoadingShipping] = useState(false);
   const [shippingError, setShippingError] = useState<string | null>(null);
+
+  const handleSelectShippingQuote = (quote: ShippingQuote) => {
+    setSelectedShippingQuote(quote);
+    localStorage.setItem('eusou_selected_shipping_quote', JSON.stringify(quote));
+    localStorage.setItem('eusou_selected_quote_id', String(quote.id));
+  };
 
   const shippingFee = selectedShippingQuote ? Number(selectedShippingQuote.price) : 0;
   const totalWithShipping = subtotal + shippingFee;
 
   const handleZipCodeChange = async (newZip: string) => {
-    setFormData((prev) => ({ ...prev, zipCode: newZip }));
-    const cleanCep = newZip.replace(/\D/g, '');
+    const formatted = formatCep(newZip);
+    setFormData((prev: typeof formData) => ({ ...prev, zipCode: formatted }));
+    const cleanCep = formatted.replace(/\D/g, '');
 
     if (cleanCep.length === 8) {
+      localStorage.setItem('eusou_customer_cep', cleanCep);
       // 1. ViaCEP preenchimento automático
       try {
         const viaRes = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
         const viaData = await viaRes.json();
         if (!viaData.erro) {
-          setFormData((prev) => ({
+          setFormData((prev: typeof formData) => ({
             ...prev,
             street: viaData.logradouro || prev.street,
             neighborhood: viaData.bairro || prev.neighborhood,
@@ -110,7 +153,11 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
         if (res.quotes && res.quotes.length > 0) {
           setShippingQuotes(res.quotes);
-          setSelectedShippingQuote(res.quotes[0]);
+          const savedQuoteId = localStorage.getItem('eusou_selected_quote_id');
+          const matched = res.quotes.find((q) => String(q.id) === savedQuoteId) || res.quotes[0];
+          setSelectedShippingQuote(matched);
+          localStorage.setItem('eusou_selected_shipping_quote', JSON.stringify(matched));
+          localStorage.setItem('eusou_selected_quote_id', String(matched.id));
         } else {
           setShippingQuotes([]);
           setSelectedShippingQuote(null);
@@ -125,6 +172,14 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       setSelectedShippingQuote(null);
     }
   };
+
+  // Preenchimento e cotação automática ao carregar se já tiver CEP salvo
+  useEffect(() => {
+    const cleanCep = formData.zipCode.replace(/\D/g, '');
+    if (cleanCep.length === 8 && items.length > 0) {
+      handleZipCodeChange(formData.zipCode);
+    }
+  }, []);
 
   // Validação real de estoque antes do checkout
   React.useEffect(() => {
@@ -600,7 +655,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   return (
                     <label
                       key={quote.id}
-                      onClick={() => setSelectedShippingQuote(quote)}
+                      onClick={() => handleSelectShippingQuote(quote)}
                       className={`p-3.5 rounded-xl border flex items-center justify-between gap-4 cursor-pointer transition ${
                         isSelected
                           ? 'border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-500/20'
@@ -612,7 +667,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                           type="radio"
                           name="shippingOption"
                           checked={isSelected}
-                          onChange={() => setSelectedShippingQuote(quote)}
+                          onChange={() => handleSelectShippingQuote(quote)}
                           className="text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                         />
                         {quote.companyLogo ? (
