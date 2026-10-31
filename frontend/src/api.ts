@@ -1,6 +1,6 @@
 const PRODUCTION_API_URL = 'https://eusou.onrender.com';
 
-const API_BASE =
+export const API_BASE =
   import.meta.env.VITE_API_URL ||
   (typeof window !== 'undefined' &&
   !window.location.hostname.includes('localhost') &&

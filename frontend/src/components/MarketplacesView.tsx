@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE } from '../api';
 import {
   Channel,
   ChannelAccount,
@@ -84,14 +85,16 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
     externalCategoryName: '',
   });
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
   const fetchWithAuth = async (endpoint: string, options: RequestInit = {}) => {
-    return fetch(`${API_URL}${endpoint}`, {
+    const effectiveToken = token || (typeof window !== 'undefined' ? localStorage.getItem('token') : '') || '';
+    return fetch(`${API_BASE}${endpoint}`, {
+      cache: 'no-store',
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        Pragma: 'no-cache',
+        'Cache-Control': 'no-cache',
+        ...(effectiveToken ? { Authorization: `Bearer ${effectiveToken}` } : {}),
         ...options.headers,
       },
     });
