@@ -395,6 +395,29 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     }
   };
 
+  // Polling automático da confirmação do Pix a cada 3 segundos
+  useEffect(() => {
+    if (!activePayment || activePayment.method !== 'PIX' || activePayment.status === 'PAID') {
+      return;
+    }
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetchApi<Payment>(`/payments/${activePayment.id}`);
+        if (res && res.status === 'PAID') {
+          setActivePayment(res);
+          if (placedOrder) {
+            onOrderPlaced(placedOrder);
+          }
+        }
+      } catch {
+        // Silencioso em caso de oscilação momentânea
+      }
+    }, 3000);
+
+    return () => clearInterval(intervalId);
+  }, [activePayment?.id, activePayment?.status, placedOrder]);
+
   // If waiting for Pix payment completion
   if (activePayment && activePayment.method === 'PIX' && activePayment.status !== 'PAID') {
     return (

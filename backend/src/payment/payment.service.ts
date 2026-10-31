@@ -528,16 +528,46 @@ export class PaymentService {
   }
 
   /**
-   * Find payment by ID
+   * Find payment by ID with automatic status synchronization if still PROCESSING
    */
   async findById(id: string): Promise<Payment> {
-    const payment = await this.prisma.payment.findUnique({
+    let payment = await this.prisma.payment.findUnique({
       where: { id },
       include: { order: true },
     });
 
     if (!payment) {
       throw new NotFoundException(`Payment "${id}" not found`);
+    }
+
+    if (payment.status === PaymentStatus.PROCESSING && payment.providerPaymentId) {
+      try {
+        const external = await this.provider.getPayment(payment.providerPaymentId);
+        if (external.success && external.status && external.status !== payment.status) {
+          const updated = await this.prisma.payment.update({
+            where: { id },
+            data: {
+              status: external.status,
+              externalStatusDetail: external.externalStatusDetail,
+            },
+            include: { order: true },
+          });
+
+          if (external.status === PaymentStatus.PAID) {
+            await this.handlePaymentSuccess(updated, payment.order);
+          } else if (
+            external.status === PaymentStatus.CANCELLED ||
+            external.status === PaymentStatus.EXPIRED ||
+            external.status === PaymentStatus.FAILED
+          ) {
+            await this.handlePaymentFailed(updated, payment.order);
+          }
+
+          return updated;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to auto-sync payment ${id}: ${err.message}`);
+      }
     }
 
     return payment;
