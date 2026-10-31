@@ -703,21 +703,10 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               )}
             </div>
 
-            {selectedShippingQuote && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-950">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <div>
-                    <span className="font-bold">Frete selecionado no Carrinho:</span>
-                    <span className="ml-1 text-emerald-900 font-semibold">
-                      {selectedShippingQuote.company} ({selectedShippingQuote.name}) — R$ {Number(selectedShippingQuote.price).toFixed(2).replace('.', ',')}
-                    </span>
-                  </div>
-                </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full shrink-0">
-                  Já Escolhido
-                </span>
-              </div>
+            {shippingQuotes.length > 0 && (
+              <p className="text-xs text-slate-600">
+                Selecione a transportadora e o prazo de entrega desejados para o seu pedido:
+              </p>
             )}
 
             {shippingQuotes.length > 0 ? (

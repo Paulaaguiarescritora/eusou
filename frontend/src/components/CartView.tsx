@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CartItem, ShippingQuote } from '../types';
 import { fetchApi, resolveMediaUrl } from '../api';
-import { Trash2, ArrowRight, ArrowLeft, ShoppingBag, AlertCircle, AlertTriangle, Truck, Loader2 } from 'lucide-react';
+import { Trash2, ArrowRight, ArrowLeft, ShoppingBag, AlertCircle, AlertTriangle, Truck, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface CartViewProps {
   items: CartItem[];
@@ -42,28 +42,15 @@ export const CartView: React.FC<CartViewProps> = ({
     return `${digits.slice(0, 5)}-${digits.slice(5)}`;
   };
 
-  // Melhor Envio Shipping States
+  // Melhor Envio - Estimativa de Frete por CEP
   const [shippingCep, setShippingCep] = useState(() => {
     const saved = localStorage.getItem('eusou_customer_cep') || '';
     return saved ? formatCep(saved) : '';
   });
-  const [shippingQuotes, setShippingQuotes] = useState<ShippingQuote[]>([]);
-  const [selectedShippingQuote, setSelectedShippingQuote] = useState<ShippingQuote | null>(() => {
-    try {
-      const savedQuote = localStorage.getItem('eusou_selected_shipping_quote');
-      return savedQuote ? JSON.parse(savedQuote) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [shippingEstimate, setShippingEstimate] = useState<number | null>(null);
   const [calculatingShipping, setCalculatingShipping] = useState(false);
   const [shippingError, setShippingError] = useState<string | null>(null);
-
-  const handleSelectQuote = (quote: ShippingQuote) => {
-    setSelectedShippingQuote(quote);
-    localStorage.setItem('eusou_selected_shipping_quote', JSON.stringify(quote));
-    localStorage.setItem('eusou_selected_quote_id', String(quote.id));
-  };
+  const [shippingCalculatedCep, setShippingCalculatedCep] = useState<string | null>(null);
 
   const handleCalculateShipping = async (e?: React.FormEvent, cepToUse?: string) => {
     if (e) e.preventDefault();
@@ -91,28 +78,28 @@ export const CartView: React.FC<CartViewProps> = ({
       });
 
       if (res.quotes && res.quotes.length > 0) {
-        setShippingQuotes(res.quotes);
-        const previouslySavedId = localStorage.getItem('eusou_selected_quote_id');
-        const matched = res.quotes.find((q) => String(q.id) === previouslySavedId) || res.quotes[0];
-        setSelectedShippingQuote(matched);
-        localStorage.setItem('eusou_selected_shipping_quote', JSON.stringify(matched));
-        localStorage.setItem('eusou_selected_quote_id', String(matched.id));
+        const prices = res.quotes.map((q) => Number(q.price)).filter((p) => !isNaN(p) && p > 0);
+        const minPrice = prices.length > 0 ? Math.min(...prices) : Number(res.quotes[0].price);
+        setShippingEstimate(minPrice);
+        setShippingCalculatedCep(formatCep(cleanCep));
       } else {
-        setShippingQuotes([]);
-        setSelectedShippingQuote(null);
+        setShippingEstimate(null);
+        setShippingCalculatedCep(null);
         setShippingError('Nenhuma opção de frete disponível para este CEP.');
       }
     } catch (err: any) {
+      setShippingEstimate(null);
+      setShippingCalculatedCep(null);
       setShippingError(err.message || 'Erro ao calcular frete.');
     } finally {
       setCalculatingShipping(false);
     }
   };
 
-  // Se já houver CEP salvo e itens no carrinho, calcula automaticamente o frete
+  // Se já houver CEP salvo e itens no carrinho, calcula automaticamente a estimativa
   useEffect(() => {
     const cleanCep = shippingCep.replace(/\D/g, '');
-    if (cleanCep.length === 8 && items.length > 0 && shippingQuotes.length === 0 && !calculatingShipping) {
+    if (cleanCep.length === 8 && items.length > 0 && shippingEstimate === null && !calculatingShipping) {
       handleCalculateShipping(undefined, cleanCep);
     }
   }, [items.length]);
@@ -356,14 +343,14 @@ export const CartView: React.FC<CartViewProps> = ({
               <span>Subtotal dos itens</span>
               <span>R$ {subtotal.toFixed(2).replace('.', ',')}</span>
             </div>
-            <div className="flex justify-between text-slate-600">
+            <div className="flex justify-between text-slate-600 items-center">
               <span>Frete</span>
-              {selectedShippingQuote ? (
-                <span className="font-bold text-slate-900">
-                  R$ {Number(selectedShippingQuote.price).toFixed(2).replace('.', ',')}
+              {shippingEstimate !== null ? (
+                <span className="font-semibold text-slate-800 text-xs">
+                  a partir de R$ {shippingEstimate.toFixed(2).replace('.', ',')}
                 </span>
               ) : (
-                <span className="text-slate-400 text-xs">Calcule abaixo</span>
+                <span className="text-slate-400 text-xs">Informe o CEP abaixo</span>
               )}
             </div>
           </div>
@@ -403,48 +390,29 @@ export const CartView: React.FC<CartViewProps> = ({
               <p className="text-[11px] text-rose-600 font-medium">{shippingError}</p>
             )}
 
-            {shippingQuotes.length > 0 && (
-              <div className="space-y-1.5 pt-1 max-h-48 overflow-y-auto">
-                {shippingQuotes.map((q) => {
-                  const isSelected = selectedShippingQuote?.id === q.id;
-                  return (
-                    <label
-                      key={q.id}
-                      onClick={() => handleSelectQuote(q)}
-                      className={`p-2 rounded-lg border text-xs flex items-center justify-between cursor-pointer transition ${
-                        isSelected
-                          ? 'border-indigo-600 bg-indigo-50/50 text-indigo-950 font-bold'
-                          : 'border-gray-200 bg-white text-slate-700 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name="cartShippingQuote"
-                          checked={isSelected}
-                          onChange={() => setSelectedShippingQuote(q)}
-                          className="text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                        />
-                        <span>
-                          {q.company} ({q.name})
-                        </span>
-                      </div>
-                      <span>R$ {Number(q.price).toFixed(2).replace('.', ',')}</span>
-                    </label>
-                  );
-                })}
+            {shippingCalculatedCep && shippingEstimate !== null && !shippingError && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-950 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>CEP {shippingCalculatedCep} atendido</span>
+                </div>
+                <p className="text-[11px] text-emerald-700 leading-relaxed">
+                  Fretes a partir de <strong>R$ {shippingEstimate.toFixed(2).replace('.', ',')}</strong>. Você escolherá a transportadora (SEDEX, PAC, Jadlog, Loggi) na finalização do pedido.
+                </p>
               </div>
             )}
           </div>
 
-          <div className="flex justify-between items-center py-4 border-b border-gray-200 mb-6">
-            <span className="font-bold text-slate-900">Total</span>
-            <span className="text-xl font-black text-slate-900">
-              R${' '}
-              {(subtotal + (selectedShippingQuote ? Number(selectedShippingQuote.price) : 0))
-                .toFixed(2)
-                .replace('.', ',')}
-            </span>
+          <div className="py-4 border-b border-gray-200 mb-6">
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-slate-900">Subtotal</span>
+              <span className="text-xl font-black text-slate-900">
+                R$ {subtotal.toFixed(2).replace('.', ',')}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              * A transportadora e o frete exato serão selecionados no Checkout.
+            </p>
           </div>
 
           {hasOutOfStockItems && (
