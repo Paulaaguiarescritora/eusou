@@ -933,7 +933,7 @@ model Inventory {
   variantId        String?
   quantity         Int             @default(0)
   reservedQuantity Int             @default(0)
-  minimumQuantity  Int             @default(0)
+  minimumQuantity  Int             @default(1)
   updatedAt        DateTime        @updatedAt
 
   product          Product?        @relation(fields: [productId], references: [id], onDelete: Cascade)

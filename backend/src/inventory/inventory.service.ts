@@ -168,7 +168,7 @@ export class InventoryService {
 
     if (String(query.lowStockOnly) === 'true') {
       filtered = filtered.filter(
-        (i) => i.quantity - i.reservedQuantity <= i.minimumQuantity,
+        (i) => i.quantity - i.reservedQuantity < i.minimumQuantity,
       );
     }
 
@@ -180,7 +180,7 @@ export class InventoryService {
 
     const enrichedItems = filtered.map((i) => {
       const avail = Math.max(0, i.quantity - i.reservedQuantity);
-      const isLow = i.quantity - i.reservedQuantity <= i.minimumQuantity;
+      const isLow = i.quantity - i.reservedQuantity < i.minimumQuantity;
       const unitCost = resolveItemUnitCost(i.product, i.variant);
       const unitPrice = resolveItemUnitRetailPrice(i.product, i.variant);
       const subtotalCost = avail * unitCost;
@@ -386,7 +386,7 @@ export class InventoryService {
           variantId: variantId || null,
           quantity: 0,
           reservedQuantity: 0,
-          minimumQuantity: 5,
+          minimumQuantity: 1,
         },
       });
     }
@@ -845,7 +845,7 @@ export class InventoryService {
           variantId: variantId || null,
           quantity: producedQuantity,
           reservedQuantity: 0,
-          minimumQuantity: 5,
+          minimumQuantity: 1,
         },
       });
     } else {

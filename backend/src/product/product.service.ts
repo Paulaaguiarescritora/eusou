@@ -104,7 +104,7 @@ export class ProductService {
             variantId: null,
             quantity: 0,
             reservedQuantity: 0,
-            minimumQuantity: 5,
+            minimumQuantity: 1,
           },
         });
       }

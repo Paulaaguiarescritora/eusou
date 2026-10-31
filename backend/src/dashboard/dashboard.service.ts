@@ -379,7 +379,7 @@ export class DashboardService {
               minimum: min,
               status: 'ESGOTADO',
             });
-          } else if (avail <= min) {
+          } else if (avail < min) {
             lowStockCount++;
             criticalItems.push({
               productId: prod.id,
@@ -422,7 +422,7 @@ export class DashboardService {
               minimum: parentInv.minimumQuantity,
               status: 'ESGOTADO',
             });
-          } else if (avail <= parentInv.minimumQuantity) {
+          } else if (avail < parentInv.minimumQuantity) {
             lowStockCount++;
             criticalItems.push({
               productId: prod.id,

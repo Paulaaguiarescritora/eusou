@@ -1461,7 +1461,7 @@ export class ProductionService {
     ).length;
 
     const lowStockProducts = inventories.filter(
-      (i) => i.quantity - i.reservedQuantity <= i.minimumQuantity,
+      (i) => i.quantity - i.reservedQuantity < i.minimumQuantity,
     ).length;
 
     const totalInventoryValue = inventories.reduce((acc, i) => {

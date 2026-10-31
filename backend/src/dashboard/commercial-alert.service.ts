@@ -173,7 +173,7 @@ export class CommercialAlertService {
               recommendedAction: 'CORRIGIR',
               actionUrl: '/admin/inventory',
             });
-          } else if (available <= varInv.minimumQuantity) {
+          } else if (available < varInv.minimumQuantity) {
             alerts.push({
               id: `inv-low-${varInv.id}`,
               type: 'STOCK_LOW',
@@ -207,7 +207,7 @@ export class CommercialAlertService {
             recommendedAction: 'CORRIGIR',
             actionUrl: '/admin/inventory',
           });
-        } else if (available <= parentInv.minimumQuantity) {
+        } else if (available < parentInv.minimumQuantity) {
           alerts.push({
             id: `inv-low-${parentInv.id}`,
             type: 'STOCK_LOW',
