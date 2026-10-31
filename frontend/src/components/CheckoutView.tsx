@@ -231,7 +231,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       if (paymentMethod === 'CREDIT_CARD') {
         const mpPublicKey =
           (import.meta as any).env?.VITE_MERCADOPAGO_PUBLIC_KEY ||
-          (window as any).__MERCADOPAGO_PUBLIC_KEY__ || 'TEST-e98fcf8b-3a6d-4baa-98d7-bca8caa1e919';
+          (window as any).__MERCADOPAGO_PUBLIC_KEY__ || 'APP_USR-bd4bca2b-7466-4b3e-804f-9bdeb9bb1ed7';
 
         if (!mpPublicKey || !mpPublicKey.trim()) {
           throw new Error('Chave pública do Mercado Pago (VITE_MERCADOPAGO_PUBLIC_KEY) não configurada no frontend.');
