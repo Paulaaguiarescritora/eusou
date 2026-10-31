@@ -59,7 +59,7 @@ async function bootstrap() {
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-  const allowedOriginsRegex = /^(https?:\/\/([a-zA-Z0-9-]+\.)*vercel\.app|https?:\/\/([a-zA-Z0-9-]+\.)*eusou\.com(\.br)?|http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?)$/;
+  const allowedOriginsRegex = /^(https?:\/\/([a-zA-Z0-9-]+\.)*vercel\.app|https?:\/\/([a-zA-Z0-9-]+\.)*(kubostudio|eusou)\.com(\.br)?|http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?)$/;
 
   app.enableCors({
     origin: (origin, callback) => {
@@ -67,7 +67,7 @@ async function bootstrap() {
       if (!origin || allowedOriginsRegex.test(origin) || (frontendUrl && origin === frontendUrl)) {
         callback(null, true);
       } else {
-        callback(new Error('Origem de requisição não permitida pelas políticas de CORS do EuSou.'), false);
+        callback(new Error('Origem de requisição não permitida pelas políticas de CORS da KUBOSTUDIO.'), false);
       }
     },
     credentials: true,

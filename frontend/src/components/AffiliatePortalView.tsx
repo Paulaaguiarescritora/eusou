@@ -999,7 +999,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
             Monetize sua audiência com os melhores produtos e curadorias exclusivas
           </h1>
           <p className="text-base sm:text-lg text-zinc-600 leading-relaxed">
-            Seja um parceiro oficial EuSou. Divulgue decorações exclusivas, colecionáveis e utilidades de alto valor percebido e receba <strong className="text-amber-700">10% de comissão</strong> sobre cada venda aprovada.
+            Seja um parceiro oficial KUBOSTUDIO. Divulgue decorações exclusivas, colecionáveis e utilidades de alto valor percebido e receba <strong className="text-amber-700">10% de comissão</strong> sobre cada venda aprovada.
           </p>
         </div>
 
@@ -1181,7 +1181,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                     className="mt-1 h-4 w-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500"
                   />
                   <label htmlFor="terms-check-logged" className="text-xs text-zinc-600 leading-snug cursor-pointer">
-                    Concordo com os Termos de Parceria e Comissionamento do Programa de Afiliados EuSou.
+                    Concordo com os Termos de Parceria e Comissionamento do Programa de Afiliados KUBOSTUDIO.
                   </label>
                 </div>
 
@@ -1357,7 +1357,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                         className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500"
                       />
                       <label htmlFor="terms-check-pub" className="text-xs text-zinc-600 cursor-pointer">
-                        Concordo com os Termos e Políticas do Programa de Afiliados EuSou.
+                        Concordo com os Termos e Políticas do Programa de Afiliados KUBOSTUDIO.
                       </label>
                     </div>
 
@@ -1644,7 +1644,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
 
               <a
                 href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                  `Olá! Dá uma olhada nesses produtos incríveis da EuSou que selecionei: ${storeRefLink}`
+                  `Olá! Dá uma olhada nesses produtos incríveis da KUBOSTUDIO que selecionei: ${storeRefLink}`
                 )}`}
                 target="_blank"
                 rel="noreferrer"
@@ -2085,7 +2085,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                   </a>
                   <a
                     href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                      `Olá! Dá uma olhada no catálogo de produtos incríveis e exclusivos da EuSou que selecionei para você: ${catalogRefLink}`
+                      `Olá! Dá uma olhada no catálogo de produtos incríveis e exclusivos da KUBOSTUDIO que selecionei para você: ${catalogRefLink}`
                     )}`}
                     target="_blank"
                     rel="noreferrer"
@@ -2113,7 +2113,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                   </div>
                 </div>
                 <p className="text-xs text-zinc-600 mb-4 leading-relaxed">
-                  Ideal para colocar na biografia do Instagram, TikTok ou YouTube. O visitante conhece a marca e todos os destaques da EuSou com seu cookie de indicação.
+                  Ideal para colocar na biografia do Instagram, TikTok ou YouTube. O visitante conhece a marca e todos os destaques da KUBOSTUDIO com seu cookie de indicação.
                 </p>
               </div>
 
@@ -2146,7 +2146,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                   </a>
                   <a
                     href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                      `Oi! Conheça as peças colecionáveis e decorações exclusivas da EuSou: ${storeRefLink}`
+                      `Oi! Conheça as peças colecionáveis e decorações exclusivas da KUBOSTUDIO: ${storeRefLink}`
                     )}`}
                     target="_blank"
                     rel="noreferrer"
@@ -2278,7 +2278,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                   Catálogos Oficiais da Loja
                 </h4>
                 <p className="text-xs text-zinc-500">
-                  Catálogos temáticos preparados pela equipe da EuSou prontos para você compartilhar com seus clientes.
+                  Catálogos temáticos preparados pela equipe da KUBOSTUDIO prontos para você compartilhar com seus clientes.
                 </p>
               </div>
 
@@ -2329,7 +2329,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                           </a>
                           <a
                             href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                              `Olá! Confira o catálogo especial "${cat.name}" da loja EuSou: ${catLink}`
+                              `Olá! Confira o catálogo especial "${cat.name}" da loja KUBOSTUDIO: ${catLink}`
                             )}`}
                             target="_blank"
                             rel="noreferrer"
@@ -2506,7 +2506,7 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                           <div className="flex items-center gap-1.5">
                             <a
                               href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                                `Oi! Olha que incrível esse ${prod.name} por apenas ${formatCurrency(prod.price)} na loja EuSou: ${prodLink}`
+                                `Oi! Olha que incrível esse ${prod.name} por apenas ${formatCurrency(prod.price)} na loja KUBOSTUDIO: ${prodLink}`
                               )}`}
                               target="_blank"
                               rel="noreferrer"
@@ -2542,13 +2542,13 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                 Copie um texto pronto e engajador para postar no Instagram, Threads ou TikTok:
               </p>
               <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs text-zinc-700 italic mb-3">
-                "Galera, confiram os colecionáveis e decorações exclusivas e incríveis na loja EuSou! Use meu link para garantir os melhores lançamentos: {catalogRefLink}"
+                "Galera, confiram os colecionáveis e decorações exclusivas e incríveis na loja KUBOSTUDIO! Use meu link para garantir os melhores lançamentos: {catalogRefLink}"
               </div>
               <button
                 type="button"
                 onClick={() =>
                   copyToClipboard(
-                    `Galera, confiram os colecionáveis e decorações exclusivas e incríveis na loja EuSou! Use meu link para garantir os melhores lançamentos: ${catalogRefLink}`,
+                    `Galera, confiram os colecionáveis e decorações exclusivas e incríveis na loja KUBOSTUDIO! Use meu link para garantir os melhores lançamentos: ${catalogRefLink}`,
                     'copy_msg'
                   )
                 }
@@ -2565,13 +2565,13 @@ export const AffiliatePortalView: React.FC<AffiliatePortalViewProps> = ({ onNavi
                 Para enviar no privado quando alguém perguntar sobre presentes, pets ou decoração:
               </p>
               <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-xs text-zinc-700 italic mb-3">
-                "Oi! Eu sou parceiro oficial da EuSou, uma loja incrível com produtos temáticos de altíssima qualidade. Separei o catálogo com todas as peças aqui para você dar uma olhada: {catalogRefLink}"
+                "Oi! Sou parceiro oficial da KUBOSTUDIO, uma loja incrível com produtos temáticos de altíssima qualidade. Separei o catálogo com todas as peças aqui para você dar uma olhada: {catalogRefLink}"
               </div>
               <button
                 type="button"
                 onClick={() =>
                   copyToClipboard(
-                    `Oi! Eu sou parceiro oficial da EuSou, uma loja incrível com produtos temáticos de altíssima qualidade. Separei o catálogo com todas as peças aqui para você dar uma olhada: ${catalogRefLink}`,
+                    `Oi! Sou parceiro oficial da KUBOSTUDIO, uma loja incrível com produtos temáticos de altíssima qualidade. Separei o catálogo com todas as peças aqui para você dar uma olhada: ${catalogRefLink}`,
                     'copy_msg_direct'
                   )
                 }

@@ -85,7 +85,7 @@ export const ProductEmbedView: React.FC<ProductEmbedViewProps> = ({ productId })
           ) : (
             <div className="text-center text-zinc-400 p-4">
               <ShoppingBag size={44} className="mx-auto mb-1 text-amber-500 opacity-80" />
-              <span className="text-xs font-bold tracking-wider uppercase text-zinc-300">EuSou Oficial</span>
+              <span className="text-xs font-bold tracking-wider uppercase text-zinc-300">KUBOSTUDIO Oficial</span>
             </div>
           )}
           <span className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-zinc-950 uppercase tracking-wider shadow-sm">
@@ -96,7 +96,7 @@ export const ProductEmbedView: React.FC<ProductEmbedViewProps> = ({ productId })
         {/* Product Details */}
         <div className="p-5 space-y-2.5">
           <div className="flex items-center justify-between text-xs text-zinc-400">
-            <span className="font-mono">{product.sku || 'EUSOU'}</span>
+            <span className="font-mono">{product.sku || 'KUBO'}</span>
             <span className="text-green-600 font-semibold flex items-center gap-1">
               <CheckCircle size={12} /> Autêntico
             </span>
@@ -131,7 +131,7 @@ export const ProductEmbedView: React.FC<ProductEmbedViewProps> = ({ productId })
           <ExternalLink size={13} />
         </a>
         <div className="mt-2 text-center text-[10px] text-zinc-400">
-          Oferecido por <strong className="text-zinc-600">EuSou</strong>
+          Oferecido por <strong className="text-zinc-600">KUBOSTUDIO</strong>
         </div>
       </div>
     </div>

@@ -38,7 +38,7 @@ export function buildWhatsAppOrderMessage(order: Order, origin?: string): string
   const totalStr = Number(order.total || 0).toFixed(2).replace('.', ',');
 
   return (
-    `🛍️ *EuSou / KUBOSTUDIO - Detalhes do Pedido*\n\n` +
+    `🛍️ *KUBOSTUDIO - Detalhes do Pedido*\n\n` +
     `Olá, *${order.customerName}*!\n` +
     `Aqui está a cópia do seu pedido realizado em nossa loja:\n\n` +
     `📋 *Pedido:* #${shortId} (ID: \`${order.id}\`)\n` +

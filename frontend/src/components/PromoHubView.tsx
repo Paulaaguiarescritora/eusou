@@ -438,7 +438,7 @@ export const PromoHubView: React.FC<PromoHubViewProps> = ({ onNavigate }) => {
                         onClick={() => {
                           const imgTag = effectiveImageUrl
                             ? `<img src="${effectiveImageUrl}" alt="${effectiveName}" style="width:100%;height:180px;object-fit:cover;display:block;" />`
-                            : `<div style="height:160px;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#f59e0b;font-size:24px;font-weight:bold;">EuSou</div>`;
+                            : `<div style="height:160px;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#f59e0b;font-size:24px;font-weight:bold;">KUBOSTUDIO</div>`;
                           const html = `<div style="max-width:280px;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;font-family:sans-serif;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">${imgTag}<div style="padding:16px;"><div style="font-size:11px;color:#94a3b8;font-weight:bold;">${effectiveSku}</div><h4 style="margin:4px 0;font-size:16px;font-weight:bold;color:#0f172a;">${effectiveName}</h4><div style="font-size:18px;font-weight:bold;color:#b45309;margin-top:8px;">${formatPrice(effectivePrice)}</div><a href="${productUrl}" target="_blank" style="display:block;margin-top:16px;text-align:center;background:#0f172a;color:#fff;padding:10px;border-radius:10px;text-decoration:none;font-size:13px;font-weight:bold;">Comprar Agora</a></div></div>`;
                           copyText(html, 'card_code');
                         }}
@@ -450,7 +450,7 @@ export const PromoHubView: React.FC<PromoHubViewProps> = ({ onNavigate }) => {
                     </div>
                     <pre className="bg-zinc-900 text-zinc-100 p-3.5 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap">
 {`<div style="max-width:280px;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;font-family:sans-serif;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);">
-  ${effectiveImageUrl ? `<img src="${effectiveImageUrl}" alt="${effectiveName}" style="width:100%;height:180px;object-fit:cover;display:block;" />` : `<div style="height:160px;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#f59e0b;font-size:24px;font-weight:bold;">EuSou</div>`}
+  ${effectiveImageUrl ? `<img src="${effectiveImageUrl}" alt="${effectiveName}" style="width:100%;height:180px;object-fit:cover;display:block;" />` : `<div style="height:160px;background:#0f172a;display:flex;align-items:center;justify-content:center;color:#f59e0b;font-size:24px;font-weight:bold;">KUBOSTUDIO</div>`}
   <div style="padding:16px;">
     <div style="font-size:11px;color:#94a3b8;font-weight:bold;">${effectiveSku}</div>
     <h4 style="margin:4px 0;font-size:16px;font-weight:bold;color:#0f172a;">${effectiveName}</h4>
@@ -632,7 +632,7 @@ export const PromoHubView: React.FC<PromoHubViewProps> = ({ onNavigate }) => {
                       <span className="text-xs font-bold text-zinc-600 uppercase">Código Iframe Embed</span>
                       <button
                         onClick={() => {
-                          const embed = `<iframe src="${origin}/embed/products/${selectedProduct.id}" width="100%" height="450" style="border:none;border-radius:16px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.1);" title="${selectedProduct.name} - EuSou"></iframe>`;
+                          const embed = `<iframe src="${origin}/embed/products/${selectedProduct.id}" width="100%" height="450" style="border:none;border-radius:16px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.1);" title="${selectedProduct.name} - KUBOSTUDIO"></iframe>`;
                           copyText(embed, 'embed_code');
                         }}
                         className="text-amber-600 hover:text-amber-700 text-xs font-semibold flex items-center gap-1"
@@ -647,7 +647,7 @@ export const PromoHubView: React.FC<PromoHubViewProps> = ({ onNavigate }) => {
   width="100%"
   height="450"
   style="border:none;border-radius:16px;box-shadow:0 10px 25px -5px rgba(0,0,0,0.1);"
-  title="${selectedProduct.name} - EuSou"
+  title="${selectedProduct.name} - KUBOSTUDIO"
 ></iframe>`}
                     </pre>
                   </div>

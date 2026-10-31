@@ -56,7 +56,7 @@ export class MailService {
     this.senderEmail =
       this.config.get<string>('MAIL_FROM') ||
       process.env.MAIL_FROM ||
-      'EuSou <onboarding@resend.dev>';
+      'KUBOSTUDIO <onboarding@resend.dev>';
 
     if (resendKey && resendKey.trim()) {
       this.resendClient = new Resend(resendKey.trim());
@@ -83,7 +83,7 @@ export class MailService {
    * Envia a confirmação do pedido para o cliente e cópia para o lojista
    */
   async sendOrderConfirmation(order: SendOrderEmailInput): Promise<boolean> {
-    const subject = `Pedido Confirmado #${order.orderId.slice(0, 8).toUpperCase()} - EuSou`;
+    const subject = `Pedido Confirmado #${order.orderId.slice(0, 8).toUpperCase()} - KUBOSTUDIO`;
     const html = this.buildOrderEmailHtml(order);
     const storeNotificationEmail =
       this.config.get<string>('STORE_NOTIFICATION_EMAIL') ||
@@ -172,8 +172,8 @@ export class MailService {
           <!-- Cabeçalho -->
           <tr>
             <td style="background-color: #0f172a; padding: 32px 24px; text-align: center;">
-              <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: -0.5px;">EuSou</h1>
-              <p style="color: #94a3b8; margin: 4px 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Loja Especializada & KUBOSTUDIO</p>
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: -0.5px;">KUBOSTUDIO</h1>
+              <p style="color: #94a3b8; margin: 4px 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Loja Especializada & Produtos Exclusivos</p>
             </td>
           </tr>
 
@@ -243,7 +243,7 @@ export class MailService {
           <tr>
             <td style="background-color: #f1f5f9; padding: 20px 24px; text-align: center; font-size: 12px; color: #64748b;">
               Dúvidas sobre sua entrega? Responda a este e-mail ou entre em contato com nosso suporte.<br>
-              <strong>KUBOSTUDIO / EuSou</strong> • Todos os direitos reservados.
+              <strong>KUBOSTUDIO</strong> • Todos os direitos reservados.
             </td>
           </tr>
         </table>

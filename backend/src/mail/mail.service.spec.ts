@@ -42,8 +42,8 @@ describe('MailService', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string) => {
-              if (key === 'MAIL_FROM') return 'EuSou <loja@eusou.com.br>';
-              if (key === 'STORE_NOTIFICATION_EMAIL') return 'admin@eusou.com.br';
+              if (key === 'MAIL_FROM') return 'KUBOSTUDIO <loja@kubostudio.com.br>';
+              if (key === 'STORE_NOTIFICATION_EMAIL') return 'admin@kubostudio.com.br';
               return null;
             }),
           },
@@ -90,9 +90,9 @@ describe('MailService', () => {
     expect(result).toBe(true);
     expect(mockSend).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: 'EuSou <loja@eusou.com.br>',
+        from: 'KUBOSTUDIO <loja@kubostudio.com.br>',
         to: ['cliente@teste.com'],
-        bcc: ['admin@eusou.com.br'],
+        bcc: ['admin@kubostudio.com.br'],
         subject: expect.stringContaining('#ORD-TEST'),
       }),
     );
@@ -110,9 +110,9 @@ describe('MailService', () => {
     expect(result).toBe(true);
     expect(mockSendMail).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: 'EuSou <loja@eusou.com.br>',
+        from: 'KUBOSTUDIO <loja@kubostudio.com.br>',
         to: 'cliente@teste.com',
-        bcc: 'admin@eusou.com.br',
+        bcc: 'admin@kubostudio.com.br',
         subject: expect.stringContaining('#ORD-TEST'),
       }),
     );

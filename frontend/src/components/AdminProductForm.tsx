@@ -88,7 +88,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
   const [slug, setSlug] = useState('');
   const [sku, setSku] = useState('');
   const [brand, setBrand] = useState('Felinodelia');
-  const [availableBrands, setAvailableBrands] = useState<string[]>(['Felinodelia', 'EuSou']);
+  const [availableBrands, setAvailableBrands] = useState<string[]>(['Felinodelia', 'KUBOSTUDIO']);
   const [status, setStatus] = useState<
     'DRAFT' | 'ACTIVE' | 'INACTIVE' | 'ARCHIVED'
   >('ACTIVE');
@@ -523,7 +523,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
         fetchApi<{ data: Tag[] }>('/tags').catch(() => ({ data: [] })),
         fetchApi<{ data: AttributeDefinition[] }>('/attributes').catch(() => ({ data: [] })),
         fetchApi<any>('/admin/materials?activeOnly=true').catch(() => []),
-        fetchApi<string[]>('/products/brands').catch(() => ['Felinodelia', 'EuSou']),
+        fetchApi<string[]>('/products/brands').catch(() => ['Felinodelia', 'KUBOSTUDIO']),
       ]);
 
       if (isEditing && productId) {

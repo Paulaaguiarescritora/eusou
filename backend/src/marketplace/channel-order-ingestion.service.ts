@@ -90,7 +90,7 @@ export class ChannelOrderIngestionService {
     // 3. Monta dados do cliente (com fallback caso o canal mascare dados)
     const customerName = dto.customer?.name || `Comprador ${channel.name} #${dto.externalOrderId}`;
     const customerEmail =
-      dto.customer?.email || `marketplace-${dto.externalOrderId.toLowerCase()}@eusou.com.br`;
+      dto.customer?.email || `marketplace-${dto.externalOrderId.toLowerCase()}@kubostudio.com.br`;
     const customerPhone = dto.customer?.phone || '00000000000';
     const street = dto.customer?.street || 'Canal Integrado';
     const number = dto.customer?.number || 'S/N';
@@ -143,7 +143,7 @@ export class ChannelOrderIngestionService {
         });
         if (!fallbackProd) {
           throw new BadRequestException(
-            `Nenhum produto cadastrado no EuSou para associar ao item "${item.title || item.sku || 'Item'}".`,
+            `Nenhum produto cadastrado na KUBOSTUDIO para associar ao item "${item.title || item.sku || 'Item'}".`,
           );
         }
         resolvedProduct = fallbackProd;

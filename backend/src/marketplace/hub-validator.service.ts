@@ -44,12 +44,12 @@ export class HubValidatorService {
       };
     }
 
-    // 2. Status do produto no EuSou
+    // 2. Status do produto na KUBOSTUDIO
     if (product.status && product.status !== 'ACTIVE') {
       errors.push({
         field: 'status',
         code: 'PRODUCT_NOT_ACTIVE',
-        message: `Produto não está ativo no sistema EuSou (status atual: ${product.status}).`,
+        message: `Produto não está ativo no sistema KUBOSTUDIO (status atual: ${product.status}).`,
       });
     }
 

@@ -89,7 +89,7 @@ export class ShippingService {
             Accept: 'application/json',
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token.trim()}`,
-            'User-Agent': 'EuSou Store (contato@eusou.com.br)',
+            'User-Agent': 'KUBOSTUDIO Store (contato@kubostudio.com.br)',
           },
           body: JSON.stringify({
             from: { postal_code: this.originPostalCode },

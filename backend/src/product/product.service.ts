@@ -274,7 +274,7 @@ export class ProductService {
       select: { brand: true },
       distinct: ['brand'],
     });
-    const brandsSet = new Set<string>(['Felinodelia', 'EuSou']);
+    const brandsSet = new Set<string>(['Felinodelia', 'KUBOSTUDIO']);
     for (const p of products) {
       if (p.brand && p.brand.trim()) {
         brandsSet.add(p.brand.trim());

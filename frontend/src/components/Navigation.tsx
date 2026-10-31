@@ -12,7 +12,7 @@ export const Header: React.FC<HeaderProps> = ({ totalItems, onNavigate, brandTit
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const displayBrand = brandTitle?.trim() || 'EuSou';
+  const displayBrand = brandTitle?.trim() || 'KUBOSTUDIO';
   const brandInitial = displayBrand.charAt(0).toUpperCase();
 
   const handleSearchSubmit = (e: React.FormEvent) => {

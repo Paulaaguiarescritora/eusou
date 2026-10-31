@@ -15,7 +15,7 @@ export class MercadoLivrePriceAdapter {
   private readonly apiBaseUrl = 'https://api.mercadolibre.com';
 
   /**
-   * Adapta e formata o preço efetivo do EuSou para envio à API do Mercado Livre
+   * Adapta e formata o preço efetivo da KUBOSTUDIO para envio à API do Mercado Livre
    */
   formatPricePayload(effectivePrice: number, currency: string = 'BRL') {
     return {

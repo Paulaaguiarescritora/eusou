@@ -920,7 +920,7 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
             <div className="flex justify-between items-center">
               <div>
                 <h3 className="text-base font-semibold text-gray-900">Mapeamento de Categorias de Marketplace</h3>
-                <p className="text-xs text-gray-500">Associe as categorias do EuSou às categorias exigidas por cada canal parceiro</p>
+                <p className="text-xs text-gray-500">Associe as categorias da KUBOSTUDIO às categorias exigidas por cada canal parceiro</p>
               </div>
               <button
                 onClick={() => setShowCategoryModal(true)}
@@ -1237,7 +1237,7 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
                 {reconciliationReports.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
-                      Clique em "Reconciliar Conta" acima para avaliar as divergências entre o EuSou e os canais externos.
+                      Clique em "Reconciliar Conta" acima para avaliar as divergências entre a KUBOSTUDIO e os canais externos.
                     </td>
                   </tr>
                 )}
@@ -1491,7 +1491,7 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
                   <h4 className="text-sm font-bold text-gray-800">Cálculo de Preço Sugerido</h4>
                   <p className="text-xs text-gray-600">
-                    O EuSou calcula a margem líquida ideal considerando as comissões do canal, taxas de venda e custos de envio.
+                    A KUBOSTUDIO calcula a margem líquida ideal considerando as comissões do canal, taxas de venda e custos de envio.
                   </p>
                   {pricingDetails ? (
                     <div className="mt-2 p-2.5 bg-white border rounded text-xs text-gray-700 space-y-1">
@@ -1629,7 +1629,7 @@ export const MarketplacesView: React.FC<MarketplacesViewProps> = ({ token }) => 
                   <p><strong>Conta:</strong> {accounts.find((a) => a.id === publishForm.channelAccountId)?.name}</p>
                   <p><strong>Preço de Venda:</strong> {publishForm.priceOverride ? `R$ ${parseFloat(publishForm.priceOverride).toFixed(2)} (Manual)` : 'Preço Calculado Automaticamente'}</p>
                   <p className="text-gray-600">
-                    Ao confirmar, o EuSou registrará a sincronização e enviará os dados do produto ao canal parceiro.
+                    Ao confirmar, a KUBOSTUDIO registrará a sincronização e enviará os dados do produto ao canal parceiro.
                   </p>
                 </div>
 

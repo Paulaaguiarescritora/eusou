@@ -933,7 +933,7 @@ export class ImportService implements OnModuleDestroy {
         const createdVariantsBySku = new Map<string, any>();
 
         if (prodVariants.length > 0) {
-          // REGRA CRÍTICA DO EUSOU:
+          // REGRA CRÍTICA DA KUBOSTUDIO:
           // Se o produto possuir variantes, NUNCA manter estoque de produto-pai (variantId: null).
           // Remove o registro de inventário base criado por padrão no ProductService.create:
           await this.prisma.inventory.deleteMany({

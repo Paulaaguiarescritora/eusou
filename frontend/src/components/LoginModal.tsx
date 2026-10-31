@@ -48,7 +48,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSucce
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-900">Acesso Restrito</h2>
-            <p className="text-xs text-slate-500">Administração EuSou</p>
+            <p className="text-xs text-slate-500">Administração KUBOSTUDIO</p>
           </div>
         </div>
 

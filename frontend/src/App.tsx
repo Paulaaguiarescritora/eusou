@@ -522,10 +522,10 @@ export function App() {
           <div className="max-w-md w-full bg-white p-7 sm:p-8 rounded-3xl border border-slate-200 text-slate-900 shadow-2xl space-y-6">
             <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
               <div className="w-11 h-11 rounded-2xl bg-slate-900 text-amber-400 font-black flex items-center justify-center text-xl shadow-md">
-                E
+                K
               </div>
               <div>
-                <h2 className="text-xl font-black tracking-tight text-slate-900">EuSou Backoffice</h2>
+                <h2 className="text-xl font-black tracking-tight text-slate-900">KUBOSTUDIO Backoffice</h2>
                 <p className="text-xs text-slate-500 font-medium">Acesso Administrativo à Plataforma</p>
               </div>
             </div>

@@ -486,7 +486,7 @@ export class MercadoPagoProvider implements PaymentProvider {
   parseCustomerName(rawName?: string): { firstName: string; lastName: string } {
     const parts = (rawName || '').trim().split(/\s+/).filter(Boolean);
     if (parts.length === 0) {
-      return { firstName: 'Cliente', lastName: 'EuSou' };
+      return { firstName: 'Cliente', lastName: 'KUBOSTUDIO' };
     }
     if (parts.length === 1) {
       return { firstName: parts[0], lastName: parts[0] };

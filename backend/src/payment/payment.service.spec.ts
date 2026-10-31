@@ -492,7 +492,7 @@ describe('PaymentService & MercadoPagoProvider (F16-A)', () => {
       });
       expect(mpProvider.parseCustomerName('')).toEqual({
         firstName: 'Cliente',
-        lastName: 'EuSou',
+        lastName: 'KUBOSTUDIO',
       });
     });
 

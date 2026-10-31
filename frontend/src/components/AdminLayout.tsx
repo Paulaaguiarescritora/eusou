@@ -112,9 +112,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       <header className="md:hidden bg-slate-900 text-white px-4 py-3 flex items-center justify-between border-b border-slate-800 sticky top-0 z-40">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-amber-500 text-slate-950 font-black flex items-center justify-center text-xs shadow-xs">
-            E
+            K
           </div>
-          <span className="font-extrabold text-sm tracking-tight">EuSou Admin</span>
+          <span className="font-extrabold text-sm tracking-tight">KUBOSTUDIO Admin</span>
         </div>
         <div className="flex items-center gap-2">
           <a
@@ -156,10 +156,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         <div className="p-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-amber-500 text-slate-950 font-black flex items-center justify-center text-sm shadow-xs">
-              E
+              K
             </div>
             <div>
-              <span className="font-extrabold text-white text-base tracking-tight block">EuSou</span>
+              <span className="font-extrabold text-white text-base tracking-tight block">KUBOSTUDIO</span>
               <span className="text-[10px] text-amber-400 font-bold tracking-wider uppercase block">
                 Backoffice Admin
               </span>

@@ -4,7 +4,7 @@ import { ExternalProductPayload } from './marketplace-connector.interface';
 @Injectable()
 export class ProductMapperService {
   /**
-   * Converte um produto interno do EuSou no payload padronizado aceito pelos conectores de marketplaces.
+   * Converte um produto interno da KUBOSTUDIO no payload padronizado aceito pelos conectores de marketplaces.
    */
   mapToExternalPayload(
     product: any,
@@ -106,7 +106,7 @@ export class ProductMapperService {
 
     if (product.status && product.status !== 'ACTIVE') {
       errors.push(
-        `Produto não está ativo no sistema EuSou (status atual: ${product.status}).`,
+        `Produto não está ativo no sistema KUBOSTUDIO (status atual: ${product.status}).`,
       );
     }
 
@@ -196,9 +196,9 @@ export class ProductMapperService {
       }
     }
 
-    // Se não houver marca, usa 'EuSou' como default profissional
+    // Se não houver marca, usa 'KUBOSTUDIO' como default profissional
     if (!mlAttributes.some((a) => a.id === 'BRAND')) {
-      mlAttributes.push({ id: 'BRAND', value_name: 'EuSou' });
+      mlAttributes.push({ id: 'BRAND', value_name: 'KUBOSTUDIO' });
     }
     // Se não houver modelo, usa 'Personalizado'
     if (!mlAttributes.some((a) => a.id === 'MODEL')) {

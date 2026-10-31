@@ -6,7 +6,7 @@ export class HealthController {
   root() {
     return {
       status: 'ONLINE',
-      platform: 'EuSou Platform API',
+      platform: 'KUBOSTUDIO Platform API',
       message: 'Backend conectado ao Supabase e operacional.',
       timestamp: new Date().toISOString(),
     };

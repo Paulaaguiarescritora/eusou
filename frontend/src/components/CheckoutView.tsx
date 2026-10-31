@@ -349,7 +349,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       }
 
       // 3. Process payment via backend PaymentService
-      // NEVER send cardNumber, securityCode or expiration to EuSou backend!
+      // NEVER send cardNumber, securityCode or expiration to KUBOSTUDIO backend!
       const paymentPayload = {
         orderId: createdOrder.id,
         method: paymentMethod,
