@@ -2,9 +2,11 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { AuditLogService } from '../audit-log.service';
+import { MailService } from '../mail/mail.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { QueryOrdersDto } from './dto/query-orders.dto';
@@ -19,6 +21,7 @@ export class OrderService {
     private readonly auditLog: AuditLogService,
     private readonly affiliateService: AffiliateService,
     private readonly inventoryService: InventoryService,
+    @Optional() private readonly mailService?: MailService,
   ) {}
 
   async create(dto: CreateOrderDto): Promise<Order> {
@@ -542,6 +545,58 @@ export class OrderService {
     return {
       expiredCount: expiredIds.length,
       orderIds: expiredIds,
+    };
+  }
+
+  /**
+   * Disparo sob demanda / reenvio de e-mail de confirmação do pedido
+   */
+  async sendOrderConfirmationEmail(orderId: string): Promise<{ success: boolean; message: string }> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true, payments: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order "${orderId}" not found`);
+    }
+
+    if (!this.mailService) {
+      return { success: false, message: 'Serviço de e-mail não disponível' };
+    }
+
+    const payment = order.payments?.[0];
+    const success = await this.mailService.sendOrderConfirmation({
+      orderId: order.id,
+      customerName: order.customerName,
+      customerEmail: order.customerEmail,
+      customerPhone: order.customerPhone,
+      items: order.items.map((i) => ({
+        name: i.productNameSnapshot,
+        variantName: i.skuSnapshot,
+        quantity: i.quantity,
+        price: Number(i.unitPrice),
+        subtotal: Number(i.subtotal),
+      })),
+      subtotal: Number(order.subtotal),
+      shippingAmount: Number(order.shippingAmount),
+      shippingService: (order as any).shippingService || 'Melhor Envio',
+      total: Number(order.total),
+      street: order.street,
+      number: order.number,
+      complement: order.complement,
+      neighborhood: order.neighborhood,
+      city: order.city,
+      state: order.state,
+      zipCode: order.zipCode,
+      paymentMethod: payment?.method || 'PIX',
+    });
+
+    return {
+      success,
+      message: success
+        ? `E-mail enviado com sucesso para ${order.customerEmail}`
+        : `E-mail registrado em log (configure RESEND_API_KEY ou SMTP para envio real)`,
     };
   }
 }

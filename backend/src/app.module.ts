@@ -27,6 +27,7 @@ import { PricingModule } from './pricing/pricing.module';
 import { PaymentModule } from './payment/payment.module';
 import { ShippingModule } from './shipping/shipping.module';
 import { ImportModule } from './import/import.module';
+import { MailModule } from './mail/mail.module';
 import { PrismaService } from './prisma.service';
 import { AuditLogService } from './audit-log.service';
 
@@ -58,6 +59,7 @@ import { AuditLogService } from './audit-log.service';
     PricingModule,
     ShippingModule,
     ImportModule,
+    MailModule,
   ],
   controllers: [HealthController, InfoController],
   providers: [PrismaService, AuditLogService],

@@ -31,3 +31,7 @@ backups/
 *.tar.gz
 .vercel
 .env*
+
+# Uploads
+uploads/
+backend/uploads/

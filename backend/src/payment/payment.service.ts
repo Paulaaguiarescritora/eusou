@@ -4,12 +4,14 @@ import {
   BadRequestException,
   InternalServerErrorException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma.service';
 import { AuditLogService } from '../audit-log.service';
 import { AffiliateService } from '../affiliate/affiliate.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { MailService } from '../mail/mail.service';
 import { PaymentMethod, PaymentStatus, OrderStatus, Payment } from '@prisma/client';
 import {
   PaymentProvider,
@@ -30,6 +32,7 @@ export class PaymentService {
     private readonly affiliateService: AffiliateService,
     private readonly inventoryService: InventoryService,
     private readonly configService: ConfigService,
+    @Optional() private readonly mailService?: MailService,
   ) {
     this.initProvider();
   }
@@ -391,6 +394,49 @@ export class PaymentService {
 
       // Affiliate conversion update
       await this.affiliateService.handleOrderStatusChanged(order.id, OrderStatus.CONFIRMED);
+
+      // Dispara envio de e-mail de confirmação ao cliente (assíncrono e não-bloqueante)
+      if (this.mailService) {
+        this.prisma.order
+          .findUnique({
+            where: { id: order.id },
+            include: { items: true },
+          })
+          .then((fullOrder) => {
+            if (fullOrder) {
+              return this.mailService!.sendOrderConfirmation({
+                orderId: fullOrder.id,
+                customerName: fullOrder.customerName,
+                customerEmail: fullOrder.customerEmail,
+                customerPhone: fullOrder.customerPhone,
+                items: fullOrder.items.map((i) => ({
+                  name: i.productNameSnapshot,
+                  variantName: i.skuSnapshot,
+                  quantity: i.quantity,
+                  price: Number(i.unitPrice),
+                  subtotal: Number(i.subtotal),
+                })),
+                subtotal: Number(fullOrder.subtotal),
+                shippingAmount: Number(fullOrder.shippingAmount),
+                shippingService: (fullOrder as any).shippingService || 'Melhor Envio',
+                total: Number(fullOrder.total),
+                street: fullOrder.street,
+                number: fullOrder.number,
+                complement: fullOrder.complement,
+                neighborhood: fullOrder.neighborhood,
+                city: fullOrder.city,
+                state: fullOrder.state,
+                zipCode: fullOrder.zipCode,
+                paymentMethod: payment.method,
+              });
+            }
+          })
+          .catch((mailErr) => {
+            this.logger.warn(
+              `Aviso ao despachar e-mail do pedido ${order.id}: ${mailErr.message}`,
+            );
+          });
+      }
     }
   }
 

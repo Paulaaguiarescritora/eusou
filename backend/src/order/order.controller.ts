@@ -51,6 +51,12 @@ export class AdminOrderController {
     return this.orderService.findById(id);
   }
 
+  // Disparo manual/reenvio de e-mail de confirmação
+  @Post(':id/send-email')
+  sendEmail(@Param('id') id: string) {
+    return this.orderService.sendOrderConfirmationEmail(id);
+  }
+
   // Trigger para expiração de pedidos via admin
   @Post('expire-unpaid')
   expireUnpaid(@Req() req: any) {
