@@ -57,6 +57,11 @@ export class AdminOrderController {
     return this.orderService.findById(id);
   }
 
+  @Delete(':id')
+  delete(@Param('id') id: string, @Req() req: any) {
+    return this.orderService.deleteOrder(id, req.user?.sub);
+  }
+
   // Disparo manual/reenvio de e-mail de confirmação
   @Post(':id/send-email')
   sendEmail(@Param('id') id: string) {
