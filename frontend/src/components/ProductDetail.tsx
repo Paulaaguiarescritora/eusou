@@ -1,8 +1,8 @@
 import { renderFormattedDescription } from '../formatDescription';
 import React, { useState, useEffect } from 'react';
 import { Product, ProductVariant } from '../types';
-import { ShoppingBag, ArrowLeft, Check, Package, AlertCircle } from 'lucide-react';
-import { resolveMediaUrl } from '../api';
+import { ShoppingBag, ArrowLeft, Check, Package, AlertCircle, Play } from 'lucide-react';
+import { resolveMediaUrl, extractYouTubeId } from '../api';
 
 interface ProductDetailProps {
   product: Product;
@@ -46,7 +46,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   }, [product.variants]);
   const [quantity, setQuantity] = useState(1);
   const [stockError, setStockError] = useState<string | null>(null);
-  const primaryImg = product.media?.find((m) => m.isPrimary)?.url || (product.media && product.media.length > 0 ? product.media[0].url : null);
+  const primaryImg = product.media?.find((m) => m.isPrimary && m.type !== 'VIDEO' && !extractYouTubeId(m.url))?.url || product.media?.find((m) => m.type !== 'VIDEO' && !extractYouTubeId(m.url))?.url || (product.media && product.media.length > 0 ? product.media[0].url : null);
   const [selectedImage, setSelectedImage] = useState<string | null>(primaryImg);
   const [addedNotice, setAddedNotice] = useState(false);
 
@@ -127,11 +127,21 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
         <div>
           <div className="aspect-square bg-slate-50 rounded-2xl overflow-hidden border border-gray-100 flex items-center justify-center">
             {selectedImage ? (
-              <img
-                src={resolveMediaUrl(selectedImage)}
-                alt={product.name}
-                className="w-full h-full object-cover"
-              />
+              extractYouTubeId(selectedImage) ? (
+                <iframe
+                  src={`https://www.youtube.com/embed/${extractYouTubeId(selectedImage)}?autoplay=1`}
+                  title={product.name}
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : (
+                <img
+                  src={resolveMediaUrl(selectedImage)}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                />
+              )
             ) : (
               <Package className="w-20 h-20 text-slate-300 stroke-[1]" />
             )}
@@ -139,17 +149,25 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
 
           {product.media && product.media.length > 1 && (
             <div className="flex gap-3 mt-4 overflow-x-auto pb-2">
-              {product.media.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => setSelectedImage(m.url)}
-                  className={`w-20 h-20 rounded-lg overflow-hidden border-2 shrink-0 ${
-                    selectedImage === m.url ? 'border-slate-900' : 'border-transparent'
-                  }`}
-                >
-                  <img src={resolveMediaUrl(m.url)} alt="Miniatura" className="w-full h-full object-cover" />
-                </button>
-              ))}
+              {product.media.map((m) => {
+                const isVideo = m.type === 'VIDEO' || Boolean(extractYouTubeId(m.url));
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setSelectedImage(m.url)}
+                    className={`relative w-20 h-20 rounded-lg overflow-hidden border-2 shrink-0 cursor-pointer ${
+                      selectedImage === m.url ? 'border-slate-900 ring-2 ring-slate-900/20' : 'border-transparent hover:opacity-80'
+                    }`}
+                  >
+                    <img src={resolveMediaUrl(m.url)} alt="Miniatura" className="w-full h-full object-cover" />
+                    {isVideo && (
+                      <div className="absolute inset-0 bg-slate-950/40 flex items-center justify-center">
+                        <Play className="w-5 h-5 text-white fill-current opacity-90 drop-shadow-md" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

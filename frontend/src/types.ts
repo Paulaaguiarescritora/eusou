@@ -19,7 +19,7 @@ export interface Product {
   availableStock?: number;
   productionProfiles?: any[];
   productChannelPrices?: any[];
-  media?: { id: string; url: string; sortOrder?: number; isPrimary?: boolean; altText?: string | null }[];
+  media?: { id: string; url: string; sortOrder?: number; isPrimary?: boolean; altText?: string | null; type?: string }[];
   variants?: ProductVariant[];
   categories?: { category: { id: string; name: string; slug: string; niche?: { id: string; name: string; slug: string } } }[];
   niches?: { niche: { id: string; name: string; slug: string } }[];

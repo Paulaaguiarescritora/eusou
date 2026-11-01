@@ -17,6 +17,7 @@ import {
   Trash2,
   Image as ImageIcon,
   Upload,
+  Play,
   Star,
   CheckCircle2,
   AlertCircle,
@@ -133,7 +134,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
 
   // Media
   const [mediaList, setMediaList] = useState<
-    { id?: string; url: string; isPrimary: boolean; sortOrder: number }[]
+    { id?: string; url: string; isPrimary: boolean; sortOrder: number; type?: string }[]
   >([]);
   const [newMediaUrl, setNewMediaUrl] = useState('');
 
@@ -2310,6 +2311,13 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                       'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>';
                   }}
                 />
+                {(m.type === 'VIDEO' || m.url?.includes('youtube') || m.url?.includes('youtu.be')) && (
+                  <div className="absolute inset-0 bg-slate-950/30 flex items-center justify-center pointer-events-none">
+                    <span className="w-7 h-7 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-md">
+                      <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                    </span>
+                  </div>
+                )}
                 {i === 0 ? (
                   <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 text-[9px] font-black shadow-xs flex items-center gap-1">
                     <Star className="w-2.5 h-2.5 fill-current" /> Principal
