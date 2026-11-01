@@ -288,8 +288,8 @@ export class PricingService {
     }
 
     const calculation = this.calculator.calculate({
-      cost: costRes.cost.greaterThan(0) ? costRes.cost : wholesaleBasis,
-      packagingCost: new Prisma.Decimal('1.00'),
+      cost: wholesaleBasis,
+      packagingCost: new Prisma.Decimal(0),
       taxRate: profile?.taxRate ?? new Prisma.Decimal('0.04'),
       targetMargin,
       commissionPercent,

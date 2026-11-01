@@ -1674,7 +1674,7 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
                     </span>
                   </div>
                   <span className="text-[10px] text-emerald-700">
-                    Regra: (Custo + Embalagem R$ 1,00) / (1 - Margem 50% - Imposto 4%) com final ,90
+                    Regra: Preço de Atacado / (1 - Margem 50% - Imposto 4%) com final ,90
                   </span>
                 </div>
 
