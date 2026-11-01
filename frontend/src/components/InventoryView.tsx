@@ -286,7 +286,7 @@ export const InventoryView: React.FC = () => {
             </div>
           </div>
           <p className="text-xs text-zinc-500 mt-2">
-            Bobinas de filamento (PLA), embalagens, argolas e suprimentos 3D.
+            Bobinas de filamento (PLA), embalagens, argolas e suprimentos.
           </p>
         </div>
 

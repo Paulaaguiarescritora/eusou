@@ -157,7 +157,7 @@ export const ShippingLabelModal: React.FC<ShippingLabelModalProps> = ({ order: i
               <div>
                 <span className="text-xl font-black tracking-wider text-black block">KUBOSTUDIO</span>
                 <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-tight block">
-                  Criações & Peças 3D Exclusivas
+                  Criações & Peças Exclusivas
                 </span>
               </div>
               <div className="text-right">
@@ -218,9 +218,9 @@ export const ShippingLabelModal: React.FC<ShippingLabelModalProps> = ({ order: i
               <div className="font-bold text-[10px] uppercase text-zinc-600 mb-0.5">
                 REMETENTE:
               </div>
-              <div className="font-bold text-xs text-black">KUBOSTUDIO (Kubo Studio 3D)</div>
+              <div className="font-bold text-xs text-black">KUBOSTUDIO (Kubo Studio)</div>
               <div className="text-[11px] text-black">
-                Rua do Ateliê, Ateliê de Criação 3D - Guarulhos / SP
+                Rua do Ateliê, Ateliê de Criação - Guarulhos / SP
               </div>
               <div className="text-[11px] font-bold text-black">
                 CEP: 07133-300 | E-mail: contato@kubostudio.com.br

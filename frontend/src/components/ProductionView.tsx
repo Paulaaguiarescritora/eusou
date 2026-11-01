@@ -520,7 +520,7 @@ export const ProductionView: React.FC = () => {
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-serif font-bold text-zinc-900">
-            Ficha Técnica, Materiais & Produção 3D
+            Ficha Técnica, Materiais & Produção
           </h1>
           <p className="text-sm text-zinc-500 mt-1">
             Apuração exata de custo: Filamento + Máquina + Materiais Adicionais + Embalagem = Custo Total de Produção

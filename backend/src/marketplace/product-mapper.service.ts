@@ -35,7 +35,7 @@ export class ProductMapperService {
     const images: string[] = [];
     if (product.media && Array.isArray(product.media)) {
       for (const m of product.media) {
-        if (m.url) images.push(m.url);
+        if (m.url) { const fullUrl = m.url.startsWith('http') ? m.url : `https://eusou.onrender.com${m.url.startsWith('/') ? '' : '/'}${m.url}`; images.push(fullUrl); }
       }
     }
 
@@ -134,12 +134,7 @@ export class ProductMapperService {
     const images: string[] = [];
     if (product.media && Array.isArray(product.media)) {
       for (const m of product.media) {
-        if (
-          m.url &&
-          (m.url.startsWith('http://') || m.url.startsWith('https://'))
-        ) {
-          images.push(m.url);
-        }
+        if (m.url) { const fullUrl = m.url.startsWith('http') ? m.url : `https://eusou.onrender.com${m.url.startsWith('/') ? '' : '/'}${m.url}`; images.push(fullUrl); }
       }
     }
 
@@ -206,7 +201,7 @@ export class ProductMapperService {
     }
 
     return {
-      title: payload.title.slice(0, 60), // Limite padrão de 60 chars do ML
+      family_name: payload.title.slice(0, 60),
       category_id: payload.categoryExternalId || 'MLB3530',
       price: payload.price,
       currency_id: payload.currency || 'BRL',

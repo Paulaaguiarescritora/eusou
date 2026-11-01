@@ -304,7 +304,7 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
           onClick={() => onNavigate('/admin/production')}
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition text-xs font-bold text-slate-800 shadow-2xs cursor-pointer"
         >
-          <Cpu className="w-3.5 h-3.5 text-cyan-600" /> Produção 3D
+          <Cpu className="w-3.5 h-3.5 text-cyan-600" /> Produção
         </button>
         <button
           onClick={() => onNavigate('/admin/marketplaces')}
@@ -596,7 +596,7 @@ export const CommercialDashboardView: React.FC<CommercialDashboardViewProps> = (
               <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center justify-between">
                 <span>Insumos & Filamentos</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-black">
-                  3D & Embalagens
+                  Insumos & Embalagens
                 </span>
               </div>
               <div className="text-2xl sm:text-3xl font-black text-cyan-300 tracking-tight my-1">

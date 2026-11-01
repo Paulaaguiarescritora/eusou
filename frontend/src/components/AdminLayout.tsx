@@ -92,7 +92,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       items: [
         { label: 'Pedidos', route: '/admin/orders', icon: ShoppingBag },
         { label: 'Precificação', route: '/admin/pricing', icon: DollarSign },
-        { label: 'Produção 3D', route: '/admin/production', icon: Cpu },
+        { label: 'Produção', route: '/admin/production', icon: Cpu },
         { label: 'Estoque', route: '/admin/inventory', icon: Boxes },
       ],
     },
