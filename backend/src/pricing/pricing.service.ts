@@ -118,41 +118,9 @@ export class PricingService {
       };
     }
 
-    // Se não houver preço de atacado, a precificação comercial é retida
+    // Se não houver preço de atacado informado, calcula estimativa a partir do custo fabril (Custo * 1.6)
     if (!wholesaleBasis || wholesaleBasis.lessThanOrEqualTo(0)) {
-      return {
-        status: 'INVALID',
-        cost: new Prisma.Decimal(0),
-        packagingCost: new Prisma.Decimal(0),
-        taxAmount: new Prisma.Decimal(0),
-        commissionAmount: new Prisma.Decimal(0),
-        fixedCostTotal: new Prisma.Decimal(0),
-        otherCostsTotal: new Prisma.Decimal(0),
-        rawPrice: new Prisma.Decimal(0),
-        calculatedPrice: new Prisma.Decimal(0),
-        manualPrice: null,
-        effectivePrice: new Prisma.Decimal(0),
-        netProfit: new Prisma.Decimal(0),
-        netMargin: new Prisma.Decimal(0),
-        appliedTierId: null,
-        appliedTierName: null,
-        appliedTierMin: null,
-        appliedTierMax: null,
-        roundingRule: 'ENDS_90',
-        mode: 'AUTOMATIC',
-        iterations: 0,
-        warnings: [...costRes.warnings, 'Aguardando preço de atacado.'],
-        errors: [
-          'Produto sem preço de atacado definido. Precificação comercial retida.',
-        ],
-        calculationDetails: {
-          cost: '0.00',
-          status: 'PENDING_WHOLESALE',
-          message: 'Aguardando definição do preço de atacado.',
-          productionCost: costRes.cost.toString(),
-          productionCostSource: costRes.source,
-        },
-      };
+      wholesaleBasis = costRes.cost.mul(new Prisma.Decimal('1.6'));
     }
 
     // Resolve perfil de precificação (especificado ou padrão)
@@ -320,8 +288,8 @@ export class PricingService {
     }
 
     const calculation = this.calculator.calculate({
-      cost: wholesaleBasis,
-      packagingCost: new Prisma.Decimal(0),
+      cost: costRes.cost.greaterThan(0) ? costRes.cost : wholesaleBasis,
+      packagingCost: new Prisma.Decimal('1.00'),
       taxRate: profile?.taxRate ?? new Prisma.Decimal('0.04'),
       targetMargin,
       commissionPercent,

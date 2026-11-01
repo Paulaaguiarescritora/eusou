@@ -1060,7 +1060,7 @@ export class ProductService {
 
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
-      select: { wholesalePrice: true, status: true },
+      select: { wholesalePrice: true, manualCost: true, status: true },
     });
 
     if (!product?.wholesalePrice || Number(product.wholesalePrice) <= 0) {
