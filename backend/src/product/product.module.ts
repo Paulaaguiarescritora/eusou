@@ -5,9 +5,10 @@ import { PrismaService } from '../prisma.service';
 import { AuditLogService } from '../audit-log.service';
 import { PricingModule } from '../pricing/pricing.module';
 import { ProductionModule } from '../production/production.module';
+import { MarketplaceModule } from '../marketplace/marketplace.module';
 
 @Module({
-  imports: [PricingModule, ProductionModule],
+  imports: [PricingModule, ProductionModule, MarketplaceModule],
   controllers: [ProductController],
   providers: [ProductService, PrismaService, AuditLogService],
   exports: [ProductService],

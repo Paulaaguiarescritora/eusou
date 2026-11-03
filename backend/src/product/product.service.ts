@@ -11,6 +11,7 @@ import { AuditLogService } from '../audit-log.service';
 import { PricingService } from '../pricing/pricing.service';
 import { CostResolverService, CostResolution } from '../pricing/services/cost-resolver.service';
 import { ProductionService } from '../production/production.service';
+import { MarketplaceService } from '../marketplace/marketplace.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
@@ -27,6 +28,7 @@ export class ProductService {
     @Optional() private readonly pricingService?: PricingService,
     @Optional() private readonly costResolver?: CostResolverService,
     @Optional() private readonly productionService?: ProductionService,
+    @Optional() private readonly marketplaceService?: MarketplaceService,
   ) {}
 
   async create(dto: CreateProductDto, actorId?: string): Promise<Product> {
