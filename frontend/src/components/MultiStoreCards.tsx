@@ -51,9 +51,9 @@ export const DEFAULT_STORES: Store[] = [
     name: 'Sensora Íntima',
     slug: 'sensora-intima',
     brandName: 'Sensora Íntima',
-    description: 'Linha sensorial exclusiva com velas de massagem beijáveis com manteiga de karité, óleos aromáticos e cosméticos de bem-estar.',
-    productsCount: 3,
-    categoriesCount: 3,
+    description: 'Linha sensorial exclusiva de bem-estar, cosméticos aromáticos e autocuidado. Em breve novidades.',
+    productsCount: 0,
+    categoriesCount: 0,
     catalogs: [
       {
         id: '74b5a356-faf9-4231-a11c-0749bc57fb34',
@@ -314,7 +314,7 @@ export const MultiStoreCards: React.FC<MultiStoreCardsProps> = ({
                       {theme.badge}
                     </span>
                     <span className="text-[11px] font-black bg-black/25 text-white backdrop-blur-xs px-2.5 py-1 rounded-full border border-white/15">
-                      {store.productsCount} {store.productsCount === 1 ? 'item' : 'produtos'}
+                      {store.productsCount === 0 ? 'Em breve' : `${store.productsCount} ${store.productsCount === 1 ? 'item' : 'produtos'}`}
                     </span>
                   </div>
 

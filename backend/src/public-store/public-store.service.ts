@@ -128,7 +128,7 @@ export class PublicStoreService {
         },
         _count: {
           select: {
-            products: true,
+            products: { where: { product: { status: 'ACTIVE' } } },
             categories: true,
           },
         },
