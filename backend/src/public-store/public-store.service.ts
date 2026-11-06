@@ -200,12 +200,12 @@ export class PublicStoreService {
         this.prisma.category.findMany({
           where: categoryWhere,
           orderBy: { name: 'asc' },
-          take: 8,
+          take: targetNiche ? 30 : 8,
         }),
         this.prisma.product.findMany({
           where: productWhere,
           orderBy: { createdAt: 'desc' },
-          take: 8,
+          take: targetNiche ? 100 : 8,
           include: {
             media: { orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }], take: 2 },
             variants: { where: { isActive: true }, include: { inventories: true }, take: 4 },

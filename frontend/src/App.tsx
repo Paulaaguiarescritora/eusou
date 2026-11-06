@@ -300,7 +300,7 @@ export function App() {
       setLoading(true);
       Promise.all([
         fetchApi<any>(`/public/home?niche=${encodeURIComponent(storeSlug)}`),
-        fetchApi<{ data: Product[] }>(`/public/products?niche=${encodeURIComponent(storeSlug)}&limit=12`),
+        fetchApi<{ data: Product[] }>(`/public/products?niche=${encodeURIComponent(storeSlug)}&limit=100`),
       ])
         .then(([homeRes, productsRes]) => {
           const resolvedBrand = homeRes?.currentStore?.brandName || fallbackBrand;
@@ -1152,8 +1152,8 @@ export function App() {
                         <ShoppingBag className="w-5 h-5" />
                       </div>
                       <div>
-                        <h2 className="text-xl font-extrabold text-slate-900">Destaques de {publicBrand}</h2>
-                        <p className="text-xs text-slate-500">Pronta entrega e curadoria exclusiva do nicho</p>
+                        <h2 className="text-xl font-extrabold text-slate-900">Todos os Produtos de {publicBrand}</h2>
+                        <p className="text-xs text-slate-500">Explore todo o catálogo ({storeProducts.length} itens disponíveis para pronta entrega)</p>
                       </div>
                     </div>
                     <button
