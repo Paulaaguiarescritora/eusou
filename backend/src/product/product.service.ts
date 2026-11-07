@@ -7,6 +7,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import * as fs from 'fs';
+import * as path from 'path';
 import { AuditLogService } from '../audit-log.service';
 import { PricingService } from '../pricing/pricing.service';
 import { CostResolverService, CostResolution } from '../pricing/services/cost-resolver.service';
@@ -694,6 +696,173 @@ export class ProductService {
 
     return {
       message: 'Product archived successfully',
+      id,
+    };
+  }
+
+  async deletePermanent(
+    id: string,
+    actorId?: string,
+  ): Promise<{ message: string; id: string }> {
+    const product = await this.findById(id);
+
+    // 1. Verificação de segurança: apenas produtos arquivados podem ser excluídos permanentemente
+    if (product.status !== ProductStatus.ARCHIVED) {
+      throw new BadRequestException(
+        `Apenas produtos com status ARQUIVADO podem ser excluídos permanentemente. Arquive o produto antes de tentar a exclusão definitiva.`,
+      );
+    }
+
+    // 2. Verificação de integridade referencial: pedidos de venda
+    const orderItemsCount = await this.prisma.orderItem.count({
+      where: { productId: id },
+    });
+    if (orderItemsCount > 0) {
+      throw new BadRequestException(
+        `Não é possível excluir permanentemente o produto "${product.name}" porque ele possui ${orderItemsCount} item(ns) vinculado(s) a pedidos de venda. Produtos com histórico de vendas devem permanecer arquivados para conformidade fiscal e integridade do histórico do cliente.`,
+      );
+    }
+
+    // 3. Verificação de ordens de produção
+    const productionJobsCount = await this.prisma.productionJob.count({
+      where: { productId: id },
+    });
+    if (productionJobsCount > 0) {
+      throw new BadRequestException(
+        `Não é possível excluir permanentemente o produto "${product.name}" porque existem ${productionJobsCount} ordem(ns) de produção registrada(s).`,
+      );
+    }
+
+    // 4. Executa a exclusão de todas as dependências e do produto em transação atômica
+    const deletedMedia = await this.prisma.$transaction(async (tx) => {
+      // Obter variantes e valores de atributo para limpeza de tabelas de junção sem cascade
+      const variants = await tx.productVariant.findMany({
+        where: { productId: id },
+        select: { id: true },
+      });
+      const variantIds = variants.map((v) => v.id);
+
+      const attributeValues = await tx.productAttributeValue.findMany({
+        where: { productId: id },
+        select: { id: true },
+      });
+      const attrValueIds = attributeValues.map((a) => a.id);
+
+      // Limpar VariantAttributeValues (junção F2B)
+      if (variantIds.length > 0 || attrValueIds.length > 0) {
+        await tx.variantAttributeValue.deleteMany({
+          where: {
+            OR: [
+              ...(variantIds.length > 0 ? [{ variantId: { in: variantIds } }] : []),
+              ...(attrValueIds.length > 0 ? [{ productAttributeValueId: { in: attrValueIds } }] : []),
+            ],
+          },
+        });
+      }
+
+      // Mídias do produto
+      const mediaList = await tx.media.findMany({
+        where: { productId: id },
+        select: { id: true, url: true },
+      });
+      await tx.media.deleteMany({ where: { productId: id } });
+
+      // Valores de atributo
+      await tx.productAttributeValue.deleteMany({ where: { productId: id } });
+
+      // Preços de canais
+      await tx.productChannelPrice.deleteMany({ where: { productId: id } });
+
+      // Canais e integrações técnicas
+      await tx.channelProduct.deleteMany({ where: { productId: id } });
+      await tx.productChannel.deleteMany({ where: { productId: id } });
+
+      // Taxonomias e Vitrines
+      await tx.productNiche.deleteMany({ where: { productId: id } });
+      await tx.productCategory.deleteMany({ where: { productId: id } });
+      await tx.productTag.deleteMany({ where: { productId: id } });
+      await tx.catalogItem.deleteMany({ where: { productId: id } });
+      await tx.collectionItem.deleteMany({ where: { productId: id } });
+
+      // Movimentações de estoque e Inventários
+      await tx.stockMovement.deleteMany({ where: { productId: id } });
+      await tx.inventory.deleteMany({ where: { productId: id } });
+
+      // Ficha técnica e perfis de produção
+      const profiles = await tx.productionProfile.findMany({
+        where: { productId: id },
+        select: { id: true },
+      });
+      if (profiles.length > 0) {
+        const profileIds = profiles.map((p) => p.id);
+        await tx.productionMaterial.deleteMany({
+          where: { productionProfileId: { in: profileIds } },
+        });
+      }
+      await tx.productionProfile.deleteMany({ where: { productId: id } });
+
+      // Regras de comissão e links de afiliados
+      await tx.commissionRule.deleteMany({ where: { productId: id } });
+      await tx.affiliateClick.updateMany({
+        where: { productId: id },
+        data: { productId: null },
+      });
+      await tx.affiliateLink.updateMany({
+        where: { productId: id },
+        data: { productId: null },
+      });
+
+      // Variantes
+      await tx.productVariant.deleteMany({ where: { productId: id } });
+
+      // Exclusão definitiva do produto
+      await tx.product.delete({ where: { id } });
+
+      return mediaList;
+    });
+
+    // 5. Limpeza de arquivos de mídia em disco (se locais)
+    for (const m of deletedMedia) {
+      if (m.url && m.url.includes('/uploads/products/')) {
+        try {
+          const filename = path.basename(m.url);
+          const fullPath = path.join(process.cwd(), 'uploads', 'products', filename);
+          if (fs.existsSync(fullPath)) {
+            fs.unlinkSync(fullPath);
+          }
+          // Se tiver arquivo -orig preservado correspondente
+          const match = filename.match(/^(.+?)(\.[a-zA-Z0-9]+)$/i);
+          if (match) {
+            const base = match[1];
+            for (const ext of ['jpg', 'jpeg', 'png', 'gif', 'webp']) {
+              const origPath = path.join(process.cwd(), 'uploads', 'products', `${base}-orig.${ext}`);
+              if (fs.existsSync(origPath)) {
+                fs.unlinkSync(origPath);
+              }
+            }
+          }
+        } catch (e: any) {
+          this.logger.warn(`Falha não bloqueante ao remover arquivo de mídia do disco: ${e.message}`);
+        }
+      }
+    }
+
+    // 6. Registro em log de auditoria
+    await this.auditLog.log({
+      action: 'PRODUCT_PERMANENTLY_DELETED',
+      entity: 'Product',
+      entityId: id,
+      userId: actorId ?? null,
+      metadata: {
+        productId: id,
+        productName: product.name,
+        sku: product.sku,
+        permanent: true,
+      },
+    });
+
+    return {
+      message: `Produto "${product.name}" foi excluído permanentemente da base de dados com sucesso.`,
       id,
     };
   }

@@ -36,6 +36,10 @@ describe('ProductController and Authorization', () => {
         message: 'Product archived successfully',
         id: 'prod-1',
       }),
+      deletePermanent: jest.fn().mockResolvedValue({
+        message: 'Produto "Item" foi excluído permanentemente da base de dados com sucesso.',
+        id: 'prod-1',
+      }),
     };
 
     reflector = new Reflector();
@@ -90,6 +94,14 @@ describe('ProductController and Authorization', () => {
       const result = await controller.delete('prod-1', mockReq);
       expect(result.message).toBe('Product archived successfully');
       expect(service.delete).toHaveBeenCalledWith('prod-1', 'admin-123');
+    });
+
+    it('should permanently delete archived product via DELETE /products/:id/permanent', async () => {
+      const mockReq: any = { user: { sub: 'admin-123' } };
+
+      const result = await controller.deletePermanent('prod-1', mockReq);
+      expect(result.message).toContain('excluído permanentemente');
+      expect(service.deletePermanent).toHaveBeenCalledWith('prod-1', 'admin-123');
     });
   });
 

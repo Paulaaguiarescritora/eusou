@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   XCircle,
   Archive,
+  Trash2,
   Image as ImageIcon,
   DollarSign,
   Layers,
@@ -41,6 +42,10 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
   // Archive Confirmation Modal State
   const [productToArchive, setProductToArchive] = useState<Product | null>(null);
   const [archiving, setArchiving] = useState(false);
+
+  // Permanent Delete Modal State
+  const [productToDeletePermanent, setProductToDeletePermanent] = useState<Product | null>(null);
+  const [deletingPermanent, setDeletingPermanent] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -77,6 +82,22 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
       alert(err.message || 'Erro ao arquivar produto');
     } finally {
       setArchiving(false);
+    }
+  };
+
+  const handleConfirmDeletePermanent = async () => {
+    if (!productToDeletePermanent) return;
+    setDeletingPermanent(true);
+    try {
+      await fetchApi(`/products/${productToDeletePermanent.id}/permanent`, {
+        method: 'DELETE',
+      });
+      setProductToDeletePermanent(null);
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir permanentemente o produto');
+    } finally {
+      setDeletingPermanent(false);
     }
   };
 
@@ -395,13 +416,21 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                           </button>
-                          {p.status !== 'ARCHIVED' && (
+                          {p.status !== 'ARCHIVED' ? (
                             <button
                               onClick={() => setProductToArchive(p)}
                               title="Arquivar produto (remove de todos os canais)"
                               className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition cursor-pointer"
                             >
                               <Archive className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setProductToDeletePermanent(p)}
+                              title="Excluir produto permanentemente do banco de dados"
+                              className="p-1.5 rounded-lg text-red-600 hover:text-red-800 hover:bg-red-50 transition cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>
@@ -431,6 +460,54 @@ export const AdminProductsView: React.FC<AdminProductsViewProps> = ({ onNavigate
           />
         )}
       </div>
+
+      {/* Modal de Confirmação Explícita de Exclusão Definitiva (Limpeza do BD) */}
+      {productToDeletePermanent && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 border border-red-200 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Excluir permanentemente?</h3>
+                <p className="text-xs text-slate-500 font-semibold">{productToDeletePermanent.name}</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs leading-relaxed space-y-2">
+              <p className="font-bold text-red-800">
+                Atenção: Esta ação é definitiva e irreversível!
+              </p>
+              <p>
+                O produto e todas as suas variantes, fotos, atributos e tabelas vinculadas serão apagados definitivamente do banco de dados para liberar espaço.
+              </p>
+              <p className="text-[11px] text-red-700">
+                Nota: Se o produto tiver pedidos de venda reais vinculados no histórico contábil, a exclusão será bloqueada para preservar o histórico fiscal.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={deletingPermanent}
+                onClick={() => setProductToDeletePermanent(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={deletingPermanent}
+                onClick={handleConfirmDeletePermanent}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                {deletingPermanent ? 'Excluindo do BD...' : 'Excluir definitivamente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Confirmação Explícita de Arquivamento */}
       {productToArchive && (

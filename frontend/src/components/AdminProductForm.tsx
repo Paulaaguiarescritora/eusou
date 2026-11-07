@@ -167,6 +167,10 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [archiving, setArchiving] = useState(false);
 
+  // Permanent Delete Modal State
+  const [showDeletePermanentModal, setShowDeletePermanentModal] = useState(false);
+  const [deletingPermanent, setDeletingPermanent] = useState(false);
+
   // --- MODAIS DE CRIAÇÃO INLINE DE TAXONOMIA ---
   const [showNicheModal, setShowNicheModal] = useState(false);
   const [nicheModalName, setNicheModalName] = useState('');
@@ -1056,6 +1060,22 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
     }
   };
 
+  const handleConfirmDeletePermanent = async () => {
+    if (!isEditing || !productId) return;
+    setDeletingPermanent(true);
+    try {
+      await fetchApi(`/products/${productId}/permanent`, {
+        method: 'DELETE',
+      });
+      setShowDeletePermanentModal(false);
+      onNavigate('/admin/products');
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir permanentemente o produto.');
+    } finally {
+      setDeletingPermanent(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -1318,6 +1338,15 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100 text-xs font-bold transition cursor-pointer"
             >
               <Archive className="w-3.5 h-3.5" /> Arquivar Produto
+            </button>
+          )}
+          {isEditing && status === 'ARCHIVED' && (
+            <button
+              type="button"
+              onClick={() => setShowDeletePermanentModal(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 text-xs font-bold transition cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Excluir Permanentemente
             </button>
           )}
 
@@ -2571,6 +2600,56 @@ export const AdminProductForm: React.FC<AdminProductFormProps> = ({
           </div>
         </div>
       </form>
+
+      {/* Modal de Confirmação Explícita de Exclusão Definitiva (Limpeza do BD) */}
+      {showDeletePermanentModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 border border-red-200 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Excluir permanentemente?
+                </h3>
+                <p className="text-xs text-slate-500 font-semibold">{name}</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-900 text-xs leading-relaxed space-y-2">
+              <p className="font-bold text-red-800">
+                Atenção: Esta ação é definitiva e irreversível!
+              </p>
+              <p>
+                O produto e todas as suas variantes, fotos, atributos e configurações vinculadas serão apagados definitivamente do banco de dados para liberar espaço.
+              </p>
+              <p className="text-[11px] text-red-700">
+                Nota: Se o produto tiver pedidos de venda reais vinculados no histórico contábil, a exclusão será bloqueada para preservar o histórico fiscal.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={deletingPermanent}
+                onClick={() => setShowDeletePermanentModal(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={deletingPermanent}
+                onClick={handleConfirmDeletePermanent}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                {deletingPermanent ? 'Excluindo do BD...' : 'Sim, excluir do banco de dados'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Confirmação Explícita de Arquivamento */}
       {showArchiveModal && (

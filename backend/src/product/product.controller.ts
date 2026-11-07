@@ -70,6 +70,13 @@ export class ProductController {
     return this.productService.update(id, dto, actorId);
   }
 
+  @Delete(':id/permanent')
+  @HttpCode(HttpStatus.OK)
+  async deletePermanent(@Param('id') id: string, @Req() req: Request) {
+    const actorId = (req as any).user?.sub;
+    return this.productService.deletePermanent(id, actorId);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
   async delete(@Param('id') id: string, @Req() req: Request) {
