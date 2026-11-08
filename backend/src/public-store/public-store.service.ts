@@ -105,30 +105,105 @@ export class PublicStoreService {
     };
   }
 
-  async getHomeData() {
+    async getStores() {
+    const stores = await this.prisma.niche.findMany({
+      where: { status: 'ACTIVE' },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        brandName: true,
+        description: true,
+        logoUrl: true,
+        faviconUrl: true,
+        catalogs: {
+          where: { status: 'ACTIVE' },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            description: true,
+          },
+        },
+        _count: {
+          select: {
+            products: true,
+            categories: true,
+          },
+        },
+      },
+    });
+
+    return stores.map((s) => ({
+      id: s.id,
+      name: s.name,
+      slug: s.slug,
+      brandName: s.brandName || s.name,
+      description: s.description,
+      logoUrl: s.logoUrl,
+      faviconUrl: s.faviconUrl,
+      productsCount: s._count.products,
+      categoriesCount: s._count.categories,
+      catalogs: s.catalogs,
+    }));
+  }
+
+  async getHomeData(nicheIdentifier?: string) {
     const ownStore = await this.getOwnStoreChannel();
 
-    const [categories, featuredProductsRaw, catalogs, collections] =
+    // Resolver nicho se passado
+    let targetNiche: any = null;
+    if (nicheIdentifier && nicheIdentifier.trim()) {
+      targetNiche = await this.prisma.niche.findFirst({
+        where: {
+          OR: [{ id: nicheIdentifier.trim() }, { slug: nicheIdentifier.trim() }],
+          status: 'ACTIVE',
+        },
+        include: {
+          defaultTheme: true,
+        },
+      });
+    }
+
+    const categoryWhere: any = { status: 'ACTIVE', parentId: null };
+    if (targetNiche) {
+      categoryWhere.nicheId = targetNiche.id;
+    }
+
+    const productWhere: any = {
+      status: 'ACTIVE',
+      ...(ownStore
+        ? {
+            productChannels: {
+              some: {
+                channelId: ownStore.id,
+                isEnabled: true,
+              },
+            },
+          }
+        : {}),
+    };
+    if (targetNiche) {
+      productWhere.niches = {
+        some: { nicheId: targetNiche.id },
+      };
+    }
+
+    const catalogWhere: any = { status: 'ACTIVE' };
+    if (targetNiche) {
+      catalogWhere.nicheId = targetNiche.id;
+    }
+
+    const [categories, featuredProductsRaw, catalogs, collections, allStores] =
       await Promise.all([
         this.prisma.category.findMany({
-          where: { status: 'ACTIVE', parentId: null },
+          where: categoryWhere,
           orderBy: { name: 'asc' },
           take: 8,
         }),
         this.prisma.product.findMany({
-          where: {
-            status: 'ACTIVE',
-            ...(ownStore
-              ? {
-                  productChannels: {
-                    some: {
-                      channelId: ownStore.id,
-                      isEnabled: true,
-                    },
-                  },
-                }
-              : {}),
-          },
+          where: productWhere,
           orderBy: { createdAt: 'desc' },
           take: 8,
           include: {
@@ -139,11 +214,12 @@ export class PublicStoreService {
           },
         }),
         this.prisma.catalog.findMany({
-          where: { status: 'ACTIVE' },
+          where: catalogWhere,
           orderBy: { createdAt: 'desc' },
-          take: 4,
+          take: 6,
           include: {
             theme: true,
+            niche: true,
             _count: { select: { items: true, collections: true } },
           },
         }),
@@ -167,6 +243,7 @@ export class PublicStoreService {
             },
           },
         }),
+        this.getStores(),
       ]);
 
     const featuredProducts = featuredProductsRaw.map((p) =>
@@ -182,6 +259,17 @@ export class PublicStoreService {
     }));
 
     return {
+      currentStore: targetNiche
+        ? {
+            id: targetNiche.id,
+            name: targetNiche.name,
+            slug: targetNiche.slug,
+            brandName: targetNiche.brandName || targetNiche.name,
+            description: targetNiche.description,
+            logoUrl: targetNiche.logoUrl,
+          }
+        : null,
+      stores: allStores,
       categories,
       featuredProducts,
       catalogs,
@@ -234,8 +322,18 @@ export class PublicStoreService {
       };
     }
 
-    if (query.nicheId) {
-      where.niches = { some: { nicheId: query.nicheId } };
+    const nicheParam = (query as any).niche || query.nicheId;
+    if (nicheParam && String(nicheParam).trim()) {
+      const trimmed = String(nicheParam).trim();
+      where.niches = {
+        some: {
+          OR: [
+            { nicheId: trimmed },
+            { niche: { id: trimmed } },
+            { niche: { slug: trimmed } },
+          ],
+        },
+      };
     }
 
     if (query.tagId) {
@@ -768,18 +866,15 @@ export class PublicStoreService {
     }
 
     if (!niche) {
-      // Fallback para primeiro nicho ativo
-      niche = await this.prisma.niche.findFirst({
-        where: { status: 'ACTIVE' },
-        include: {
-          defaultTheme: true,
-          catalogs: {
-            where: { status: 'ACTIVE' },
-            take: 1,
-            include: { theme: true },
-          },
-        },
-      });
+      return {
+        brandName: 'KUBO STUDIO',
+        nicheId: null,
+        nicheSlug: null,
+        logoUrl: null,
+        faviconUrl: null,
+        theme: null,
+        catalogs: [],
+      };
     }
 
     if (!niche) {

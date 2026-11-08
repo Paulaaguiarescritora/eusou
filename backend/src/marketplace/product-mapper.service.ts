@@ -35,7 +35,12 @@ export class ProductMapperService {
     const images: string[] = [];
     if (product.media && Array.isArray(product.media)) {
       for (const m of product.media) {
-        if (m.url) { const fullUrl = m.url.startsWith('http') ? m.url : `https://eusou.onrender.com${m.url.startsWith('/') ? '' : '/'}${m.url}`; images.push(fullUrl); }
+        if (m.url) {
+          const fullUrl = m.url.startsWith('http')
+            ? m.url
+            : `https://eusou.onrender.com${m.url.startsWith('/') ? '' : '/'}${m.url}`;
+          images.push(fullUrl);
+        }
       }
     }
 
@@ -134,7 +139,12 @@ export class ProductMapperService {
     const images: string[] = [];
     if (product.media && Array.isArray(product.media)) {
       for (const m of product.media) {
-        if (m.url) { const fullUrl = m.url.startsWith('http') ? m.url : `https://eusou.onrender.com${m.url.startsWith('/') ? '' : '/'}${m.url}`; images.push(fullUrl); }
+        if (m.url) {
+          const fullUrl = m.url.startsWith('http')
+            ? m.url
+            : `https://eusou.onrender.com${m.url.startsWith('/') ? '' : '/'}${m.url}`;
+          images.push(fullUrl);
+        }
       }
     }
 
@@ -212,7 +222,7 @@ export class ProductMapperService {
       description: {
         plain_text: payload.description || payload.title,
       },
-      pictures: payload.images.map((img) => ({ source: img })),
+      pictures: payload.images.slice(0, 10).map((img) => ({ source: img })),
       attributes: mlAttributes,
     };
   }

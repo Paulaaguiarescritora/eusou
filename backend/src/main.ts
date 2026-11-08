@@ -7,6 +7,7 @@ import * as cookieParser from 'cookie-parser';
 import * as express from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
+const sharp = require('sharp');
 import { PrismaService } from './prisma.service';
 
 async function bootstrap() {
@@ -29,10 +30,49 @@ async function bootstrap() {
 
     try {
       const prisma = app.get(PrismaService);
-      const rows: any = await prisma.$queryRawUnsafe(
+
+      // 1. Tenta buscar o arquivo exato no banco de reidratação
+      let rows: any = await prisma.$queryRawUnsafe(
         'SELECT mime_type, data FROM product_media_files WHERE file_name = $1 LIMIT 1',
         fileName,
       );
+
+      // 2. Se a requisição for .jpg/.jpeg mas a mídia foi salva como .webp (Conversão automática para Mercado Livre e marketplaces)
+      const isJpgRequest = /\.(jpe?g)$/i.test(fileName);
+      if ((!rows || rows.length === 0) && isJpgRequest) {
+        const webpFileName = fileName.replace(/\.(jpe?g)$/i, '.webp');
+        const localWebpPath = path.join(path.dirname(requestedPath), webpFileName);
+
+        let webpBuffer: Buffer | null = null;
+        if (fs.existsSync(localWebpPath)) {
+          webpBuffer = fs.readFileSync(localWebpPath);
+        } else {
+          const webpRows: any = await prisma.$queryRawUnsafe(
+            'SELECT data FROM product_media_files WHERE file_name = $1 LIMIT 1',
+            webpFileName,
+          );
+          if (webpRows && webpRows.length > 0) {
+            webpBuffer = webpRows[0].data;
+          }
+        }
+
+        if (webpBuffer) {
+          const jpegBuffer = await sharp(webpBuffer)
+            .flatten({ background: { r: 255, g: 255, b: 255 } })
+            .jpeg({ quality: 90 })
+            .toBuffer();
+
+          const dir = path.dirname(requestedPath);
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
+          fs.writeFileSync(requestedPath, jpegBuffer);
+
+          res.setHeader('Content-Type', 'image/jpeg');
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          return res.send(jpegBuffer);
+        }
+      }
 
       if (rows && rows.length > 0) {
         const fileRow = rows[0];
@@ -47,7 +87,7 @@ async function bootstrap() {
         return res.send(fileRow.data);
       }
     } catch (err) {
-      console.warn('Falha ao restaurar mídia do banco:', err);
+      console.warn('Falha ao restaurar ou converter mídia:', err);
     }
 
     next();

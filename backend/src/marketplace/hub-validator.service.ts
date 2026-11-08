@@ -111,8 +111,9 @@ export class HubValidatorService {
     const images: string[] = [];
     if (product.media && Array.isArray(product.media)) {
       for (const m of product.media) {
-        if (m.url && (m.url.startsWith('http://') || m.url.startsWith('https://'))) {
-          images.push(m.url);
+        if (m.url) {
+          const fullUrl = m.url.startsWith('http') ? m.url : `https://eusou.onrender.com${m.url.startsWith('/') ? '' : '/'}${m.url}`;
+          images.push(fullUrl);
         }
       }
     }

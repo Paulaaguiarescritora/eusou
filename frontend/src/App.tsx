@@ -8,6 +8,7 @@ import { OrderConfirmation } from './components/OrderConfirmation';
 import { CatalogView } from './components/CatalogView';
 import { AffiliateCatalogView } from './components/AffiliateCatalogView';
 import { Pagination } from './components/Pagination';
+import { MultiStoreCards, DEFAULT_STORES } from './components/MultiStoreCards';
 
 // Lazy load backoffice and auxiliary components to drastically reduce initial bundle size for shoppers
 const AdminOrdersView = lazy(() => import('./components/AdminOrdersView').then((m) => ({ default: m.AdminOrdersView })));
@@ -43,8 +44,8 @@ const ViewFallback = () => (
 );
 import { useCart } from './useCart';
 import { fetchApi } from './api';
-import { Product, Catalog, Category, Collection, Order, CartItem } from './types';
-import { Sparkles, ArrowRight, Filter, X } from 'lucide-react';
+import { Product, Catalog, Category, Collection, Order, CartItem, Store } from './types';
+import { Sparkles, ArrowRight, Filter, X, ArrowLeft, Store as StoreIcon } from 'lucide-react';
 
 function extractProductNiche(prod: Product | null | undefined): string | null {
   if (!prod) return null;
@@ -110,6 +111,21 @@ export function App() {
     faviconUrl: string | null;
   } | null>(null);
 
+  const [activeStoreSlug, setActiveStoreSlug] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const pathname = window.location.pathname || '';
+      if (pathname.startsWith('/loja/')) {
+        const raw = pathname.replace('/loja/', '').split('?')[0];
+        return raw === 'felinodelia' ? 'pet-shop' : raw;
+      }
+      const params = new URLSearchParams(window.location.search);
+      const n = params.get('niche');
+      if (n) return n === 'felinodelia' ? 'pet-shop' : n;
+      return localStorage.getItem('eusou_active_niche_slug') || null;
+    }
+    return null;
+  });
+
   const [activeNicheName, setActiveNicheName] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       const currentPath = window.location.pathname || '/';
@@ -146,6 +162,8 @@ export function App() {
     featuredProducts: Product[];
     catalogs: Catalog[];
     collections: Collection[];
+    stores?: Store[];
+    currentStore?: { id: string; name: string; slug: string; brandName: string; description?: string | null; logoUrl?: string | null } | null;
   } | null>(null);
 
   const [productsList, setProductsList] = useState<Product[]>([]);
@@ -239,7 +257,35 @@ export function App() {
 
     if (route === '/') {
       setActiveNicheName(null);
-      try { localStorage.removeItem('eusou_active_niche'); } catch {}
+      setActiveStoreSlug(null);
+      try {
+        localStorage.removeItem('eusou_active_niche');
+        localStorage.removeItem('eusou_active_niche_slug');
+      } catch {}
+      fetchApi<any>('/public/home')
+        .then((data) => setHomeData(data))
+        .catch(console.error);
+    } else if (route.startsWith('/loja/')) {
+      setSelectedProduct(null);
+      const rawSlug = route.replace('/loja/', '').split('?')[0];
+      const storeSlug = rawSlug === 'felinodelia' ? 'pet-shop' : rawSlug;
+      setActiveStoreSlug(storeSlug);
+      try {
+        localStorage.setItem('eusou_active_niche_slug', storeSlug);
+      } catch {}
+      setLoading(true);
+      fetchApi<any>(`/public/home?niche=${encodeURIComponent(storeSlug)}`)
+        .then((data) => {
+          setHomeData(data);
+          if (data.currentStore?.brandName) {
+            setActiveNicheName(data.currentStore.brandName);
+            try {
+              localStorage.setItem('eusou_active_niche', data.currentStore.brandName);
+            } catch {}
+          }
+        })
+        .catch(console.error)
+        .finally(() => setLoading(false));
     } else if (route === '/produtos' || route.startsWith('/produtos?')) {
       setSelectedProduct(null);
       const queryStr = route.includes('?') ? route.substring(route.indexOf('?')) : '';
@@ -358,7 +404,8 @@ export function App() {
 
   // Route change handler
   const navigateTo = (newRoute: string) => {
-    const canonical = normalizeCanonicalRoute(newRoute);
+    const [pathPart, hashPart] = newRoute.split('#');
+    const canonical = normalizeCanonicalRoute(pathPart || '/');
     if (canonical === '/') {
       setActiveNicheName(null);
       try { localStorage.removeItem('eusou_active_niche'); } catch {}
@@ -375,10 +422,20 @@ export function App() {
     }
 
     setRoute(canonical);
+    const fullTarget = hashPart ? `${canonical}#${hashPart}` : canonical;
     if (typeof window !== 'undefined' && (window.location.pathname + window.location.search) !== canonical) {
-      window.history.pushState({}, '', canonical);
+      window.history.pushState({}, '', fullTarget);
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (hashPart) {
+      setTimeout(() => {
+        const el = document.getElementById(hashPart);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handlePageChange = (newPage: number) => {
@@ -729,7 +786,9 @@ export function App() {
 
   // 3. PUBLIC STORE ROUTE
   const isAffiliateCatalog = route.startsWith('/catalogo/') || route.startsWith('/afiliado/');
-  const publicBrand = activeNicheName || storeContext?.brandName || 'Loja Especializada';
+  const publicBrand = activeStoreSlug
+    ? (homeData?.currentStore?.brandName || activeNicheName || 'Loja Especializada')
+    : 'KUBO STUDIO';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50/50 text-slate-800 font-sans antialiased">
@@ -738,7 +797,18 @@ export function App() {
           totalItems={totalItems}
           onNavigate={navigateTo}
           currentRoute={route}
-          brandTitle={publicBrand}
+          brandTitle={activeStoreSlug && homeData?.currentStore?.brandName ? homeData.currentStore.brandName : publicBrand}
+          activeStoreSlug={activeStoreSlug}
+          stores={homeData?.stores && homeData.stores.length > 0 ? homeData.stores : DEFAULT_STORES}
+          onSelectStore={(slug) => {
+            if (slug) {
+              setActiveStoreSlug(slug);
+              navigateTo(`/loja/${slug}`);
+            } else {
+              setActiveStoreSlug(null);
+              navigateTo('/');
+            }
+          }}
         />
       )}
 
@@ -753,48 +823,133 @@ export function App() {
       )}
 
       <main className="flex-1">
-        {/* ROUTE: HOME */}
+        {/* ROUTE: HOME (PORTAL MULTILOJAS) */}
         {route === '/' && (
-          <div>
-            {/* Hero Banner */}
-            <div className="bg-slate-900 text-white py-20 px-4 sm:px-6 lg:px-8 text-center relative overflow-hidden">
-              <div className="max-w-3xl mx-auto space-y-4">
-                <span className="inline-flex items-center px-3 py-1 rounded-full bg-white/10 text-xs font-semibold tracking-wider uppercase text-slate-300">
-                  <Sparkles className="w-3.5 h-3.5 mr-1 text-amber-400" /> {publicBrand}
+          <div className="bg-slate-50/60 pb-20">
+            {/* Top Intro Section */}
+            <div className="bg-gradient-to-b from-slate-900 to-slate-800 text-white pt-12 pb-24 px-4 sm:px-6 lg:px-8 text-center relative overflow-hidden">
+              <div className="max-w-3xl mx-auto space-y-3">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-xs font-semibold tracking-wider uppercase text-slate-300 border border-white/10">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" /> PLATAFORMA MULTILOJAS • KUBO STUDIO
                 </span>
-                <h1 className="text-4xl sm:text-6xl font-black tracking-tight leading-tight">
-                  Descubra Produtos Autênticos & Curadorias Exclusivas
+                <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
+                  Nossos Nichos Especializados
                 </h1>
-                <p className="text-slate-400 text-sm sm:text-base max-w-xl mx-auto leading-relaxed">
-                  Explore catálogos inteligentes, seleções temáticas e finalize seu pedido com total agilidade e segurança.
+                <p className="text-slate-300 text-xs sm:text-base max-w-xl mx-auto leading-relaxed">
+                  Selecione um nicho abaixo para acessar a loja dedicada, navegar por categorias e catálogos exclusivos ou divulgar como afiliado parceiro.
                 </p>
-                <div className="pt-4 flex justify-center gap-4">
+              </div>
+            </div>
+
+            {/* Grid dos Cards de Nicho com Cores Distintas */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-12 relative z-10 space-y-12">
+              <MultiStoreCards
+                stores={homeData?.stores && homeData.stores.length > 0 ? homeData.stores : DEFAULT_STORES}
+                onSelectStore={(slug) => {
+                  setActiveStoreSlug(slug);
+                  navigateTo(`/loja/${slug}`);
+                }}
+                onSelectCatalog={(catSlug) => navigateTo(`/catalogos/${catSlug}`)}
+                onNavigateAffiliate={(slug) => {
+                  navigateTo(slug ? `/affiliate?niche=${encodeURIComponent(slug)}` : '/affiliate');
+                }}
+              />
+
+              {/* Informações de Confiança e Segurança (sem listar nenhum produto) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+                <div className="bg-white p-6 rounded-2xl border border-gray-100 flex items-center gap-4 shadow-xs">
+                  <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-2xl shrink-0">
+                    🚚
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900">Envio para Todo o Brasil</h3>
+                    <p className="text-xs text-slate-500">Rastreamento e entrega rápida garantida</p>
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-gray-100 flex items-center gap-4 shadow-xs">
+                  <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold text-2xl shrink-0">
+                    ✨
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900">Curadoria & Fabricação Própria</h3>
+                    <p className="text-xs text-slate-500">Alta precisão, design autoral e testes rigorosos</p>
+                  </div>
+                </div>
+                <div className="bg-white p-6 rounded-2xl border border-gray-100 flex items-center gap-4 shadow-xs">
+                  <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-2xl shrink-0">
+                    🔒
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900">Pagamento 100% Seguro</h3>
+                    <p className="text-xs text-slate-500">Checkout transparente processado via Mercado Pago</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ROUTE: LOJA ESPECÍFICA (/loja/:storeSlug) */}
+        {route.startsWith('/loja/') && (
+          <div>
+            {/* Store Hero Banner */}
+            <div className={`py-14 sm:py-16 px-4 sm:px-6 lg:px-8 text-white text-center relative overflow-hidden ${
+              activeStoreSlug === 'romance'
+                ? 'bg-gradient-to-r from-rose-950 via-slate-900 to-rose-950'
+                : activeStoreSlug === 'sensora-intima'
+                ? 'bg-gradient-to-r from-purple-950 via-slate-900 to-purple-950'
+                : 'bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950'
+            }`}>
+              <div className="max-w-3xl mx-auto space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveStoreSlug(null);
+                    navigateTo('/');
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-xs font-semibold text-slate-300 hover:bg-white/20 transition cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" /> Voltar ao Portal de Todas as Lojas
+                </button>
+                <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
+                  {homeData?.currentStore?.brandName || activeNicheName || 'Loja Exclusiva'}
+                </h1>
+                <p className="text-slate-300 text-xs sm:text-sm max-w-xl mx-auto leading-relaxed">
+                  {homeData?.currentStore?.description || 'Explore o catálogo exclusivo e novidades desta marca.'}
+                </p>
+                <div className="pt-2 flex flex-wrap justify-center gap-3">
                   <button
-                    onClick={() => navigateTo('/produtos')}
-                    className="px-6 py-3 bg-white text-slate-900 rounded-xl font-bold text-xs hover:bg-slate-100 transition shadow-xs cursor-pointer"
+                    onClick={() => navigateTo(`/produtos?niche=${encodeURIComponent(activeStoreSlug || '')}`)}
+                    className="px-5 py-2.5 bg-white text-slate-900 rounded-xl font-bold text-xs hover:bg-slate-100 transition shadow-xs cursor-pointer"
                   >
-                    Ver Todos os Produtos
+                    Ver Catálogo Completo
+                  </button>
+                  <button
+                    onClick={() => navigateTo(`/affiliate?niche=${encodeURIComponent(activeStoreSlug || '')}`)}
+                    className="px-5 py-2.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl font-bold text-xs hover:bg-amber-500/30 transition cursor-pointer"
+                  >
+                    Área de Afiliados desta Loja
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Content Sections */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-20">
-              {/* Categorias em Destaque */}
+            {/* Store Content */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
+              {/* Categorias da Loja */}
               {homeData?.categories && homeData.categories.length > 0 && (
                 <div>
                   <div className="flex justify-between items-center mb-6">
                     <div>
-                      <h2 className="text-xl font-extrabold text-slate-900">Categorias</h2>
-                      <p className="text-xs text-slate-500">Navegue pelas principais áreas de produto</p>
+                      <h2 className="text-xl font-extrabold text-slate-900">Categorias de {homeData.currentStore?.brandName || 'Produtos'}</h2>
+                      <p className="text-xs text-slate-500">Navegue pelas linhas desta loja</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     {homeData.categories.map((c) => (
                       <div
                         key={c.id}
-                        onClick={() => navigateTo(`/produtos?category=${c.slug}`)}
+                        onClick={() => navigateTo(`/produtos?category=${c.slug}&niche=${encodeURIComponent(activeStoreSlug || '')}`)}
                         className="p-4 bg-white rounded-2xl border border-gray-100 hover:border-slate-800 hover:shadow-xs transition text-center cursor-pointer group"
                       >
                         <span className="text-xs font-bold text-slate-800 group-hover:text-black">
@@ -806,13 +961,13 @@ export function App() {
                 </div>
               )}
 
-              {/* Catálogos Ativos em Destaque */}
+              {/* Catálogos da Loja */}
               {homeData?.catalogs && homeData.catalogs.length > 0 && (
                 <div>
                   <div className="flex justify-between items-center mb-6">
                     <div>
-                      <h2 className="text-xl font-extrabold text-slate-900">Catálogos em Destaque</h2>
-                      <p className="text-xs text-slate-500">Curadorias ativas e temáticas</p>
+                      <h2 className="text-xl font-extrabold text-slate-900">Catálogos & Curadorias</h2>
+                      <p className="text-xs text-slate-500">Acesse curadorias prontas para compra ou divulgação</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -824,7 +979,7 @@ export function App() {
                       >
                         <div>
                           <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 block mb-1">
-                            {cat.type === 'AUTOMATIC' ? 'Catálogo Dinâmico' : 'Curadoria Manual'}
+                            Catálogo Oficial
                           </span>
                           <h3 className="text-lg font-bold text-slate-900">{cat.name}</h3>
                           {cat.description && (
@@ -843,25 +998,25 @@ export function App() {
                 </div>
               )}
 
-              {/* Produtos Recentes / Destaques */}
+              {/* Produtos em Destaque da Loja */}
               {homeData?.featuredProducts && (
                 <div>
                   <div className="flex justify-between items-center mb-6">
                     <div>
-                      <h2 className="text-xl font-extrabold text-slate-900">Produtos em Destaque</h2>
-                      <p className="text-xs text-slate-500">Seleção com disponibilidade imediata</p>
+                      <h2 className="text-xl font-extrabold text-slate-900">Destaques da Loja</h2>
+                      <p className="text-xs text-slate-500">Pronta entrega e alta procura</p>
                     </div>
                     <button
-                      onClick={() => navigateTo('/produtos')}
+                      onClick={() => navigateTo(`/produtos?niche=${encodeURIComponent(activeStoreSlug || '')}`)}
                       className="text-xs font-bold text-slate-800 hover:underline flex items-center"
                     >
-                      Ver todos <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                      Ver todos os produtos <ArrowRight className="w-3.5 h-3.5 ml-1" />
                     </button>
                   </div>
 
                   {homeData.featuredProducts.length === 0 ? (
                     <div className="p-12 text-center text-xs text-slate-400 bg-white rounded-2xl border border-gray-100">
-                      Nenhum produto cadastrado no momento.
+                      Nenhum produto cadastrado nesta loja no momento.
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -1134,6 +1289,53 @@ export function App() {
             <AffiliatePortalView onNavigate={navigateTo} />
           </Suspense>
         )}
+
+        {/* ROUTE: PRODUTO NÃO ENCONTRADO */}
+        {!loading && !selectedProduct && route.startsWith('/produtos/') && (
+          <div className="max-w-xl mx-auto px-4 py-20 text-center">
+            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+              <span className="text-2xl font-bold">?</span>
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">Produto não encontrado</h2>
+            <p className="text-sm text-slate-500 mb-6">
+              O produto que você procura pode ter sido descontinuado ou o link está incorreto.
+            </p>
+            <button
+              onClick={() => navigateTo('/produtos')}
+              className="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition cursor-pointer"
+            >
+              Ver todos os produtos
+            </button>
+          </div>
+        )}
+
+        {/* ROTA NÃO ENCONTRADA (404) */}
+        {!loading &&
+          route !== '/' &&
+          !route.startsWith('/produtos') &&
+          !route.startsWith('/colecoes/') &&
+          !isAffiliateCatalog &&
+          !route.startsWith('/catalogos/') &&
+          route !== '/carrinho' &&
+          route !== '/checkout' &&
+          !route.startsWith('/pedido/') &&
+          route !== '/affiliate' &&
+          !route.startsWith('/admin') &&
+          !route.startsWith('/embed/product/') && (
+            <div className="max-w-xl mx-auto px-4 py-24 text-center">
+              <h1 className="text-5xl font-black text-slate-900 mb-3">404</h1>
+              <h2 className="text-lg font-bold text-slate-800 mb-2">Página não encontrada</h2>
+              <p className="text-sm text-slate-500 mb-6">
+                O endereço acessado não existe ou foi movido.
+              </p>
+              <button
+                onClick={() => navigateTo('/')}
+                className="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition cursor-pointer"
+              >
+                Voltar para o Início
+              </button>
+            </div>
+          )}
       </main>
 
       {!isAffiliateCatalog && <Footer onNavigate={navigateTo} brandTitle={publicBrand} />}

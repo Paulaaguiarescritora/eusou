@@ -138,6 +138,19 @@ export interface Collection {
   updatedAt?: string;
 }
 
+export interface Store {
+  id: string;
+  name: string;
+  slug: string;
+  brandName: string;
+  description?: string | null;
+  logoUrl?: string | null;
+  faviconUrl?: string | null;
+  productsCount: number;
+  categoriesCount: number;
+  catalogs: Array<{ id: string; name: string; slug: string; description?: string | null }>;
+}
+
 export interface Niche {
   id: string;
   name: string;

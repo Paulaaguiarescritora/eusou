@@ -38,6 +38,10 @@ export class QueryProductsDto {
 
   @IsOptional()
   @IsString()
+  niche?: string;
+
+  @IsOptional()
+  @IsString()
   categoryId?: string;
 
   @IsOptional()

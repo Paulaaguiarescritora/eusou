@@ -139,6 +139,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
                 <img
                   src={resolveMediaUrl(selectedImage)}
                   alt={product.name}
+                  decoding="async"
                   className="w-full h-full object-cover"
                 />
               )
@@ -159,7 +160,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
                       selectedImage === m.url ? 'border-slate-900 ring-2 ring-slate-900/20' : 'border-transparent hover:opacity-80'
                     }`}
                   >
-                    <img src={resolveMediaUrl(m.url)} alt="Miniatura" className="w-full h-full object-cover" />
+                    <img src={resolveMediaUrl(m.url)} alt="Miniatura" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                     {isVideo && (
                       <div className="absolute inset-0 bg-slate-950/40 flex items-center justify-center">
                         <Play className="w-5 h-5 text-white fill-current opacity-90 drop-shadow-md" />

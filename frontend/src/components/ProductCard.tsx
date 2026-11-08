@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Product } from '../types';
 import { Package, Plus } from 'lucide-react';
 import { resolveMediaUrl } from '../api';
@@ -14,6 +14,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onSelect,
   onQuickAdd,
 }) => {
+  const [hasImgError, setHasImgError] = useState(false);
   const imageUrl =
     product.media?.find((m) => m.isPrimary)?.url ||
     (product.media && product.media.length > 0 ? product.media[0].url : null);
@@ -26,10 +27,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     >
       <div>
         <div className="relative aspect-square w-full bg-slate-50 flex items-center justify-center overflow-hidden">
-          {imageUrl ? (
+          {imageUrl && !hasImgError ? (
             <img
               src={resolveMediaUrl(imageUrl)}
               alt={product.name}
+              loading="lazy"
+              decoding="async"
+              onError={() => setHasImgError(true)}
               className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
             />
           ) : (
