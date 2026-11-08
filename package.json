@@ -4,5 +4,8 @@
   "scripts": {
     "build": "cd frontend && npm install && npm run build",
     "backup": "node scripts/backup/run-backup-pipeline.js"
+  },
+  "devDependencies": {
+    "vercel": "^65.12.1"
   }
 }

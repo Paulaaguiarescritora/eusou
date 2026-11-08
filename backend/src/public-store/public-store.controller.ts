@@ -14,8 +14,8 @@ export class PublicStoreController {
 
   @Get('home')
   @Header('Cache-Control', 'public, max-age=60, s-maxage=60, stale-while-revalidate=120')
-  getHomeData() {
-    return this.publicStoreService.getHomeData();
+  getHomeData(@Query('niche') niche?: string) {
+    return this.publicStoreService.getHomeData(niche);
   }
 
   @Get('products')

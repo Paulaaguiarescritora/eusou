@@ -49,12 +49,17 @@ import { Sparkles, ArrowRight, Filter, X, ArrowLeft, Store as StoreIcon } from '
 
 function extractProductNiche(prod: Product | null | undefined): string | null {
   if (!prod) return null;
-  if (prod.niches && prod.niches.length > 0 && prod.niches[0].niche?.name) {
-    return prod.niches[0].niche.name;
+  if (prod.niches && prod.niches.length > 0) {
+    if (prod.niches[0].niche?.slug) return prod.niches[0].niche.slug;
+    if (prod.niches[0].niche?.name) return prod.niches[0].niche.name;
   }
-  if (prod.categories && prod.categories.length > 0 && prod.categories[0].category?.niche?.name) {
-    return prod.categories[0].category.niche.name;
+  if (prod.categories && prod.categories.length > 0) {
+    if (prod.categories[0].category?.niche?.slug) return prod.categories[0].category.niche.slug;
+    if (prod.categories[0].category?.niche?.name) return prod.categories[0].category.niche.name;
   }
+  if (prod.brand?.toLowerCase().includes('felino')) return 'pet-shop';
+  if (prod.brand?.toLowerCase().includes('romance')) return 'romance';
+  if (prod.brand?.toLowerCase().includes('sensora')) return 'sensora-intima';
   return null;
 }
 
@@ -128,8 +133,15 @@ export function App() {
 
   const [activeNicheName, setActiveNicheName] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
-      const currentPath = window.location.pathname || '/';
-      if (currentPath === '/') return null;
+      const currentPath = window.location.pathname || '';
+      if (currentPath === '/' || currentPath === '') return null;
+      if (currentPath.startsWith('/loja/')) {
+        const raw = currentPath.replace('/loja/', '').split('?')[0];
+        const storeSlug = raw === 'felinodelia' ? 'pet-shop' : raw;
+        if (storeSlug === 'pet-shop') return 'Felinodélia';
+        if (storeSlug === 'romance') return 'Romance';
+        if (storeSlug === 'sensora-intima') return 'Sensora Íntima';
+      }
       const saved = localStorage.getItem('eusou_active_niche');
       if (saved) return saved;
       try {
@@ -269,20 +281,66 @@ export function App() {
       setSelectedProduct(null);
       const rawSlug = route.replace('/loja/', '').split('?')[0];
       const storeSlug = rawSlug === 'felinodelia' ? 'pet-shop' : rawSlug;
+      const storeConfig = DEFAULT_STORES.find((s) => s.slug === storeSlug);
+      const fallbackBrand = storeSlug === 'pet-shop'
+        ? 'Felinodélia'
+        : storeSlug === 'romance'
+        ? 'Romance'
+        : storeSlug === 'sensora-intima'
+        ? 'Sensora Íntima'
+        : (storeConfig?.brandName || 'Loja Especializada');
+
       setActiveStoreSlug(storeSlug);
+      setActiveNicheName(fallbackBrand);
       try {
         localStorage.setItem('eusou_active_niche_slug', storeSlug);
+        localStorage.setItem('eusou_active_niche', fallbackBrand);
       } catch {}
+
       setLoading(true);
-      fetchApi<any>(`/public/home?niche=${encodeURIComponent(storeSlug)}`)
-        .then((data) => {
-          setHomeData(data);
-          if (data.currentStore?.brandName) {
-            setActiveNicheName(data.currentStore.brandName);
-            try {
-              localStorage.setItem('eusou_active_niche', data.currentStore.brandName);
-            } catch {}
-          }
+      Promise.all([
+        fetchApi<any>(`/public/home?niche=${encodeURIComponent(storeSlug)}`),
+        fetchApi<{ data: Product[] }>(`/public/products?niche=${encodeURIComponent(storeSlug)}&limit=12`),
+      ])
+        .then(([homeRes, productsRes]) => {
+          const resolvedBrand = homeRes?.currentStore?.brandName || fallbackBrand;
+          setActiveNicheName(resolvedBrand);
+          try {
+            localStorage.setItem('eusou_active_niche', resolvedBrand);
+          } catch {}
+
+          // Garantir isolamento 100% rigoroso de produtos deste nicho
+          const rawProducts = (productsRes?.data && productsRes.data.length > 0)
+            ? productsRes.data
+            : (homeRes?.featuredProducts || []);
+
+          const nicheProducts = rawProducts.filter((p: any) => {
+            const pNiche = extractProductNiche(p);
+            if (storeSlug === 'pet-shop') {
+              return pNiche?.toLowerCase().includes('pet') || p.brand?.toLowerCase().includes('felino');
+            }
+            if (storeSlug === 'romance') {
+              return pNiche?.toLowerCase().includes('romance') || p.name?.toLowerCase().includes('carimbo');
+            }
+            if (storeSlug === 'sensora-intima') {
+              return pNiche?.toLowerCase().includes('sensora') || pNiche?.toLowerCase().includes('íntima');
+            }
+            return true;
+          });
+
+          setHomeData({
+            ...(homeRes || {}),
+            currentStore: {
+              id: storeConfig?.id || homeRes?.currentStore?.id || '',
+              name: storeConfig?.name || homeRes?.currentStore?.name || resolvedBrand,
+              slug: storeSlug,
+              brandName: resolvedBrand,
+              description: homeRes?.currentStore?.description || storeConfig?.description || null,
+              logoUrl: homeRes?.currentStore?.logoUrl || storeConfig?.logoUrl || null,
+            },
+            featuredProducts: nicheProducts,
+            stores: homeRes?.stores && homeRes.stores.length > 0 ? homeRes.stores : DEFAULT_STORES,
+          });
         })
         .catch(console.error)
         .finally(() => setLoading(false));
@@ -786,9 +844,50 @@ export function App() {
 
   // 3. PUBLIC STORE ROUTE
   const isAffiliateCatalog = route.startsWith('/catalogo/') || route.startsWith('/afiliado/');
+  const storeFromSlug = DEFAULT_STORES.find((s) => s.slug === activeStoreSlug);
+  const fallbackStoreBrand = activeStoreSlug === 'pet-shop'
+    ? 'Felinodélia'
+    : activeStoreSlug === 'romance'
+    ? 'Romance'
+    : activeStoreSlug === 'sensora-intima'
+    ? 'Sensora Íntima'
+    : (storeFromSlug?.brandName || 'Loja Especializada');
+
   const publicBrand = activeStoreSlug
-    ? (homeData?.currentStore?.brandName || activeNicheName || 'Loja Especializada')
+    ? (homeData?.currentStore?.brandName || activeNicheName || fallbackStoreBrand)
     : 'KUBO STUDIO';
+
+  // Filtros estritos por nicho no contexto da loja especializada
+  const storeCategories = (homeData?.categories || []).filter((c) => {
+    if (!activeStoreSlug) return true;
+    if (storeFromSlug?.id) {
+      return c.nicheId === storeFromSlug.id;
+    }
+    return true;
+  });
+
+  const storeCatalogs = (homeData?.catalogs || []).filter((cat) => {
+    if (!activeStoreSlug) return true;
+    if (storeFromSlug?.id) {
+      return cat.nicheId === storeFromSlug.id || cat.niche?.slug === activeStoreSlug || cat.niche?.id === storeFromSlug.id;
+    }
+    return true;
+  });
+
+  const storeProducts = (homeData?.featuredProducts || []).filter((p) => {
+    if (!activeStoreSlug) return true;
+    const pNiche = extractProductNiche(p);
+    if (activeStoreSlug === 'pet-shop') {
+      return pNiche?.toLowerCase().includes('pet') || p.brand?.toLowerCase().includes('felino');
+    }
+    if (activeStoreSlug === 'romance') {
+      return pNiche?.toLowerCase().includes('romance') || p.name?.toLowerCase().includes('carimbo');
+    }
+    if (activeStoreSlug === 'sensora-intima') {
+      return pNiche?.toLowerCase().includes('sensora') || pNiche?.toLowerCase().includes('íntima');
+    }
+    return true;
+  });
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50/50 text-slate-800 font-sans antialiased">
@@ -912,10 +1011,10 @@ export function App() {
                   <ArrowLeft className="w-3.5 h-3.5" /> Voltar ao Portal de Todas as Lojas
                 </button>
                 <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
-                  {homeData?.currentStore?.brandName || activeNicheName || 'Loja Exclusiva'}
+                  {publicBrand}
                 </h1>
                 <p className="text-slate-300 text-xs sm:text-sm max-w-xl mx-auto leading-relaxed">
-                  {homeData?.currentStore?.description || 'Explore o catálogo exclusivo e novidades desta marca.'}
+                  {homeData?.currentStore?.description || storeFromSlug?.description || 'Explore o catálogo exclusivo e novidades desta marca.'}
                 </p>
                 <div className="pt-2 flex flex-wrap justify-center gap-3">
                   <button
@@ -937,16 +1036,16 @@ export function App() {
             {/* Store Content */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
               {/* Categorias da Loja */}
-              {homeData?.categories && homeData.categories.length > 0 && (
+              {storeCategories.length > 0 && (
                 <div>
                   <div className="flex justify-between items-center mb-6">
                     <div>
-                      <h2 className="text-xl font-extrabold text-slate-900">Categorias de {homeData.currentStore?.brandName || 'Produtos'}</h2>
+                      <h2 className="text-xl font-extrabold text-slate-900">Categorias de {publicBrand}</h2>
                       <p className="text-xs text-slate-500">Navegue pelas linhas desta loja</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                    {homeData.categories.map((c) => (
+                    {storeCategories.map((c) => (
                       <div
                         key={c.id}
                         onClick={() => navigateTo(`/produtos?category=${c.slug}&niche=${encodeURIComponent(activeStoreSlug || '')}`)}
@@ -962,7 +1061,7 @@ export function App() {
               )}
 
               {/* Catálogos da Loja */}
-              {homeData?.catalogs && homeData.catalogs.length > 0 && (
+              {storeCatalogs.length > 0 && (
                 <div>
                   <div className="flex justify-between items-center mb-6">
                     <div>
@@ -971,7 +1070,7 @@ export function App() {
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {homeData.catalogs.map((cat) => (
+                    {storeCatalogs.map((cat) => (
                       <div
                         key={cat.id}
                         onClick={() => handleSelectCatalog(cat.slug)}
@@ -998,37 +1097,36 @@ export function App() {
                 </div>
               )}
 
-              {/* Produtos em Destaque da Loja */}
-              {homeData?.featuredProducts && (
-                <div>
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <h2 className="text-xl font-extrabold text-slate-900">Destaques da Loja</h2>
-                      <p className="text-xs text-slate-500">Pronta entrega e alta procura</p>
-                    </div>
-                    <button
-                      onClick={() => navigateTo(`/produtos?niche=${encodeURIComponent(activeStoreSlug || '')}`)}
-                      className="text-xs font-bold text-slate-800 hover:underline flex items-center"
-                    >
-                      Ver todos os produtos <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                    </button>
+              {/* Produtos em Destaque da Loja (100% isolados pelo nicho ativo) */}
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-xl font-extrabold text-slate-900">Destaques da Loja</h2>
+                    <p className="text-xs text-slate-500">Pronta entrega e alta procura</p>
                   </div>
+                  <button
+                    onClick={() => navigateTo(`/produtos?niche=${encodeURIComponent(activeStoreSlug || '')}`)}
+                    className="text-xs font-bold text-slate-800 hover:underline flex items-center"
+                  >
+                    Ver todos os produtos <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  </button>
+                </div>
 
-                  {homeData.featuredProducts.length === 0 ? (
-                    <div className="p-12 text-center text-xs text-slate-400 bg-white rounded-2xl border border-gray-100">
-                      Nenhum produto cadastrado nesta loja no momento.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-                      {homeData.featuredProducts.map((p) => (
-                        <ProductCard
-                          key={p.id}
-                          product={p}
-                          onSelect={handleSelectProduct}
-                          onQuickAdd={(prod) =>
-                            handleAddToCart({
-                              productId: prod.id,
-                              name: prod.name,
+                {storeProducts.length === 0 ? (
+                  <div className="p-12 text-center text-xs text-slate-400 bg-white rounded-2xl border border-gray-100">
+                    Nenhum produto cadastrado nesta loja no momento.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {storeProducts.map((p) => (
+                      <ProductCard
+                        key={p.id}
+                        product={p}
+                        onSelect={handleSelectProduct}
+                        onQuickAdd={(prod) =>
+                          handleAddToCart({
+                            productId: prod.id,
+                            name: prod.name,
                               unitPrice: prod.basePrice ? Number(prod.basePrice) : 0,
                               quantity: 1,
                               imageUrl: prod.media?.find((m) => m.isPrimary)?.url || prod.media?.[0]?.url || null,
@@ -1040,7 +1138,6 @@ export function App() {
                     </div>
                   )}
                 </div>
-              )}
             </div>
           </div>
         )}
