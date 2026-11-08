@@ -7,12 +7,16 @@ interface ProductCardProps {
   product: Product;
   onSelect: (product: Product) => void;
   onQuickAdd?: (product: Product) => void;
+  quickAddClass?: string;
+  cardBorderClass?: string;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   onSelect,
   onQuickAdd,
+  quickAddClass,
+  cardBorderClass,
 }) => {
   const [hasImgError, setHasImgError] = useState(false);
   const imageUrl =
@@ -23,7 +27,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   return (
     <div
       onClick={() => onSelect(product)}
-      className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition duration-200 cursor-pointer flex flex-col justify-between"
+      className={`group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-lg transition duration-200 cursor-pointer flex flex-col justify-between ${
+        cardBorderClass || 'hover:border-slate-300'
+      }`}
     >
       <div>
         <div className="relative aspect-square w-full bg-slate-50 flex items-center justify-center overflow-hidden">
@@ -44,7 +50,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           )}
 
           {product.brand && (
-            <span className="absolute top-2 left-2 px-2 py-0.5 bg-white/90 backdrop-blur-xs text-[11px] font-semibold text-slate-700 rounded-md shadow-xs">
+            <span className="absolute top-2 left-2 px-2.5 py-0.5 bg-white/95 backdrop-blur-xs text-[11px] font-bold text-slate-800 rounded-lg shadow-xs border border-gray-100">
               {product.brand}
             </span>
           )}
@@ -84,7 +90,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 onQuickAdd(product);
               }
             }}
-            className="p-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-xs transition cursor-pointer"
+            className={`p-2 rounded-lg text-white shadow-xs transition cursor-pointer ${
+              quickAddClass || 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700'
+            }`}
             title={
               product.variants && product.variants.length > 0
                 ? 'Escolher opções do produto'

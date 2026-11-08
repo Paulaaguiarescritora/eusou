@@ -8,7 +8,6 @@ import {
   Heart,
   CheckCircle2,
   PawPrint,
-  Flame,
 } from 'lucide-react';
 import { Store } from '../types';
 
@@ -66,44 +65,49 @@ export const DEFAULT_STORES: Store[] = [
   },
 ];
 
-interface MultiStoreCardsProps {
-  stores: Store[];
-  onSelectStore: (storeSlug: string) => void;
-  onSelectCatalog: (catalogSlug: string) => void;
-  onNavigateAffiliate: (storeSlug?: string) => void;
+export interface TrustPillar {
+  icon: string;
+  title: string;
+  desc: string;
+}
+
+export interface StoreVisualTheme {
+  badge: string;
+  icon: React.ReactNode;
+  headerGradient: string;
+  heroGradient: string;
+  headerTextColor: string;
+  borderClass: string;
+  hoverBorder: string;
+  shadowGlow: string;
+  accentBg: string;
+  accentText: string;
+  groupHoverText: string;
+  buttonColor: string;
+  quickAddColor: string;
+  pillBg: string;
+  tagline: string;
+  featuredItems: string[];
+  actionLabel: string;
+  trustPillars: TrustPillar[];
 }
 
 // Configurações visuais personalizadas e cores distintas por nicho
-const STORE_THEMES: Record<
-  string,
-  {
-    badge: string;
-    icon: React.ReactNode;
-    headerGradient: string;
-    headerTextColor: string;
-    borderClass: string;
-    hoverBorder: string;
-    shadowGlow: string;
-    accentBg: string;
-    accentText: string;
-    buttonColor: string;
-    pillBg: string;
-    tagline: string;
-    featuredItems: string[];
-    actionLabel: string;
-  }
-> = {
+export const STORE_THEMES: Record<string, StoreVisualTheme> = {
   'pet-shop': {
     badge: 'PET SHOP & DESIGN',
     icon: <PawPrint className="w-5 h-5 text-indigo-100" />,
     headerGradient: 'bg-gradient-to-br from-indigo-600 via-blue-600 to-indigo-800',
+    heroGradient: 'bg-gradient-to-br from-indigo-900 via-blue-900 to-indigo-950',
     headerTextColor: 'text-white',
     borderClass: 'border-indigo-100/90',
     hoverBorder: 'hover:border-indigo-500',
     shadowGlow: 'hover:shadow-2xl hover:shadow-indigo-500/20',
-    accentBg: 'bg-indigo-50/70',
+    accentBg: 'bg-indigo-50/80',
     accentText: 'text-indigo-600',
+    groupHoverText: 'group-hover:text-indigo-600',
     buttonColor: 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white shadow-indigo-500/30',
+    quickAddColor: 'bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white shadow-indigo-500/30',
     pillBg: 'bg-white/20 text-white border-white/30',
     tagline: 'Design ergonômico, brinquedos com catnip e acessórios utilitários para cães e gatos.',
     featuredItems: [
@@ -112,18 +116,38 @@ const STORE_THEMES: Record<
       'Coleiras, Chaveiros & Acessórios',
     ],
     actionLabel: 'Entrar na Loja Felinodélia',
+    trustPillars: [
+      {
+        icon: '🐾',
+        title: 'Ergonomia & Bem-estar Pet',
+        desc: 'Comedouros e utilitários desenvolvidos para postura correta e conforto animal.',
+      },
+      {
+        icon: '🌿',
+        title: 'Catnip Puro & Materiais Atóxicos',
+        desc: 'Brinquedos sensoriais atóxicos com erva dos gatos selecionada de alto estímulo.',
+      },
+      {
+        icon: '📦',
+        title: 'Envio Seguro com Rastreamento',
+        desc: 'Embalagens reforçadas e envio ágil para todo o território nacional.',
+      },
+    ],
   },
   romance: {
     badge: 'CONFEITARIA & ROMANCE',
     icon: <Heart className="w-5 h-5 text-rose-100" />,
     headerGradient: 'bg-gradient-to-br from-rose-500 via-pink-600 to-rose-700',
+    heroGradient: 'bg-gradient-to-br from-rose-900 via-pink-900 to-rose-950',
     headerTextColor: 'text-white',
     borderClass: 'border-rose-100/90',
     hoverBorder: 'hover:border-rose-500',
     shadowGlow: 'hover:shadow-2xl hover:shadow-rose-500/20',
-    accentBg: 'bg-rose-50/70',
+    accentBg: 'bg-rose-50/80',
     accentText: 'text-rose-600',
+    groupHoverText: 'group-hover:text-rose-600',
     buttonColor: 'bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white shadow-rose-500/30',
+    quickAddColor: 'bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white shadow-rose-500/30',
     pillBg: 'bg-white/20 text-white border-white/30',
     tagline: 'Carimbos marcadores e cortadores de precisão para brigadeiros gourmet e doces finos.',
     featuredItems: [
@@ -132,18 +156,38 @@ const STORE_THEMES: Record<
       'Kits para Confeitaria Gourmet',
     ],
     actionLabel: 'Entrar na Loja Romance',
+    trustPillars: [
+      {
+        icon: '🍰',
+        title: 'Precisão na Confeitaria',
+        desc: 'Marcações nítidas e cortes milimétricos que agregam valor aos doces finos.',
+      },
+      {
+        icon: '✨',
+        title: 'Material 100% Próprio para Alimentos',
+        desc: 'Termoplásticos atóxicos duráveis, de fácil lavagem e higienização.',
+      },
+      {
+        icon: '⚡',
+        title: 'Pronta Entrega para Confeiteiros',
+        desc: 'Despacho rápido para garantir que suas encomendas nunca fiquem paradas.',
+      },
+    ],
   },
   'sensora-intima': {
     badge: 'BEM-ESTAR & AUTOCUIDADO',
     icon: <Sparkles className="w-5 h-5 text-purple-100" />,
     headerGradient: 'bg-gradient-to-br from-purple-600 via-violet-600 to-purple-800',
+    heroGradient: 'bg-gradient-to-br from-purple-900 via-violet-900 to-purple-950',
     headerTextColor: 'text-white',
     borderClass: 'border-purple-100/90',
     hoverBorder: 'hover:border-purple-500',
     shadowGlow: 'hover:shadow-2xl hover:shadow-purple-500/20',
-    accentBg: 'bg-purple-50/70',
+    accentBg: 'bg-purple-50/80',
     accentText: 'text-purple-600',
+    groupHoverText: 'group-hover:text-purple-600',
     buttonColor: 'bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 text-white shadow-purple-500/30',
+    quickAddColor: 'bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white shadow-purple-500/30',
     pillBg: 'bg-white/20 text-white border-white/30',
     tagline: 'Linha exclusiva de autocuidado, velas de massagem beijáveis e bem-estar sensorial.',
     featuredItems: [
@@ -152,8 +196,74 @@ const STORE_THEMES: Record<
       'Bullet Pocket Velvet & Autocuidado',
     ],
     actionLabel: 'Entrar na Loja Sensora Íntima',
+    trustPillars: [
+      {
+        icon: '📦',
+        title: 'Embalagem 100% Discreta',
+        desc: 'Sigilo absoluto garantido: caixa parda neutra sem menção a produtos ou categoria.',
+      },
+      {
+        icon: '🕯️',
+        title: 'Fórmulas Suaves & Karité Nobre',
+        desc: 'Velas de massagem beijáveis com manteiga de karité pura e toque aveludado.',
+      },
+      {
+        icon: '🔒',
+        title: 'Privacidade & Pagamento Protegido',
+        desc: 'Descrição neutra na fatura do cartão com checkout criptografado de ponta a ponta.',
+      },
+    ],
   },
 };
+
+export function getStoreTheme(slug?: string | null): StoreVisualTheme {
+  if (slug && STORE_THEMES[slug]) {
+    return STORE_THEMES[slug];
+  }
+  return {
+    badge: 'LOJA ESPECIALIZADA',
+    icon: <ShoppingBag className="w-5 h-5 text-slate-100" />,
+    headerGradient: 'bg-gradient-to-br from-slate-800 to-slate-900',
+    heroGradient: 'bg-gradient-to-r from-slate-900 via-slate-800 to-slate-950',
+    headerTextColor: 'text-white',
+    borderClass: 'border-slate-200',
+    hoverBorder: 'hover:border-slate-500',
+    shadowGlow: 'hover:shadow-2xl hover:shadow-slate-500/20',
+    accentBg: 'bg-slate-50',
+    accentText: 'text-slate-700',
+    groupHoverText: 'group-hover:text-slate-900',
+    buttonColor: 'bg-slate-900 hover:bg-black text-white shadow-slate-900/30',
+    quickAddColor: 'bg-slate-800 hover:bg-slate-700 text-white',
+    pillBg: 'bg-white/20 text-white border-white/30',
+    tagline: 'Produtos de alta qualidade com envio imediato e garantia.',
+    featuredItems: [],
+    actionLabel: 'Entrar na Loja',
+    trustPillars: [
+      {
+        icon: '🚚',
+        title: 'Envio para Todo o Brasil',
+        desc: 'Rastreamento e entrega rápida garantida',
+      },
+      {
+        icon: '✨',
+        title: 'Curadoria & Fabricação Própria',
+        desc: 'Alta precisão, design autoral e testes rigorosos',
+      },
+      {
+        icon: '🔒',
+        title: 'Pagamento 100% Seguro',
+        desc: 'Checkout transparente processado via Mercado Pago',
+      },
+    ],
+  };
+}
+
+interface MultiStoreCardsProps {
+  stores: Store[];
+  onSelectStore: (storeSlug: string) => void;
+  onSelectCatalog: (catalogSlug: string) => void;
+  onNavigateAffiliate: (storeSlug?: string) => void;
+}
 
 export const MultiStoreCards: React.FC<MultiStoreCardsProps> = ({
   stores,
@@ -182,23 +292,7 @@ export const MultiStoreCards: React.FC<MultiStoreCardsProps> = ({
       {/* Grid com os Cards de Nicho com Cores Distintas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
         {displayStores.map((store) => {
-          const theme = STORE_THEMES[store.slug] || {
-            badge: 'LOJA ESPECIALIZADA',
-            icon: <ShoppingBag className="w-5 h-5 text-slate-100" />,
-            headerGradient: 'bg-gradient-to-br from-slate-800 to-slate-900',
-            headerTextColor: 'text-white',
-            borderClass: 'border-slate-200',
-            hoverBorder: 'hover:border-slate-500',
-            shadowGlow: 'hover:shadow-2xl hover:shadow-slate-500/20',
-            accentBg: 'bg-slate-50',
-            accentText: 'text-slate-700',
-            buttonColor: 'bg-slate-900 hover:bg-black text-white shadow-slate-900/30',
-            pillBg: 'bg-white/20 text-white border-white/30',
-            tagline: store.description || 'Produtos com envio imediato e garantia.',
-            featuredItems: [],
-            actionLabel: `Entrar na Loja ${store.brandName}`,
-          };
-
+          const theme = getStoreTheme(store.slug);
           const primaryCatalog = store.catalogs?.[0];
 
           return (

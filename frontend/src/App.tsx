@@ -8,7 +8,7 @@ import { OrderConfirmation } from './components/OrderConfirmation';
 import { CatalogView } from './components/CatalogView';
 import { AffiliateCatalogView } from './components/AffiliateCatalogView';
 import { Pagination } from './components/Pagination';
-import { MultiStoreCards, DEFAULT_STORES } from './components/MultiStoreCards';
+import { MultiStoreCards, DEFAULT_STORES, getStoreTheme } from './components/MultiStoreCards';
 
 // Lazy load backoffice and auxiliary components to drastically reduce initial bundle size for shoppers
 const AdminOrdersView = lazy(() => import('./components/AdminOrdersView').then((m) => ({ default: m.AdminOrdersView })));
@@ -45,7 +45,7 @@ const ViewFallback = () => (
 import { useCart } from './useCart';
 import { fetchApi } from './api';
 import { Product, Catalog, Category, Collection, Order, CartItem, Store } from './types';
-import { Sparkles, ArrowRight, Filter, X, ArrowLeft, Store as StoreIcon } from 'lucide-react';
+import { Sparkles, ArrowRight, Filter, X, ArrowLeft, Store as StoreIcon, Layers, ShoppingBag, Share2, CheckCircle2 } from 'lucide-react';
 
 function extractProductNiche(prod: Product | null | undefined): string | null {
   if (!prod) return null;
@@ -989,144 +989,198 @@ export function App() {
         )}
 
         {/* ROUTE: LOJA ESPECÍFICA (/loja/:storeSlug) */}
-        {route.startsWith('/loja/') && (
-          <div>
-            {/* Store Hero Banner */}
-            <div className={`py-14 sm:py-16 px-4 sm:px-6 lg:px-8 text-white text-center relative overflow-hidden ${
-              activeStoreSlug === 'romance'
-                ? 'bg-gradient-to-r from-rose-950 via-slate-900 to-rose-950'
-                : activeStoreSlug === 'sensora-intima'
-                ? 'bg-gradient-to-r from-purple-950 via-slate-900 to-purple-950'
-                : 'bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950'
-            }`}>
-              <div className="max-w-3xl mx-auto space-y-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveStoreSlug(null);
-                    navigateTo('/');
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-xs font-semibold text-slate-300 hover:bg-white/20 transition cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" /> Voltar ao Portal de Todas as Lojas
-                </button>
-                <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
-                  {publicBrand}
-                </h1>
-                <p className="text-slate-300 text-xs sm:text-sm max-w-xl mx-auto leading-relaxed">
-                  {homeData?.currentStore?.description || storeFromSlug?.description || 'Explore o catálogo exclusivo e novidades desta marca.'}
-                </p>
-                <div className="pt-2 flex flex-wrap justify-center gap-3">
-                  <button
-                    onClick={() => navigateTo(`/produtos?niche=${encodeURIComponent(activeStoreSlug || '')}`)}
-                    className="px-5 py-2.5 bg-white text-slate-900 rounded-xl font-bold text-xs hover:bg-slate-100 transition shadow-xs cursor-pointer"
-                  >
-                    Ver Catálogo Completo
-                  </button>
-                  <button
-                    onClick={() => navigateTo(`/affiliate?niche=${encodeURIComponent(activeStoreSlug || '')}`)}
-                    className="px-5 py-2.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl font-bold text-xs hover:bg-amber-500/30 transition cursor-pointer"
-                  >
-                    Área de Afiliados desta Loja
-                  </button>
+        {route.startsWith('/loja/') && (() => {
+          const activeTheme = getStoreTheme(activeStoreSlug);
+          return (
+            <div>
+              {/* Store Hero Banner Customizado com o Tema do Card */}
+              <div className={`py-14 sm:py-20 px-4 sm:px-6 lg:px-8 text-white text-center relative overflow-hidden ${activeTheme.heroGradient}`}>
+                {/* Ambient Orbs */}
+                <div className="absolute -right-20 -top-20 w-80 h-80 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+                <div className="absolute -left-20 -bottom-20 w-80 h-80 rounded-full bg-black/25 blur-3xl pointer-events-none" />
+
+                <div className="max-w-4xl mx-auto space-y-4 relative z-10">
+                  {/* Top Bar com Navegação e Badge do Nicho */}
+                  <div className="flex flex-wrap items-center justify-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveStoreSlug(null);
+                        navigateTo('/');
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 text-xs font-semibold text-white transition cursor-pointer backdrop-blur-xs border border-white/20"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" /> Portal Multilojas
+                    </button>
+                    <span className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider backdrop-blur-xs border ${activeTheme.pillBg}`}>
+                      {activeTheme.icon}
+                      {activeTheme.badge}
+                    </span>
+                    <span className="text-xs font-black bg-black/30 text-white backdrop-blur-xs px-2.5 py-1 rounded-full border border-white/15">
+                      {storeProducts.length} {storeProducts.length === 1 ? 'item disponível' : 'itens disponíveis'}
+                    </span>
+                  </div>
+
+                  <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight text-white drop-shadow-sm">
+                    {publicBrand}
+                  </h1>
+
+                  <p className="text-white/90 text-xs sm:text-sm md:text-base max-w-2xl mx-auto leading-relaxed">
+                    {homeData?.currentStore?.description || storeFromSlug?.description || activeTheme.tagline}
+                  </p>
+
+                  {/* Highlights Pills do Card */}
+                  {activeTheme.featuredItems.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-2 pt-1">
+                      {activeTheme.featuredItems.map((item, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-white/15 text-white/95 border border-white/20 backdrop-blur-xs"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-white/90" />
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* CTA Buttons da Loja */}
+                  <div className="pt-3 flex flex-wrap justify-center gap-3">
+                    <button
+                      onClick={() => navigateTo(`/produtos?niche=${encodeURIComponent(activeStoreSlug || '')}`)}
+                      className="px-6 py-3 bg-white text-slate-900 rounded-xl font-extrabold text-xs sm:text-sm hover:bg-slate-50 transition shadow-lg shadow-black/10 flex items-center gap-2 cursor-pointer"
+                    >
+                      <ShoppingBag className="w-4 h-4" />
+                      Ver Todos os Produtos ({storeProducts.length})
+                    </button>
+                    <button
+                      onClick={() => navigateTo(`/affiliate?niche=${encodeURIComponent(activeStoreSlug || '')}`)}
+                      className="px-5 py-3 bg-black/25 hover:bg-black/35 text-white border border-white/25 rounded-xl font-bold text-xs sm:text-sm transition backdrop-blur-xs flex items-center gap-2 cursor-pointer"
+                    >
+                      <Share2 className="w-4 h-4 text-amber-300" />
+                      Programa de Afiliados desta Loja
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Store Content */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
-              {/* Categorias da Loja */}
-              {storeCategories.length > 0 && (
-                <div>
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <h2 className="text-xl font-extrabold text-slate-900">Categorias de {publicBrand}</h2>
-                      <p className="text-xs text-slate-500">Navegue pelas linhas desta loja</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                    {storeCategories.map((c) => (
-                      <div
-                        key={c.id}
-                        onClick={() => navigateTo(`/produtos?category=${c.slug}&niche=${encodeURIComponent(activeStoreSlug || '')}`)}
-                        className="p-4 bg-white rounded-2xl border border-gray-100 hover:border-slate-800 hover:shadow-xs transition text-center cursor-pointer group"
-                      >
-                        <span className="text-xs font-bold text-slate-800 group-hover:text-black">
-                          {c.name}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Catálogos da Loja */}
-              {storeCatalogs.length > 0 && (
-                <div>
-                  <div className="flex justify-between items-center mb-6">
-                    <div>
-                      <h2 className="text-xl font-extrabold text-slate-900">Catálogos & Curadorias</h2>
-                      <p className="text-xs text-slate-500">Acesse curadorias prontas para compra ou divulgação</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {storeCatalogs.map((cat) => (
-                      <div
-                        key={cat.id}
-                        onClick={() => handleSelectCatalog(cat.slug)}
-                        className="p-6 bg-white rounded-2xl border border-gray-100 hover:shadow-md transition cursor-pointer flex flex-col justify-between"
-                      >
-                        <div>
-                          <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400 block mb-1">
-                            Catálogo Oficial
-                          </span>
-                          <h3 className="text-lg font-bold text-slate-900">{cat.name}</h3>
-                          {cat.description && (
-                            <p className="text-xs text-slate-500 mt-2 line-clamp-2">
-                              {cat.description}
-                            </p>
-                          )}
-                        </div>
-                        <div className="mt-6 pt-4 border-t border-gray-50 flex items-center justify-between text-xs font-semibold text-slate-800">
-                          <span>Acessar Catálogo</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Produtos em Destaque da Loja (100% isolados pelo nicho ativo) */}
-              <div>
-                <div className="flex justify-between items-center mb-6">
+              {/* Store Content */}
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
+                {/* Categorias da Loja com Tema Personalizado */}
+                {storeCategories.length > 0 && (
                   <div>
-                    <h2 className="text-xl font-extrabold text-slate-900">Destaques da Loja</h2>
-                    <p className="text-xs text-slate-500">Pronta entrega e alta procura</p>
+                    <div className="flex justify-between items-center mb-6">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`p-2 rounded-xl ${activeTheme.accentBg} ${activeTheme.accentText}`}>
+                          <Layers className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h2 className="text-xl font-extrabold text-slate-900">Categorias de {publicBrand}</h2>
+                          <p className="text-xs text-slate-500">Linhas exclusivas e coleções segmentadas</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                      {storeCategories.map((c) => (
+                        <div
+                          key={c.id}
+                          onClick={() => navigateTo(`/produtos?category=${c.slug}&niche=${encodeURIComponent(activeStoreSlug || '')}`)}
+                          className={`p-4 bg-white rounded-2xl border border-gray-100 ${activeTheme.hoverBorder} hover:shadow-md transition text-center cursor-pointer group flex flex-col items-center justify-center min-h-[90px]`}
+                        >
+                          <span className={`text-xs font-bold text-slate-800 ${activeTheme.groupHoverText}`}>
+                            {c.name}
+                          </span>
+                          <span className="text-[10px] text-slate-400 mt-1 flex items-center gap-0.5">
+                            Explorar <ArrowRight className="w-2.5 h-2.5" />
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <button
-                    onClick={() => navigateTo(`/produtos?niche=${encodeURIComponent(activeStoreSlug || '')}`)}
-                    className="text-xs font-bold text-slate-800 hover:underline flex items-center"
-                  >
-                    Ver todos os produtos <ArrowRight className="w-3.5 h-3.5 ml-1" />
-                  </button>
-                </div>
+                )}
 
-                {storeProducts.length === 0 ? (
-                  <div className="p-12 text-center text-xs text-slate-400 bg-white rounded-2xl border border-gray-100">
-                    Nenhum produto cadastrado nesta loja no momento.
+                {/* Catálogos da Loja com Tema Personalizado */}
+                {storeCatalogs.length > 0 && (
+                  <div>
+                    <div className="flex justify-between items-center mb-6">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`p-2 rounded-xl ${activeTheme.accentBg} ${activeTheme.accentText}`}>
+                          <Sparkles className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h2 className="text-xl font-extrabold text-slate-900">Catálogos & Curadorias</h2>
+                          <p className="text-xs text-slate-500">Acesse curadorias temáticas prontas para compra ou divulgação</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {storeCatalogs.map((cat) => (
+                        <div
+                          key={cat.id}
+                          onClick={() => handleSelectCatalog(cat.slug)}
+                          className={`p-6 bg-white rounded-2xl border border-gray-100 ${activeTheme.hoverBorder} hover:shadow-md transition cursor-pointer flex flex-col justify-between group`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className={`text-[10px] font-extrabold tracking-wider uppercase px-2 py-0.5 rounded-md ${activeTheme.accentBg} ${activeTheme.accentText}`}>
+                                Catálogo Oficial
+                              </span>
+                              <Layers className={`w-4 h-4 ${activeTheme.accentText}`} />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-900 group-hover:text-black">{cat.name}</h3>
+                            {cat.description && (
+                              <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
+                                {cat.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className={`mt-6 pt-4 border-t border-gray-50 flex items-center justify-between text-xs font-bold ${activeTheme.accentText}`}>
+                            <span>Acessar Catálogo</span>
+                            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-                    {storeProducts.map((p) => (
-                      <ProductCard
-                        key={p.id}
-                        product={p}
-                        onSelect={handleSelectProduct}
-                        onQuickAdd={(prod) =>
-                          handleAddToCart({
-                            productId: prod.id,
-                            name: prod.name,
+                )}
+
+                {/* Produtos em Destaque da Loja (100% isolados pelo nicho ativo) */}
+                <div>
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`p-2 rounded-xl ${activeTheme.accentBg} ${activeTheme.accentText}`}>
+                        <ShoppingBag className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-extrabold text-slate-900">Destaques de {publicBrand}</h2>
+                        <p className="text-xs text-slate-500">Pronta entrega e curadoria exclusiva do nicho</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => navigateTo(`/produtos?niche=${encodeURIComponent(activeStoreSlug || '')}`)}
+                      className={`text-xs font-bold ${activeTheme.accentText} hover:underline flex items-center gap-1`}
+                    >
+                      Ver todos os produtos ({storeProducts.length}) <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {storeProducts.length === 0 ? (
+                    <div className="p-12 text-center text-xs text-slate-400 bg-white rounded-2xl border border-gray-100">
+                      Nenhum produto cadastrado nesta loja no momento.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
+                      {storeProducts.map((p) => (
+                        <ProductCard
+                          key={p.id}
+                          product={p}
+                          cardBorderClass={activeTheme.hoverBorder}
+                          quickAddClass={activeTheme.quickAddColor}
+                          onSelect={handleSelectProduct}
+                          onQuickAdd={(prod) =>
+                            handleAddToCart({
+                              productId: prod.id,
+                              name: prod.name,
                               unitPrice: prod.basePrice ? Number(prod.basePrice) : 0,
                               quantity: 1,
                               imageUrl: prod.media?.find((m) => m.isPrimary)?.url || prod.media?.[0]?.url || null,
@@ -1138,9 +1192,25 @@ export function App() {
                     </div>
                   )}
                 </div>
+
+                {/* Trust Pillars personalizados para a Loja */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-gray-200/60">
+                  {activeTheme.trustPillars.map((tp, idx) => (
+                    <div key={idx} className="bg-white p-6 rounded-2xl border border-gray-100 flex items-center gap-4 shadow-xs hover:border-gray-200 transition">
+                      <div className={`w-12 h-12 rounded-xl ${activeTheme.accentBg} ${activeTheme.accentText} flex items-center justify-center font-bold text-2xl shrink-0`}>
+                        {tp.icon}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-sm text-slate-900">{tp.title}</h3>
+                        <p className="text-xs text-slate-500 leading-relaxed mt-0.5">{tp.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ROUTE: PRODUTOS OU COLEÇÕES (LISTAGEM) */}
         {(route.startsWith('/produtos') || route.startsWith('/colecoes/')) && !selectedProduct && (
@@ -1258,23 +1328,28 @@ export function App() {
                     loading ? 'opacity-40' : 'opacity-100'
                   }`}
                 >
-                  {productsList.map((p) => (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      onSelect={handleSelectProduct}
-                      onQuickAdd={(prod) =>
-                        handleAddToCart({
-                          productId: prod.id,
-                          name: prod.name,
-                          unitPrice: prod.basePrice ? Number(prod.basePrice) : 0,
-                          quantity: 1,
-                          imageUrl: prod.media?.find((m) => m.isPrimary)?.url || prod.media?.[0]?.url || null,
-                          nicheName: extractProductNiche(prod),
-                        })
-                      }
-                    />
-                  ))}
+                  {productsList.map((p) => {
+                    const itemTheme = getStoreTheme(activeStoreSlug || extractProductNiche(p));
+                    return (
+                      <ProductCard
+                        key={p.id}
+                        product={p}
+                        cardBorderClass={itemTheme.hoverBorder}
+                        quickAddClass={itemTheme.quickAddColor}
+                        onSelect={handleSelectProduct}
+                        onQuickAdd={(prod) =>
+                          handleAddToCart({
+                            productId: prod.id,
+                            name: prod.name,
+                            unitPrice: prod.basePrice ? Number(prod.basePrice) : 0,
+                            quantity: 1,
+                            imageUrl: prod.media?.find((m) => m.isPrimary)?.url || prod.media?.[0]?.url || null,
+                            nicheName: extractProductNiche(prod),
+                          })
+                        }
+                      />
+                    );
+                  })}
                 </div>
               </div>
             )}
