@@ -1484,6 +1484,7 @@ export function App() {
         {/* ROTA NÃO ENCONTRADA (404) */}
         {!loading &&
           route !== '/' &&
+          !route.startsWith('/loja/') &&
           !route.startsWith('/produtos') &&
           !route.startsWith('/colecoes/') &&
           !isAffiliateCatalog &&
