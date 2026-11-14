@@ -155,7 +155,7 @@ export const Header: React.FC<HeaderProps> = ({
                     onClick={() => handleStoreClick('pet-shop')}
                     className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-indigo-50/50 flex items-center justify-between"
                   >
-                    <span>🐾 Felinodélia (Pet)</span>
+                    <span>🐾 Felinodelia (Pet)</span>
                     {activeStoreSlug === 'pet-shop' && <span className="text-[10px] text-indigo-600 font-bold">Ativo</span>}
                   </button>
                   <button
@@ -256,7 +256,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => handleStoreClick('pet-shop')}
                 className="block w-full text-left py-1.5 px-2 text-xs font-semibold text-slate-700 rounded-lg hover:bg-white"
               >
-                🐾 Felinodélia (Pet & Design)
+                🐾 Felinodelia (Pet & Design)
               </button>
               <button
                 onClick={() => handleStoreClick('romance')}
@@ -335,7 +335,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, brandTitle }) => {
             <span>{displayBrand}</span>
           </div>
           <p className="text-sm text-slate-400 leading-relaxed">
-            Ecossistema de lojas especializadas: Felinodélia (Pet), Romance (Confeitaria) e Sensora Íntima (Bem-Estar).
+            Ecossistema de lojas especializadas: Felinodelia (Pet), Romance (Confeitaria) e Sensora Íntima (Bem-Estar).
           </p>
         </div>
         <div>
@@ -347,7 +347,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, brandTitle }) => {
                 onClick={() => onNavigate && onNavigate('/loja/pet-shop')}
                 className="hover:text-white transition cursor-pointer text-left flex items-center gap-1.5"
               >
-                <span>🐾 Felinodélia (Pet Shop)</span>
+                <span>🐾 Felinodelia (Pet Shop)</span>
               </button>
             </li>
             <li>

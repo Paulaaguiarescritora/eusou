@@ -16,7 +16,7 @@ export const DEFAULT_STORES: Store[] = [
     id: 'b1105636-1e1f-4fb3-a6a1-70dd402fae43',
     name: 'Pet Shop',
     slug: 'pet-shop',
-    brandName: 'Felinodélia',
+    brandName: 'Felinodelia',
     description: 'Design inovador, comedouros ergonômicos, brinquedos interativos e coleções exclusivas para cães e gatos.',
     productsCount: 38,
     categoriesCount: 6,
@@ -115,7 +115,7 @@ export const STORE_THEMES: Record<string, StoreVisualTheme> = {
       'Brinquedos Interativos & Catnip Puro',
       'Coleiras, Chaveiros & Acessórios',
     ],
-    actionLabel: 'Entrar na Loja Felinodélia',
+    actionLabel: 'Entrar na Loja Felinodelia',
     trustPillars: [
       {
         icon: '🐾',

@@ -17,11 +17,11 @@ const prisma = new PrismaClient({ datasourceUrl: env.DIRECT_URL });
 async function setupMultiStore() {
   console.log('=== 1. Atualizando marcas e descrições dos Nichos ===');
   
-  // 1. Felinodélia
+  // 1. Felinodelia
   const petNiche = await prisma.niche.update({
     where: { slug: 'pet-shop' },
     data: {
-      brandName: 'Felinodélia',
+      brandName: 'Felinodelia',
       description: 'Design inovador, brinquedos interativos e acessórios exclusivos para cães e gatos.'
     }
   });

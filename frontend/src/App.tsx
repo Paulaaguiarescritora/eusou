@@ -138,7 +138,7 @@ export function App() {
       if (currentPath.startsWith('/loja/')) {
         const raw = currentPath.replace('/loja/', '').split('?')[0];
         const storeSlug = raw === 'felinodelia' ? 'pet-shop' : raw;
-        if (storeSlug === 'pet-shop') return 'Felinodélia';
+        if (storeSlug === 'pet-shop') return 'Felinodelia';
         if (storeSlug === 'romance') return 'Romance';
         if (storeSlug === 'sensora-intima') return 'Sensora Íntima';
       }
@@ -283,7 +283,7 @@ export function App() {
       const storeSlug = rawSlug === 'felinodelia' ? 'pet-shop' : rawSlug;
       const storeConfig = DEFAULT_STORES.find((s) => s.slug === storeSlug);
       const fallbackBrand = storeSlug === 'pet-shop'
-        ? 'Felinodélia'
+        ? 'Felinodelia'
         : storeSlug === 'romance'
         ? 'Romance'
         : storeSlug === 'sensora-intima'
@@ -846,7 +846,7 @@ export function App() {
   const isAffiliateCatalog = route.startsWith('/catalogo/') || route.startsWith('/afiliado/');
   const storeFromSlug = DEFAULT_STORES.find((s) => s.slug === activeStoreSlug);
   const fallbackStoreBrand = activeStoreSlug === 'pet-shop'
-    ? 'Felinodélia'
+    ? 'Felinodelia'
     : activeStoreSlug === 'romance'
     ? 'Romance'
     : activeStoreSlug === 'sensora-intima'
